@@ -1,6 +1,17 @@
 import type { Points } from './distance.ts';
-import { computePairwiseDistances, lookupDist } from './distance.ts';
+import { SpatialGrid } from './spatial-grid.ts';
 import type { EdgeEntry } from './h0.ts';
+
+function euclidean(points: Points, dims: number, i: number, j: number): number {
+  const bi = i * dims;
+  const bj = j * dims;
+  let sq = 0.0;
+  for (let d = 0; d < dims; d++) {
+    const diff = points[bi + d]! - points[bj + d]!;
+    sq += diff * diff;
+  }
+  return Math.sqrt(sq);
+}
 
 /** A triangle (2-simplex) in the Rips complex. */
 export interface TriangleEntry {
@@ -30,7 +41,27 @@ interface TempEdge {
 /**
  * The Vietoris–Rips complex up to dimension 3.
  *
- * Edge enumeration uses row-offset distance lookup: O(n²) time.
+ * Edge enumeration uses a uniform spatial grid (src/core/spatial-grid.ts,
+ * cellSize = maxDist) to narrow candidate pairs before computing any
+ * distance, when maxDist is finite and positive: O(n · 3^dims) candidate
+ * checks instead of a brute-force O(n²) scan, with the SAME exact edges and
+ * filtration values as brute force (the grid only rules out pairs that are
+ * geometrically impossible to be within maxDist -- see spatial-grid.ts's
+ * docstring for the correctness argument). Falls back to the original
+ * brute-force O(n²) double loop when maxDist is 0, negative, infinite, or
+ * NaN (the grid isn't meaningful without a finite positive cell size, and
+ * an unbounded/degenerate threshold means every/no pair is a candidate
+ * anyway, so there's nothing for the grid to narrow).
+ *
+ * Triangle/tetrahedron filtration values are computed by reusing already-
+ * discovered edge values (via edgeIndex) rather than a second O(n²)
+ * distance-matrix lookup -- every pair needed for a triangle or tetrahedron
+ * boundary is, by construction of the bit-vector adjacency it's found
+ * through, already a known edge. This also means buildRipsComplex no longer
+ * needs to build a full O(n²) DistanceMatrix at all (computePairwiseDistances
+ * remains a separate, independently useful public export -- see src/index.ts
+ * -- just no longer a dependency of this function).
+ *
  * Triangle enumeration uses bit-vector adjacency intersection
  * (Uint32Array per vertex, Math.clz32 for trailing-zero count):
  * O(|E| · n/w) per triangle, where w = 32.
@@ -40,7 +71,32 @@ interface TempEdge {
  *   |T| = O(n³)    in the worst case (dense)
  *   |Tet| = O(n⁴)  in the worst case (dense, maxDim=3)
  *
- * For sparse thresholds (ε ≪ diameter), |E| ≈ O(n · εᵈ).
+ * For sparse thresholds (ε ≪ diameter), |E| ≈ O(n · εᵈ), and the spatial
+ * grid above lets edge enumeration approach that same O(n · εᵈ) cost
+ * instead of always paying O(n²) to discover it.
+ *
+ * **The grid has real per-point overhead (Map lookups, small-array
+ * allocation) that brute force doesn't, so it is NOT a strict win at every
+ * n.** Isolated edge-building-only benchmarks (both approaches building the
+ * same full edge array, JIT-warmed, averaged over repeated trials) across
+ * two density regimes found a consistent crossover around n≈900-1000:
+ *
+ *   n=60:    0.07x-0.30x (grid 3-14x SLOWER -- per-point overhead dominates)
+ *   n=400:   0.18x-0.56x (still slower)
+ *   n=1000:  1.45x-1.64x (grid wins, modestly)
+ *   n=2000:  2.67x-2.81x
+ *   n=3000:  4.04x-4.25x (win grows with n, as expected for O(n)-ish vs O(n²))
+ *
+ * This means this repo's own current benchmark datasets (n=60-400 in
+ * bench/compare_ripser.py and bench/benchmark.ts) are ALL below the
+ * crossover -- the grid provides no measured benefit there, and would
+ * modestly hurt if used unconditionally. GRID_MIN_N below gates the grid
+ * behind a threshold set just above the measured crossover, so
+ * buildRipsComplex only pays the grid's setup cost when the data says it's
+ * actually going to win; small/moderate n always uses brute force, exactly
+ * as before this optimization existed. See spatial-grid.ts's own docstring
+ * for why the grid is correctness-safe (candidate superset, not an
+ * approximation) independent of this performance threshold.
  */
 export interface RipsComplex {
   n: number;
@@ -57,6 +113,19 @@ function triKey(u: number, v: number, w: number, n: number): number {
   return (u * n + v) * n + w;
 }
 
+/**
+ * n threshold below which buildRipsComplex uses brute force even when
+ * maxDist is finite/positive -- set just above the measured crossover
+ * (~900-1000, see this file's top docstring) where the grid's per-point
+ * Map/array overhead stops being worth it. This is a deliberately simple,
+ * single-density-agnostic constant rather than an adaptive estimate: both
+ * regimes measured (sparse and moderate density) crossed over in the same
+ * n≈900-1000 neighborhood, so a fixed conservative cutoff is a reasonable,
+ * honest choice rather than over-engineering a density predictor for a
+ * boundary that didn't move much between the two regimes actually tested.
+ */
+const GRID_MIN_N = 1000;
+
 export function buildRipsComplex(
   points: Points,
   dims: number,
@@ -64,20 +133,36 @@ export function buildRipsComplex(
   maxDim: number = 2,
 ): RipsComplex {
   const n = points.length / dims;
-  const dist = computePairwiseDistances(points, dims, n);
 
   // ── Build edges ──
   const tempEdges: TempEdge[] = [];
   const adj: number[][] = Array.from({ length: n }, () => []);
 
+  // Grid only makes sense for a finite, positive cellSize -- see this
+  // function's docstring and spatial-grid.ts for why 0/negative/Infinity/NaN
+  // maxDist fall back to brute force instead. Also gated on n >= GRID_MIN_N:
+  // below that, the grid's own overhead measurably loses to brute force (see
+  // this file's top docstring for the benchmark numbers behind the cutoff).
+  const useGrid = maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
+  const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
+
   for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const d = lookupDist(dist, i, j);
+    // candidates is ascending-j (matches the brute-force loop's order
+    // exactly, so origIdx tie-break values -- and therefore output -- are
+    // identical either way, see spatial-grid.ts's candidatesAfter() docstring).
+    const candidates = grid ? grid.candidatesAfter(points, i) : null;
+    const checkPair = (j: number): void => {
+      const d = euclidean(points, dims, i, j);
       if (d <= maxDist) {
         tempEdges.push({ u: i, v: j, val: d, origIdx: adj[i]!.length });
         adj[i]!.push(j);
         adj[j]!.push(i);
       }
+    };
+    if (candidates) {
+      for (const j of candidates) checkPair(j);
+    } else {
+      for (let j = i + 1; j < n; j++) checkPair(j);
     }
   }
 
@@ -132,17 +217,25 @@ export function buildRipsComplex(
         const k = (w << 5) + bit;
         bits ^= lsb;
 
-        const dik = lookupDist(dist, u, k);
-        const djk = lookupDist(dist, v, k);
+        // k > v > u always holds here (bit scan starts at v+1), so both
+        // queries are in edgeIndex's u<v convention and both are guaranteed
+        // present (k is a bit-vector neighbor of both u and v, i.e. edges
+        // (u,k) and (v,k) exist by construction). Reusing the already-
+        // computed edge .val (not a second distance computation, and not
+        // even a lookup into a separate O(n^2) distance matrix, which this
+        // function no longer builds at all) is not just faster: it's
+        // bit-for-bit identical to the old lookupDist(dist,u,k) value,
+        // since that value ultimately CAME from this same edge's own
+        // distance computation in the first place.
+        const ukIdx = edgeIndex[u * n + k]!;
+        const vkIdx = edgeIndex[v * n + k]!;
+        const dik = edges[ukIdx]!.val;
+        const djk = edges[vkIdx]!.val;
         const birth = Math.max(dij, dik, djk);
         triangles.push({
-          edges: [
-            // (u, v) is exactly the current outer-loop edge -- ei is already
-            // its index, no lookup needed (was a redundant Map.get before).
-            ei,
-            edgeIndex[u * n + k]!,
-            edgeIndex[v * n + k]!,
-          ],
+          // (u, v) is exactly the current outer-loop edge -- ei is already
+          // its index, no lookup needed (was a redundant Map.get before).
+          edges: [ei, ukIdx, vkIdx],
           verts: [u, v, k],
           val: birth,
         });
@@ -184,9 +277,13 @@ export function buildRipsComplex(
           const x = (wd << 5) + bit;
           bits ^= lsb;
 
-          const dux = lookupDist(dist, su, x);
-          const dvx = lookupDist(dist, sv, x);
-          const dwx = lookupDist(dist, sw, x);
+          // Same reasoning as the triangle loop above: x > sw > sv > su
+          // always holds here, so su<x, sv<x, sw<x are all valid u<v
+          // edgeIndex queries, guaranteed present, and reusing their .val
+          // is bit-for-bit identical to the old distance-matrix lookups.
+          const dux = edges[edgeIndex[su * n + x]!]!.val;
+          const dvx = edges[edgeIndex[sv * n + x]!]!.val;
+          const dwx = edges[edgeIndex[sw * n + x]!]!.val;
           const birth = Math.max(triVal, dux, dvx, dwx);
 
           tetrahedra.push({

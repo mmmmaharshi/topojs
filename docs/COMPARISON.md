@@ -1,12 +1,15 @@
 # Comparison Against Ripser (Batch Vietoris–Rips Engines)
 
-This document compares TopoJS's plain batch engine (`computePersistentHomology`,
-`src/core/homology.ts`) against [Ripser](https://arxiv.org/abs/1908.02518)
-(Bauer, 2021) — the established fastest batch Vietoris–Rips persistence tool
-(Bauer's own paper shows it outperforms GUDHI, Dionysus, PHAT, and Perseus by
-40x+ in time and 15x+ in memory) — on the same real datasets used elsewhere
-in this repo's benchmarks. This is a correctness cross-check plus an honest
-speed reference point, not a claim that TopoJS competes with Ripser on speed.
+This document compares TopoJS's two batch engines — `computePersistentHomology`
+("plain", `src/core/homology.ts`) and `computePersistentHomologyCohomology`
+("cohom", `src/core/homology-cohom.ts`, which re-derives some of Ripser's own
+structural techniques per its docstring) — against
+[Ripser](https://arxiv.org/abs/1908.02518) (Bauer, 2021), the established
+fastest batch Vietoris–Rips persistence tool (Bauer's own paper shows it
+outperforms GUDHI, Dionysus, PHAT, and Perseus by 40x+ in time and 15x+ in
+memory), on the same real datasets used elsewhere in this repo's benchmarks.
+This is a correctness cross-check plus an honest speed reference point, not a
+claim that TopoJS competes with Ripser on speed.
 
 GUDHI was also attempted (`pip install gudhi`) but has no manylinux wheel for
 this environment's architecture (aarch64) and there is no conda available to
@@ -22,57 +25,77 @@ Reproduce with: `pip install --break-system-packages ripser numpy` then
 For each real dataset (monthly sunspots, Melbourne daily min. temperatures —
 the same CSVs and 2D delay-embedding methodology as `bench/benchmark.ts`,
 re-implemented in Python in `bench/compare_ripser.py` to match exactly), the
-identical point cloud is fed to both Ripser (`ripser.ripser(X, maxdim, thresh)`)
-and TopoJS (`bench/export_topojs_diagram.ts`, a thin Node subprocess wrapper
-around `computePersistentHomology`). Betti-number-style summaries (finite vs.
-essential pair counts per homology dimension) are compared directly, and
-wall-clock time is reported for both.
+identical point cloud is fed to Ripser (`ripser.ripser(X, maxdim, thresh)`,
+run once per case) and then to BOTH TopoJS engines in turn
+(`bench/export_topojs_diagram.ts`, a thin Node subprocess wrapper that takes
+an `engine` arg selecting `computePersistentHomology` or
+`computePersistentHomologyCohomology`). Betti-number-style summaries (finite
+vs. essential pair counts per homology dimension) are compared directly for
+each engine against the same Ripser run, and wall-clock time is reported for
+all three.
 
 **API convention mismatch, found and documented so it isn't rediscovered:**
 Ripser's `maxdim` parameter is the highest *homology* dimension to compute
-(`maxdim=2` → H0+H1+H2). TopoJS's `computePersistentHomology`'s `maxDim`
-parameter is the highest *simplex* dimension to construct — per its own
-docstring, `maxDim=1` and `maxDim=2` both mean "H0+H1 only"; `maxDim=3`
-(tetrahedra) is required to get H2 at all. The comparison script converts
-between the two conventions explicitly (`bench/compare_ripser.py`,
-`run_case()`); an earlier run of this exact script without that conversion
-produced what looked like a real "TopoJS misses an H2 class" bug and was, in
-fact, just this off-by-one in API convention.
+(`maxdim=2` → H0+H1+H2). Both TopoJS engines' `maxDim` parameter is the
+highest *simplex* dimension to construct — per their docstrings, `maxDim=1`
+and `maxDim=2` both mean "H0+H1 only"; `maxDim=3` (tetrahedra) is required to
+get H2 at all. The comparison script converts between the two conventions
+explicitly (`bench/compare_ripser.py`, `run_topojs_engine()`); an earlier run
+of this exact script without that conversion produced what looked like a
+real "TopoJS misses an H2 class" bug and was, in fact, just this off-by-one
+in API convention.
 
 ## Results
 
-| Case | n | maxDim(H) | Ripser | TopoJS | Betti match (raw) | Betti match (excl. zero-persistence bars) | Speed ratio |
-|---|---|---|---|---|---|---|---|
-| sunspots | 60 | H0+H1+H2 | 3.4ms | 117ms | YES | YES | 35x slower |
-| Melbourne temps | 60 | H0+H1+H2 | 1.8ms | 29ms | YES | YES | 16x slower |
-| sunspots | 400 | H0+H1 | 7.1ms | 660ms | YES | YES | 93x slower |
-| Melbourne temps | 400 | H0+H1 | 6.3ms | 185ms | **NO** (see below) | **YES** (confirmed) | 30x slower |
+| Case | n | maxDim(H) | Ripser | plain | cohom | Betti match (raw) | Betti match (excl. zero-persistence bars) | plain vs Ripser | cohom vs Ripser | cohom vs plain |
+|---|---|---|---|---|---|---|---|---|---|---|
+| sunspots | 60 | H0+H1+H2 | 3.6ms | 119ms | 56ms | YES (both) | YES | 33x slower | 16x slower | 2.1x faster |
+| Melbourne temps | 60 | H0+H1+H2 | 1.8ms | 33ms | 29ms | YES (both) | YES | 18x slower | 16x slower | 1.1x faster |
+| sunspots | 400 | H0+H1 | 7.9ms | 681ms | 207ms | YES (both) | YES | 86x slower | 26x slower | 3.3x faster |
+| Melbourne temps | 400 | H0+H1 | 6.2ms | 198ms | 109ms | **NO** (both, see below) | **YES** (both) | 32x slower | 18x slower | 1.8x faster |
+
+Geometric mean slowdown vs Ripser across all 4 cases: **plain 35.9x, cohom
+18.5x**. Reproduce with `python3 bench/compare_ripser.py`; raw output in
+`bench/data/ripser_comparison_results.txt`, including a note that the exact
+per-case cohom-vs-plain ratio is noisy run-to-run (pure-JS JIT/GC timing) —
+the *direction* (cohom consistently faster, roughly halving the gap) was
+stable across multiple runs, the exact multiplier was not.
 
 ### Speed, reported honestly
 
-TopoJS's plain batch engine is 18x–91x slower than Ripser on these real
-datasets, and the gap widens with `n` (91x at n=400 vs. 18-36x at n=60) —
+TopoJS's plain batch engine is 18x–86x slower than Ripser on these real
+datasets, and the gap widens with `n` (86x at n=400 vs. 18-33x at n=60) —
 consistent with Ripser's fundamentally different algorithmic approach
 (implicit coboundary representation, apparent pairs, avoids ever
 materializing the full boundary matrix) versus this engine's explicit
 DenseWorkingCol matrix reduction. This is expected and not hidden: Ripser is
 a decade of C++ optimization built specifically to be the fastest tool in
 its category; TopoJS's plain engine was never claimed to compete with it.
-(`computePersistentHomologyCohomology`, this repo's other batch engine,
-independently re-derives *some* of Ripser's structural techniques — see its
-own docstring in `src/index.ts` for exactly which ones and their measured
-effect — but was not included in this comparison and has not been
-benchmarked against Ripser either; that is a gap for future work, not a
-claim resolved here.)
 
-**H2 does not scale in this engine.** An n=400 case with H2 enabled
-(`maxDim=3`, tetrahedra construction) was attempted and did not finish in
-40 seconds, so it was dropped from the table above in favor of an H0+H1-only
-n=400 comparison. Ripser computed the same case's H0+H1+H2 in ~72ms in an
-earlier probe run. This is a real, load-bearing limitation of the plain
-engine's explicit tetrahedra-enumeration approach to H2, not a benchmark
-artifact — documented here rather than quietly avoided by only testing small
-n.
+**Update: `computePersistentHomologyCohomology` was benchmarked against
+Ripser too (previously flagged as a gap for future work, not resolved
+here — now resolved).** It closes roughly half the gap on a geometric-mean
+basis (35.9x → 18.5x slower than Ripser), consistent with its docstring's
+own claim of re-deriving *some* (not all) of Ripser's structural techniques
+— it reduces one column per cycle edge instead of one per triangle, the same
+category of structural win Ripser gets from its coboundary direction, but
+still builds an explicit boundary/coboundary matrix in JS rather than
+Ripser's fully implicit, apparent-pairs-first C++ implementation. Both
+engines remain exactly as correct as the plain engine (identical Betti
+numbers on every case, identical zero-persistence-bar reconciliation on the
+one case with coincident points) — the speed difference between them is a
+pure implementation-technique gap, not a precision or correctness tradeoff.
+
+**H2 does not scale in the plain engine.** An n=400 case with H2 enabled
+(`maxDim=3`, tetrahedra construction) was attempted against the plain engine
+and did not finish in 40 seconds, so it was dropped from the H0+H1+H2 cases
+above in favor of an H0+H1-only n=400 comparison (run against both engines
+for a fair comparison on the same case). Ripser computed the same case's
+H0+H1+H2 in ~72ms in an earlier probe run. Whether the cohom engine's H2
+phase (which the class docstring says exists, using the same apparent-pairs-
+style construction one dimension up) also survives n=400 where the plain
+engine's explicit tetrahedra enumeration doesn't is a separate,
+not-yet-answered question — tracked as a follow-up, not assumed either way.
 
 ### The one real mismatch, root-caused
 
@@ -130,13 +153,18 @@ told about explicitly, not left to discover.
 
 ## Honest summary
 
-TopoJS's plain batch engine is correct (verified against an independent,
-peer-reviewed, widely-used reference implementation, not just against its
-own differential test suite) on real data with no coincident points, and
+Both TopoJS batch engines are correct (verified against an independent,
+peer-reviewed, widely-used reference implementation, not just against each
+other's differential test suite) on real data with no coincident points, and
 correct in a way that is well-understood and defensible (not silently wrong)
-on real data that does have coincident points — it is simply operating under
-a different, explicitly stated zero-persistence-bar convention than Ripser.
-It is substantially slower than Ripser (18x-91x on these cases, widening
-with `n`), which is expected and not something this repository claims to
-have solved. H2 (tetrahedra-based) computation does not scale past small `n`
-in the plain engine and is a real, acknowledged limitation.
+on real data that does have coincident points — they are simply operating
+under a different, explicitly stated zero-persistence-bar convention than
+Ripser. Both are substantially slower than Ripser (18x-86x, widening with
+`n`), which is expected and not something this repository claims to have
+solved — but they are not equally slow: `computePersistentHomologyCohomology`
+is consistently faster than the plain engine (1.1x-3.3x observed, roughly
+halving the geometric-mean gap to Ripser, 35.9x → 18.5x) by re-deriving part
+of Ripser's own structural approach, at no correctness cost. H2
+(tetrahedra-based) computation does not scale past small `n` in the plain
+engine and is a real, acknowledged limitation; whether the cohom engine's H2
+phase does better is not yet measured.

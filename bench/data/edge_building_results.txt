@@ -1,0 +1,94 @@
+Spatial-grid edge-building optimization: isolated micro-benchmark
+===================================================================
+
+WHAT THIS MEASURES
+-------------------
+buildRipsComplex (src/core/complex.ts) used to find all point pairs within
+maxDist via a brute-force O(n^2) double loop. It now optionally uses a
+uniform spatial grid (src/core/spatial-grid.ts, cellSize = maxDist) to
+narrow candidate pairs before computing any distance -- see complex.ts's
+docstring for the correctness argument (candidate superset, zero
+approximation, byte-identical output; verified in test/spatial-grid.test.ts
+via differential testing against an independent brute-force reference,
+including a dedicated case with n above the threshold below).
+
+This file isolates ONLY the edge-building step (both approaches building
+the identical full {u,v,val} edge array, JIT-warmed with a throwaway run
+before timing, averaged over repeated trials) to characterize the grid's
+actual performance, separate from buildRipsComplex's other stages
+(triangle/tetrahedra construction, matrix reduction) which this change did
+not touch and which dominate total time in this repo's current benchmark
+cases (see "why this doesn't move compare_ripser.py's numbers" below).
+
+METHOD
+------
+2D point clouds, n points uniformly random in a box of side ~sqrt(n)*c
+(c varies by regime below, controlling realized point density), fixed
+maxDist=1.0, 3 timed trials per n after JIT warmup. Two regimes tested to
+check whether the crossover point is sensitive to density.
+
+RESULTS: sparse regime (c=3, box grows faster than n -- keeps edge count
+low relative to n^2, mimics a low-density windowed-TDA-style point cloud)
+---------------------------------------------------------------------------
+n=60:    edges=12      brute=0.297ms   grid=0.982ms   speedup=0.30x  (grid LOSES)
+n=150:   edges=33      brute=0.154ms   grid=0.737ms   speedup=0.21x  (grid LOSES)
+n=400:   edges=69      brute=0.225ms   grid=1.225ms   speedup=0.18x  (grid LOSES)
+n=700:   edges=136     brute=0.703ms   grid=0.743ms   speedup=0.95x  (breakeven)
+n=1000:  edges=188     brute=1.397ms   grid=0.853ms   speedup=1.64x  (grid wins)
+n=1400:  edges=266     brute=2.834ms   grid=1.300ms   speedup=2.18x
+n=2000:  edges=357     brute=5.501ms   grid=2.062ms   speedup=2.67x
+n=3000:  edges=518     brute=12.740ms  grid=2.996ms   speedup=4.25x
+
+RESULTS: moderate-density regime (c=1.2 -- denser complex at the same n)
+---------------------------------------------------------------------------
+n=60:    edges=58      brute=0.006ms   grid=0.078ms   speedup=0.07x  (grid LOSES badly)
+n=150:   edges=151     brute=0.033ms   grid=0.203ms   speedup=0.16x  (grid LOSES)
+n=400:   edges=435     brute=0.230ms   grid=0.408ms   speedup=0.56x  (grid LOSES)
+n=700:   edges=726     brute=0.691ms   grid=0.946ms   speedup=0.73x  (grid LOSES)
+n=1000:  edges=1050    brute=1.390ms   grid=0.957ms   speedup=1.45x  (grid wins)
+n=1400:  edges=1516    brute=2.848ms   grid=1.440ms   speedup=1.98x
+n=2000:  edges=2190    brute=5.643ms   grid=2.006ms   speedup=2.81x
+n=3000:  edges=3299    brute=12.826ms  grid=3.173ms   speedup=4.04x
+
+A separate, much denser regime (maxDist large relative to point spread,
+so nearly every pair is a true edge) was also checked at n=500/2000 and
+showed the grid losing even more badly there (0.23x/0.78x) -- consistent
+with the grid providing zero benefit when almost nothing is filtered out,
+since candidate-narrowing has no work to save in that regime.
+
+CONCLUSION: a real, consistent crossover around n~900-1000, essentially
+the same in both density regimes tested. Below it, the grid's per-point
+overhead (Map.get/set on string cell keys, small array allocation per
+query) costs more than the distance computations it avoids. Above it, the
+O(n) grid construction plus O(3^dims) candidate cells per point starts
+winning over O(n^2) brute force, and the win grows with n as expected.
+
+DECISION
+--------
+buildRipsComplex now gates the grid behind GRID_MIN_N = 1000 (src/core/
+complex.ts) -- a single, density-agnostic constant set just above the
+measured crossover, chosen deliberately simple over an adaptive density
+estimate since both regimes tested crossed over in the same neighborhood.
+Below GRID_MIN_N, buildRipsComplex always uses brute force, exactly as
+before this optimization existed -- no regression is possible for n below
+the threshold, by construction.
+
+WHY THIS DOESN'T MOVE compare_ripser.py's OR benchmark.ts's NUMBERS
+---------------------------------------------------------------------
+Every real-data case in this repo's other benchmarks uses n=60-400 points
+(bench/compare_ripser.py) or windowSize=5-80 (bench/benchmark.ts's
+streaming comparisons, via StreamingHomology's naive buildRipsComplex
+rebuild on every push). All of these are below GRID_MIN_N=1000, so the
+grid path is never taken by any currently-benchmarked case in this repo --
+this is not a bug, it's the threshold correctly protecting small-n cases
+from the grid's measured overhead. The optimization's real, verified
+benefit (correctness-checked via differential testing, performance-checked
+here) applies to larger point clouds than this repo currently benchmarks
+on; it is reported honestly as such rather than claimed as a win on
+existing benchmark numbers it does not actually move.
+
+Reproduce: the exact scripts used are not checked into this repo (ad hoc
+isolated micro-benchmarks, not part of the `npm run bench` harness since
+they test an internal implementation detail of buildRipsComplex rather
+than a user-facing engine comparison) -- the method above is complete
+enough to reproduce directly against src/core/spatial-grid.ts.

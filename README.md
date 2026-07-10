@@ -111,13 +111,27 @@ by differential testing against the reference implementation at every push. Run
   Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest
   existing streaming-persistent-homology framework (Moitra/Malott/Wilsey
   2023) — and states plainly what is and is not novel here.
-- `docs/COMPARISON.md` cross-checks the batch engine
-  (`computePersistentHomology`) against [Ripser](https://arxiv.org/abs/1908.02518)
-  on real data: correctness matches on data with no coincident points,
-  18x–91x slower than Ripser (expected, not hidden), and documents one real,
-  root-caused convention difference (zero-persistence H0 bars from
-  exact-duplicate points: kept here, silently dropped by Ripser) found via
-  the cross-check. Reproduce with `python3 bench/compare_ripser.py`.
+- `buildRipsComplex`'s edge-building step (`src/core/complex.ts`) uses a
+  uniform spatial grid instead of brute-force O(n²) pairwise distances when
+  `n >= 1000` (below that, measured grid overhead loses to brute force —
+  see `bench/data/edge_building_results.txt` for the isolated benchmark and
+  crossover data behind that threshold). Zero approximation: same exact
+  edges and filtration values either way, verified by differential testing
+  in `test/spatial-grid.test.ts`. Reported honestly — this does not move
+  any of this repo's current benchmark numbers, since every dataset
+  benchmarked elsewhere in this repo (n=60–400, streaming windows 5–80) is
+  below the threshold; the win is real but applies to larger point clouds
+  than this repo currently benchmarks on.
+- `docs/COMPARISON.md` cross-checks both batch engines
+  (`computePersistentHomology` and `computePersistentHomologyCohomology`)
+  against [Ripser](https://arxiv.org/abs/1908.02518) on real data:
+  correctness matches on data with no coincident points, 18x–86x slower than
+  Ripser depending on engine and case (expected, not hidden — cohom is
+  consistently ~1.1x-3.3x faster than plain, roughly halving the geometric-
+  mean gap to Ripser, 36x → 18x), and documents one real, root-caused
+  convention difference (zero-persistence H0/H1 bars from exact-duplicate
+  points: kept here, silently dropped by Ripser) found via the cross-check.
+  Reproduce with `python3 bench/compare_ripser.py`.
 
 ## License
 

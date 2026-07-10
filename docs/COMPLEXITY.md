@@ -28,8 +28,14 @@ For a window of `k` points under Rips threshold `maxDist`:
 1. **Edges** (lines 73–82): an unconditional double loop over all `i < j`
    pairs — this is `Θ(k²)` **always**, independent of how many pairs
    actually survive the `maxDist` filter. There is no way to avoid this
-   without a spatial index (not implemented here) — a genuine, unavoidable
-   `Θ(k²)` per push.
+   without a spatial index. A spatial-grid index *was* later added to
+   `buildRipsComplex` (see `bench/data/edge_building_results.txt`), but it
+   is gated to `n >= 1000` because measured grid overhead loses to brute
+   force below that — every window size `StreamingHomology` actually calls
+   `buildRipsComplex` with in this repo's benchmarks (`k` = 5–80) is well
+   under that threshold, so this section's `Θ(k²)` **always** claim for the
+   naive baseline's edge step still holds unqualified in practice here, not
+   just in the worst case.
 2. **Triangles** (lines 117–150): for each of the `E` realized edges `(u,v)`,
    it intersects `u`'s and `v`'s bit-vector adjacency sets to find common
    neighbors — **not** a raw `O(k³)` enumeration of all vertex triples. Cost

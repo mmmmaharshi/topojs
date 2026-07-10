@@ -91,41 +91,37 @@ def betti_summary(dgms, maxdim: int) -> dict:
     return out
 
 
-def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> None:
-    n = len(points)
-    print(f"\n=== {name}: n={n} points, maxDist={max_dist}, maxDim={max_dim} ===")
-
-    # -- Ripser --
-    t0 = time.perf_counter()
-    result = ripser(points, maxdim=max_dim, thresh=max_dist)
-    ripser_ms = (time.perf_counter() - t0) * 1000
-    ripser_betti = betti_summary(result["dgms"], max_dim)
-    print(f"ripser (C++, state-of-the-art batch reference): {ripser_ms:.2f}ms  byDim={ripser_betti}")
-
-    # -- topojs (via Node subprocess, exact same point cloud) --
-    csv_path = TMPDIR / f"{name}.csv"
-    out_path = TMPDIR / f"{name}_result.json"
+def run_topojs_engine(name: str, engine: str, points: np.ndarray, max_dist: float,
+                       max_dim: int, ripser_ms: float, ripser_betti: dict) -> dict:
+    """Run one topojs engine ("plain" or "cohom") against the same case Ripser
+    already ran, compare Betti numbers, and return a small results dict for
+    the cross-engine summary table. Split out of run_case() so both engines
+    can be run and compared side by side against the same Ripser result,
+    instead of re-running Ripser (nondeterministic timing) per engine."""
+    csv_path = TMPDIR / f"{name}_{engine}.csv"
+    out_path = TMPDIR / f"{name}_{engine}_result.json"
     np.savetxt(csv_path, points, fmt="%.10f")
     # NOTE on convention mismatch: ripser's `maxdim` is the highest HOMOLOGY
-    # dimension to compute (2 = H0+H1+H2). topojs's computePersistentHomology
-    # `maxDim` is the highest SIMPLEX dimension to construct -- per its own
-    # docstring, maxDim=1 and maxDim=2 both mean "H0+H1 only"; you must pass
-    # maxDim=3 (tetrahedra) to get H2 at all. This tripped up the first run
-    # of this script (saw a real-looking "topojs missed an H2 class"
-    # mismatch that was actually just this off-by-one in API convention, not
-    # an algorithm bug) -- documented here so it isn't silently "fixed" by
-    # coincidence again.
+    # dimension to compute (2 = H0+H1+H2). topojs's engines' `maxDim` is the
+    # highest SIMPLEX dimension to construct -- per their docstrings, maxDim=1
+    # and maxDim=2 both mean "H0+H1 only"; you must pass maxDim=3 (tetrahedra)
+    # to get H2 at all. This tripped up the first run of this script (saw a
+    # real-looking "topojs missed an H2 class" mismatch that was actually
+    # just this off-by-one in API convention, not an algorithm bug) --
+    # documented here so it isn't silently "fixed" by coincidence again.
     topojs_max_dim = max_dim + 1 if max_dim >= 2 else max_dim
     subprocess.run(
         [
             "node", "--experimental-transform-types",
             str(HERE / "export_topojs_diagram.ts"),
-            str(csv_path), "2", str(max_dist), str(topojs_max_dim), str(out_path),
+            str(csv_path), "2", str(max_dist), str(topojs_max_dim), str(out_path), engine,
         ],
         check=True, capture_output=True, text=True,
     )
     topojs_result = json.loads(out_path.read_text())
-    print(f"topojs (pure JS, this repo): {topojs_result['ms']:.2f}ms  byDim={topojs_result['byDim']}")
+    label = "topojs[plain] (pure JS, computePersistentHomology)" if engine == "plain" \
+        else "topojs[cohom] (pure JS, computePersistentHomologyCohomology -- re-derives some Ripser structural tricks)"
+    print(f"{label}: {topojs_result['ms']:.2f}ms  byDim={topojs_result['byDim']}")
 
     # -- compare --
     match = True
@@ -136,23 +132,24 @@ def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> No
         r_essential = ripser_betti[str(d)]["essential"]
         if (t_finite, t_essential) != (r_finite, r_essential):
             match = False
-            print(f"  MISMATCH at dim {d}: topojs finite={t_finite} essential={t_essential}  "
+            print(f"  [{engine}] MISMATCH at dim {d}: topojs finite={t_finite} essential={t_essential}  "
                   f"ripser finite={r_finite} essential={r_essential}")
-    print(f"Betti-number match across all dims: {'YES' if match else 'NO'}")
+    print(f"[{engine}] Betti-number match across all dims: {'YES' if match else 'NO'}")
 
     # -- reconcile via zero-persistence-bar convention, if raw counts mismatched --
     # Root-caused (see docs/COMPARISON.md "The one real mismatch, root-caused"):
     # coincident/duplicate points produce degenerate simplices whose birth and
     # death filtration values are equal (a zero-persistence bar). TopoJS's
-    # computePersistentHomology emits these unconditionally (every boundary-
-    # matrix reduction pivot is a mathematically valid pair, full stop);
-    # Ripser silently drops them from its returned diagram, which is the
-    # common convention in TDA tooling (zero-persistence bars carry no
-    # information about the Betti-number curve at any filtration value) but
-    # is NOT documented as such in Ripser's own API. If the raw counts above
-    # disagreed, re-check after excluding these bars from TopoJS's side
-    # before concluding there is an algorithm bug -- a raw MISMATCH here is
-    # NOT on its own evidence of incorrect computation.
+    # engines emit these unconditionally (every boundary-matrix reduction
+    # pivot is a mathematically valid pair, full stop); Ripser silently drops
+    # them from its returned diagram, which is the common convention in TDA
+    # tooling (zero-persistence bars carry no information about the
+    # Betti-number curve at any filtration value) but is NOT documented as
+    # such in Ripser's own API. If the raw counts above disagreed, re-check
+    # after excluding these bars from TopoJS's side before concluding there
+    # is an algorithm bug -- a raw MISMATCH here is NOT on its own evidence
+    # of incorrect computation.
+    reconciled = None
     if not match:
         t_pairs = topojs_result["pairs"]
         EPS = 1e-9
@@ -171,38 +168,93 @@ def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> No
             r_essential = ripser_betti[str(d)]["essential"]
             if (t_nontrivial_finite, t_essential) != (r_finite, r_essential):
                 reconciled = False
-        print(f"Betti-number match after excluding topojs's zero-persistence bars: "
+        print(f"[{engine}] Betti-number match after excluding topojs's zero-persistence bars: "
               f"{'YES' if reconciled else 'STILL NO -- investigate further'}")
+
+    speed_ratio = topojs_result["ms"] / ripser_ms if ripser_ms > 0 else float("inf")
     if ripser_ms > 0:
-        print(f"speed ratio (topojs_ms / ripser_ms): {topojs_result['ms'] / ripser_ms:.1f}x "
+        print(f"[{engine}] speed ratio (topojs_ms / ripser_ms): {speed_ratio:.1f}x "
               f"({'topojs slower' if topojs_result['ms'] > ripser_ms else 'topojs faster'})")
 
     csv_path.unlink(missing_ok=True)
     out_path.unlink(missing_ok=True)
+    return {
+        "engine": engine, "ms": topojs_result["ms"], "match": match,
+        "reconciled": reconciled, "speed_ratio": speed_ratio,
+    }
+
+
+def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> list:
+    n = len(points)
+    print(f"\n=== {name}: n={n} points, maxDist={max_dist}, maxDim={max_dim} ===")
+
+    # -- Ripser (run once per case, shared as the baseline for both topojs engines) --
+    t0 = time.perf_counter()
+    result = ripser(points, maxdim=max_dim, thresh=max_dist)
+    ripser_ms = (time.perf_counter() - t0) * 1000
+    ripser_betti = betti_summary(result["dgms"], max_dim)
+    print(f"ripser (C++, state-of-the-art batch reference): {ripser_ms:.2f}ms  byDim={ripser_betti}")
+
+    engine_results = []
+    for engine in ("plain", "cohom"):
+        r = run_topojs_engine(name, engine, points, max_dist, max_dim, ripser_ms, ripser_betti)
+        r["case"] = name
+        engine_results.append(r)
+
+    plain_ms = next(r["ms"] for r in engine_results if r["engine"] == "plain")
+    cohom_ms = next(r["ms"] for r in engine_results if r["engine"] == "cohom")
+    if cohom_ms > 0:
+        print(f"cohom vs plain (this repo, same case): {plain_ms / cohom_ms:.2f}x "
+              f"({'cohom faster' if cohom_ms < plain_ms else 'cohom slower or equal'})")
+
+    return engine_results
 
 
 def main():
     sunspots = load_sunspots()
     melbourne = load_melbourne()
 
+    all_results = []
+
     # Small case, H0+H1+H2: same order of magnitude as the streaming
     # benchmarks' window sizes. topojs's plain computePersistentHomology
     # needs maxDim=3 (tetrahedra construction) to compute H2 at all -- see
-    # the conversion note in run_case().
-    run_case("sunspots_n60", sunspots[:60], max_dist=0.15, max_dim=2)
-    run_case("melbourne_n60", melbourne[:60], max_dist=0.15, max_dim=2)
+    # the conversion note in run_topojs_engine().
+    all_results += run_case("sunspots_n60", sunspots[:60], max_dist=0.15, max_dim=2)
+    all_results += run_case("melbourne_n60", melbourne[:60], max_dist=0.15, max_dim=2)
 
     # Larger case, H0+H1 ONLY (max_dim=1 -> topojs maxDim=1, no tetrahedra).
     # An earlier version of this script tried n=400 WITH H2 (max_dim=2) here
-    # and topojs's tetrahedra enumeration did not finish in 40s -- Ripser
-    # avoids ever materializing tetrahedra explicitly (implicit coboundary +
-    # apparent pairs, Bauer 2019), which is exactly the kind of structural
-    # advantage this repo's own computePersistentHomologyCohomology partially
-    # re-derives (see its docstring) but the PLAIN engine tested here does
-    # not have. That is reported honestly as a real scaling limit of this
-    # specific engine at H2, not glossed over by quietly capping n lower.
-    run_case("sunspots_n400_H0H1only", sunspots[:400], max_dist=0.1, max_dim=1)
-    run_case("melbourne_n400_H0H1only", melbourne[:400], max_dist=0.1, max_dim=1)
+    # and topojs's PLAIN engine's tetrahedra enumeration did not finish in
+    # 40s -- Ripser avoids ever materializing tetrahedra explicitly (implicit
+    # coboundary + apparent pairs, Bauer 2019), which is exactly the kind of
+    # structural advantage this repo's own computePersistentHomologyCohomology
+    # partially re-derives (see its docstring). Both engines are compared at
+    # H0+H1 here for a fair apples-to-apples read on the same case; whether
+    # the cohom engine also survives the H2/n=400 case the plain engine
+    # couldn't is a separate, not-yet-answered question (see punch list).
+    all_results += run_case("sunspots_n400_H0H1only", sunspots[:400], max_dist=0.1, max_dim=1)
+    all_results += run_case("melbourne_n400_H0H1only", melbourne[:400], max_dist=0.1, max_dim=1)
+
+    # -- cross-case summary: how much of the plain engine's gap does cohom close? --
+    print("\n=== summary: topojs engine speed ratio vs Ripser, across all cases ===")
+    print(f"{'case':<28}{'plain (x slower)':<20}{'cohom (x slower)':<20}{'cohom speedup over plain':<26}")
+    plain_ratios, cohom_ratios = [], []
+    for case_name in dict.fromkeys(r["case"] for r in all_results):  # preserve order, de-dup
+        case_rs = [r for r in all_results if r["case"] == case_name]
+        plain_r = next(r for r in case_rs if r["engine"] == "plain")
+        cohom_r = next(r for r in case_rs if r["engine"] == "cohom")
+        plain_ratios.append(plain_r["speed_ratio"])
+        cohom_ratios.append(cohom_r["speed_ratio"])
+        speedup = plain_r["ms"] / cohom_r["ms"] if cohom_r["ms"] > 0 else float("inf")
+        print(f"{case_name:<28}{plain_r['speed_ratio']:<20.1f}{cohom_r['speed_ratio']:<20.1f}{speedup:<26.2f}")
+    if plain_ratios and cohom_ratios:
+        import statistics
+        print(f"\ngeometric mean slowdown vs Ripser: plain={statistics.geometric_mean(plain_ratios):.1f}x, "
+              f"cohom={statistics.geometric_mean(cohom_ratios):.1f}x")
+    all_reconciled = all(r["match"] or r["reconciled"] for r in all_results)
+    print(f"all cases correct (raw match OR reconciled via zero-persistence-bar convention): "
+          f"{'YES' if all_reconciled else 'NO -- see MISMATCH lines above'}")
 
 
 if __name__ == "__main__":
