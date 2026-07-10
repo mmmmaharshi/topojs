@@ -123,13 +123,15 @@ export type { TopologicalSummary } from './streaming/topological-summary.ts';
 // All performance claims for this class are now benchmarked against real,
 // externally-sourced data only (earlier synthetic i.i.d.-random benchmarks
 // and their output data have been removed). See bench/data/summary.txt for
-// full methodology and bench/incremental-real-data-benchmark.ts (sunspots),
-// bench/incremental-iris-benchmark.ts (UCI Iris), and
-// bench/incremental-melbourne-temp-benchmark.ts (Melbourne daily min temps)
-// for the three independent real-data measurements: geometric mean speedup
-// over StreamingHomology of 1.34x-1.91x, all statistically significant
-// (paired t-test on log-speedup, p<0.05) despite small chunk counts (the
-// practical limit of chunking a single real series). Re-run before citing
-// exact numbers.
+// full methodology and bench/incremental-benchmark.ts (one parameterized
+// harness, dataset registry covers sunspots, UCI Iris, and Melbourne daily
+// min temps -- run all with `npm run bench:incremental`, or a single
+// dataset with `npm run bench:incremental -- <name>`) for the three
+// independent real-data measurements: geometric mean speedup over
+// StreamingHomology of 1.34x-1.91x, all statistically significant (paired
+// t-test on log-speedup, p<0.05) despite small chunk counts (the practical
+// limit of chunking a single real series). Re-run before citing exact
+// numbers. Add new benchmark axes to that file's dataset registry, not as
+// a new standalone script.
 export { IncrementalH1 } from './streaming/incremental-h1.ts';
 export type { IncrementalH1Options, IncrementalH1Update } from './streaming/incremental-h1.ts';

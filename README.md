@@ -58,8 +58,11 @@ engine (`IncrementalH1`) against the naive recompute-from-scratch baseline
 
 All three are statistically significant (paired t-test on log-speedup, p<0.05).
 Full methodology, raw per-trial numbers, and honest caveats in `bench/data/summary.txt`.
-Reproduce with `npm run bench:incremental:real-data`, `npm run bench:incremental:iris`,
-`npm run bench:incremental:melbourne-temp`.
+All three run from one parameterized harness — reproduce all with
+`npm run bench:incremental`, or a single dataset with
+`npm run bench:incremental -- sunspots` (also `iris`, `melbourne-temp`).
+New benchmark axes (datasets, engines) should be added to that same file's
+dataset registry rather than as new standalone scripts — real data only.
 
 ## Test Coverage
 

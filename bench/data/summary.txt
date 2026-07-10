@@ -9,7 +9,10 @@ output data, per an explicit decision to keep only benchmarks run against
 real, externally-sourced data. What remains below are the three real-data
 speedup benchmarks for the v3 incremental-geometry change to IncrementalH1
 (src/streaming/incremental-h1.ts) versus the Phase A naive baseline
-(StreamingHomology).
+(StreamingHomology). All three now run from one parameterized harness,
+bench/incremental-benchmark.ts (dataset registry keyed by name), rather
+than three separate near-duplicate scripts -- run all with
+`npm run bench:incremental`, or one with `npm run bench:incremental -- <name>`.
 
 Axis 1: Incremental H1 (v3) vs Phase A naive, REAL data — monthly sunspots
   Data: monthly sunspot counts 1749-1983 (2820 real months, SIDC/WDC-SILSO,
@@ -30,7 +33,7 @@ Axis 1: Incremental H1 (v3) vs Phase A naive, REAL data — monthly sunspots
   lag=25). The v3 incremental-GEOMETRY speedup (this axis's actual measured
   ~1.9-2x) holds up fine on real data regardless -- that part of the
   mechanism doesn't depend on prefix-caching paying off. Script: bench/
-  incremental-real-data-benchmark.ts (npm run bench:incremental:real-data).
+  incremental-benchmark.ts (npm run bench:incremental -- sunspots).
   Re-run before citing.
 
 Axis 2: Incremental H1 (v3) vs Phase A naive, REAL data — UCI Iris
@@ -55,8 +58,8 @@ Axis 2: Incremental H1 (v3) vs Phase A naive, REAL data — UCI Iris
   further evidence the prefix-caching mechanism itself stays saturated
   regardless of data type; only the v3 geometry-construction change carries
   the measured speedup, consistently, across real time series and real
-  class-structured data. Script: bench/incremental-iris-benchmark.ts (npm
-  run bench:incremental:iris). Re-run before citing.
+  class-structured data. Script: bench/incremental-benchmark.ts (npm run
+  bench:incremental -- iris). Re-run before citing.
 
 Axis 3: Incremental H1 (v3) vs Phase A naive, REAL data — Melbourne daily
   min temperatures
@@ -77,8 +80,8 @@ Axis 3: Incremental H1 (v3) vs Phase A naive, REAL data — Melbourne daily
   Re-reduced fraction: 99.6%, again consistent with every other axis --
   third independent real-data confirmation that the whole measured gain is
   the v3 geometry-construction change, not prefix-caching. Script: bench/
-  incremental-melbourne-temp-benchmark.ts (npm run bench:incremental:
-  melbourne-temp). Re-run before citing.
+  incremental-benchmark.ts (npm run bench:incremental -- melbourne-temp).
+  Re-run before citing.
 
 Cross-axis summary: v3 incremental-geometry speedup measured at 1.3x-1.9x
 (geometric mean) across three independently real, structurally different

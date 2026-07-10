@@ -25,9 +25,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "demo:real-data": "node --experimental-transform-types bench/real-data-validation.ts",
-    "bench:incremental:real-data": "node --experimental-transform-types bench/incremental-real-data-benchmark.ts",
-    "bench:incremental:iris": "node --experimental-transform-types bench/incremental-iris-benchmark.ts",
-    "bench:incremental:melbourne-temp": "node --experimental-transform-types bench/incremental-melbourne-temp-benchmark.ts"
+    "bench:incremental": "node --experimental-transform-types bench/incremental-benchmark.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
