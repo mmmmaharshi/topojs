@@ -77,6 +77,15 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * part of a repo-wide real-data-only policy; new benchmark axes belong in
  * that file's dataset registry, not a new standalone script.
  *
+ * IMPORTANT, stated honestly: a fixed-window speedup (1.3x-1.9x, Axes 1-3 in
+ * bench/data/summary.txt) does not by itself prove a different growth RATE
+ * vs the naive baseline -- it could just be a constant-factor win. The
+ * scaling sweep (`npm run bench -- --scaling <dataset>`, Axis 4 in the same
+ * file) tests that directly across a range of real window sizes and gets a
+ * MIXED result: growth-rate gap clearly confirmed on sunspot data, close/
+ * noisy on Melbourne temp data, inverted on the smallest/noisiest (Iris)
+ * data. Treat the asymptotic claim as an open question, not settled.
+ *
  * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
  * recomputed fresh via union-find on every push — that step is already
  * O(E α(n)), not the bottleneck, so there is nothing to gain by making it

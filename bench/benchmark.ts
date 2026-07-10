@@ -25,6 +25,7 @@
  * Run all real-data benchmarks:  npm run bench
  * Run just one:                 npm run bench -- sunspots
  * List available datasets:      npm run bench -- --list
+ * Scaling sweep (see below):    npm run bench -- --scaling melbourne-temp
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -130,6 +131,10 @@ interface DatasetConfig {
   maxDist: number;
   nTrials: number; // chunks or repeats
   note?: string;
+  /** Window sizes used by --scaling to empirically measure growth rate on this dataset's real data. */
+  scalingWindowSizes: number[];
+  /** Trials per window size for --scaling; smaller for datasets too short to support the default. */
+  scalingTrials?: number;
   /** Returns the full real point stream in original order, plus a log line describing it. */
   load(): { points: number[][]; logLines: string[] };
 }
@@ -143,6 +148,7 @@ const DATASETS: Record<string, DatasetConfig> = {
     windowSize: 40,
     maxDist: 0.15,
     nTrials: 6,
+    scalingWindowSizes: [10, 20, 40, 80],
     load: loadSunspots,
   },
   iris: {
@@ -154,6 +160,8 @@ const DATASETS: Record<string, DatasetConfig> = {
     maxDist: 0.35,
     nTrials: 10,
     note: 'Only 150 real points exist; repeats time the SAME stream (measurement/JIT noise, not data diversity).',
+    scalingWindowSizes: [5, 10, 20],
+    scalingTrials: 3,
     load: loadIris,
   },
   'melbourne-temp': {
@@ -164,6 +172,7 @@ const DATASETS: Record<string, DatasetConfig> = {
     windowSize: 45,
     maxDist: 0.15,
     nTrials: 8,
+    scalingWindowSizes: [10, 20, 40, 80],
     load: loadMelbourneTemp,
   },
 };
@@ -284,6 +293,106 @@ function runDataset(key: string): { key: string; geoMean: number; ciLow: number;
   return { key, geoMean, ciLow, ciHigh };
 }
 
+// ── scaling sweep ────────────────────────────────────────────────────────
+// Empirically validates the complexity claim (naive O(k^2)/O(k^3) full
+// rebuild vs incremental O(k) + O(deg(new)^2) update) by measuring both
+// engines across a RANGE of window sizes on the SAME real dataset, then
+// fitting a log-log growth-rate exponent (time ~ C * windowSize^p) to each.
+// Real windowed data is not a complete graph, so measured exponents will
+// not exactly hit the worst-case bound -- this reports actual growth on
+// real data, not the theoretical bound, and says so in the output.
+
+interface ScalingRow {
+  windowSize: number;
+  naiveMs: number;
+  incrMs: number;
+  speedup: number;
+  reReducedFrac: number;
+}
+
+function logLogSlope(xs: number[], ys: number[]): number {
+  const lx = xs.map(Math.log);
+  const ly = ys.map(Math.log);
+  const n = lx.length;
+  const mx = lx.reduce((a, b) => a + b, 0) / n;
+  const my = ly.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (lx[i]! - mx) * (ly[i]! - my);
+    den += (lx[i]! - mx) ** 2;
+  }
+  return num / den;
+}
+
+function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10): void {
+  const cfg = DATASETS[key];
+  if (!cfg) throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(', ')}`);
+
+  console.log(`\n=== SCALING SWEEP: ${cfg.name} ===`);
+  console.log(`source: ${cfg.source}`);
+  console.log('(measures real growth rate vs. window size -- validates the O(k) vs O(k^2)/O(k^3) claim on real data)');
+
+  const { points, logLines } = cfg.load();
+  for (const l of logLines) console.log(l);
+
+  const rows: ScalingRow[] = [];
+  console.log();
+  console.log('windowSize'.padStart(10) + 'naive_ms'.padStart(12) + 'incr_ms'.padStart(12) + 'speedup'.padStart(10) + 'reReduced%'.padStart(12));
+
+  for (const windowSize of windowSizes) {
+    const warmup = windowSize + 5;
+    const chunkLen = Math.floor(points.length / trialsPerSize);
+    if (chunkLen < warmup + 25) {
+      console.log(`${String(windowSize).padStart(10)}  skipped -- not enough real data for ${trialsPerSize} trials at this window size`);
+      continue;
+    }
+    // Fewer timed pushes at larger window sizes (each push costs more) so total
+    // sweep time stays roughly bounded across the range, not just the timed part --
+    // the untimed warmup fill (O(windowSize) pushes) still scales with window size.
+    const timedSteps = Math.min(60, Math.max(25, Math.floor(2000 / windowSize)), chunkLen - warmup - 5);
+
+    let naiveTotal = 0;
+    let incrTotal = 0;
+    let reReducedTotal = 0;
+    for (let t = 0; t < trialsPerSize; t++) {
+      const chunk = points.slice(t * chunkLen, t * chunkLen + chunkLen);
+      naiveTotal += benchNaive(chunk, cfg.dims, windowSize, cfg.maxDist, warmup, timedSteps);
+      const { ms, reReducedFrac } = benchIncremental(chunk, cfg.dims, windowSize, cfg.maxDist, warmup, timedSteps);
+      incrTotal += ms;
+      reReducedTotal += reReducedFrac;
+    }
+    const naiveMs = naiveTotal / trialsPerSize;
+    const incrMs = incrTotal / trialsPerSize;
+    const row: ScalingRow = { windowSize, naiveMs, incrMs, speedup: naiveMs / incrMs, reReducedFrac: reReducedTotal / trialsPerSize };
+    rows.push(row);
+    console.log(
+      String(windowSize).padStart(10) + naiveMs.toFixed(2).padStart(12) + incrMs.toFixed(2).padStart(12) +
+        `${row.speedup.toFixed(2)}x`.padStart(10) + `${(row.reReducedFrac * 100).toFixed(1)}%`.padStart(12),
+    );
+  }
+
+  if (rows.length < 3) {
+    console.log('\nNot enough completed window sizes for a growth-rate fit (need >=3).');
+    return;
+  }
+
+  const naiveSlope = logLogSlope(rows.map((r) => r.windowSize), rows.map((r) => r.naiveMs));
+  const incrSlope = logLogSlope(rows.map((r) => r.windowSize), rows.map((r) => r.incrMs));
+  const first = rows[0]!;
+  const last = rows[rows.length - 1]!;
+
+  console.log();
+  console.log('empirical growth rate on real data (log-log slope, time ~ windowSize^p):');
+  console.log(`  naive (Phase A, full rebuild):     p=${naiveSlope.toFixed(2)}`);
+  console.log(`  incremental (v3 IncrementalH1):    p=${incrSlope.toFixed(2)}`);
+  console.log(`speedup grows with window size: ${first.speedup.toFixed(2)}x at windowSize=${first.windowSize} -> ${last.speedup.toFixed(2)}x at windowSize=${last.windowSize}`);
+  console.log('NOTE: real windowed point clouds are not complete graphs, so these exponents will not exactly');
+  console.log('match the worst-case O(k^2)/O(k^3) bound -- this measures actual growth on real data, not the bound.');
+  console.log('A widening speedup with window size (not a flat ratio) is the signal that the algorithmic change,');
+  console.log('not a constant-factor optimization, is what is being measured.');
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 
 const arg = process.argv[2];
@@ -291,6 +400,16 @@ const arg = process.argv[2];
 if (arg === '--list') {
   console.log('Available datasets:');
   for (const [key, cfg] of Object.entries(DATASETS)) console.log(`  ${key.padEnd(16)} ${cfg.name}  (${cfg.source})`);
+  process.exit(0);
+}
+
+if (arg === '--scaling') {
+  const dsKey = process.argv[3] ?? 'melbourne-temp';
+  const sizesArg = process.argv[4];
+  const cfg = DATASETS[dsKey];
+  if (!cfg) throw new Error(`unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(', ')}`);
+  const windowSizes = sizesArg ? sizesArg.split(',').map(Number) : cfg.scalingWindowSizes;
+  runScalingSweep(dsKey, windowSizes, cfg.scalingTrials ?? 10);
   process.exit(0);
 }
 

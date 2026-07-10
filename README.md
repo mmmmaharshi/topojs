@@ -64,6 +64,15 @@ All three run from one parameterized harness — reproduce all with
 New benchmark axes (datasets, engines) should be added to that same file's
 dataset registry rather than as new standalone scripts — real data only.
 
+A separate scaling sweep (`npm run bench -- --scaling <dataset>`) checks
+whether the speedup reflects a genuinely different growth rate (not just a
+constant-factor win) by timing both engines across a range of real window
+sizes. Result, reported honestly rather than cherry-picked: the growth-rate
+gap is clearly confirmed on the sunspot data, close/noisy on the Melbourne
+temperature data, and inverted on the (smallest, noisiest) Iris data — see
+`bench/data/summary.txt` Axis 4 and `bench/data/scaling_results.txt` for the
+full picture. This is flagged as an open question, not a settled result.
+
 ## Test Coverage
 
 Ground-truth topology tests (known Betti numbers for circles, octahedra, disjoint

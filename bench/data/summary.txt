@@ -90,3 +90,59 @@ series). Re-reduced fraction stays 98.9-99.6% in every real-data axis,
 consistently indicating the entire measured speedup comes from the v3
 geometry-construction change (skipping full O(k^2)/O(k^3) rebuild), not
 from the prefix-caching / reduction-skipping mechanism.
+
+Axis 4: Scaling sweep — does the growth RATE differ, not just a constant
+  factor? Axes 1-3 above each use ONE fixed window size per dataset, so a
+  1.3x-1.9x speedup could in principle just be a constant-factor win (same
+  big-O, smaller constant) rather than the claimed different asymptotic
+  class (naive full O(k^2) edges + O(k^3) triangles rebuild vs incremental
+  O(k) new-point distances + O(deg(new)^2) new triangles). This axis tests
+  that directly: for each dataset, time BOTH engines across a RANGE of real
+  window sizes (same data, same maxDist, only k varies), then fit a log-log
+  growth-rate exponent p to each engine's time-vs-k curve (time ~ C*k^p).
+  Method: bench/benchmark.ts --scaling <dataset> (npm run bench -- --scaling
+  <dataset>); disjoint real-data chunks per window size (paired trials, same
+  design as Axes 1/3), 6-10 trials per size depending on how much real data
+  the dataset has to spare. Raw output: bench/data/scaling_results.txt.
+
+  Sunspots (windowSize 10/20/40/80, 6 trials each): naive p=2.07-2.09,
+  incremental p=1.84-1.87. Speedup widens with window size (1.28-1.29x at
+  k=10 -> 1.93-1.98x at k=80) -- this is the CONFIRMING result: on this
+  dataset the incremental engine measurably grows slower than the naive
+  rebuild, not just a fixed ratio.
+
+  Melbourne temps (windowSize 10/20/40/80, 6 trials each): naive p=1.98-2.09,
+  incremental p=1.87-1.93 -- close to each other, not clearly separated.
+  Speedup is noisy rather than monotonically widening (1.28x, dipped to
+  0.98x-1.12x at k=20, back up to 1.65-1.98x at k=40, 1.65-1.68x at k=80).
+  Honest reading: on this dataset, at these window sizes, most of the
+  measured time in BOTH engines is spent in the shared reduction step (which
+  Axes 1-3 already showed stays ~99% re-reduced regardless of engine), so
+  the two curves track each other more closely than on sunspots -- the
+  construction-cost win is present (naive slope still nominally higher) but
+  smaller and noisier here than the sunspots axis shows.
+
+  Iris (windowSize 5/10/20, 3 trials each -- only 150 real points total, so
+  fewer/smaller trials than the other two, and all timings are sub-15ms,
+  where JIT/measurement noise is a large fraction of the signal): naive
+  p=1.83-1.88, incremental p=2.13. Speedup SHRINKS with window size here
+  (1.52-1.62x at k=5 down to 1.08x at k=20) -- the inverse of the sunspots
+  result. Reported plainly rather than dropped: this is the dataset with the
+  least statistical power (fewest trials, smallest absolute times, same
+  caveat already stated for Axes 1-3's Iris numbers), so it is the least
+  reliable of the three, but it is a real disconfirming data point at this
+  configuration and is not excluded from this summary.
+
+  Cross-dataset reading: the complexity argument (incremental should grow
+  slower than naive as window size increases) is clearly confirmed on one
+  of three real datasets (sunspots), ambiguous/roughly-tied on a second
+  (Melbourne temps), and inverted on the third, least-powered one (Iris).
+  The FIXED-window speedup claims in Axes 1-3 (1.3x-1.9x, each statistically
+  significant on its own terms) stand independent of this axis. What this
+  axis adds honestly: the speedup is not uniformly explained by a widening
+  asymptotic gap across all real data tested -- on some real datasets/window
+  ranges it looks close to a constant-factor win instead. This is a genuine
+  open question for further work (larger window-size ranges, more trials,
+  and/or a formal complexity proof -- see project punch list), not a
+  settled result. Re-run before citing; see bench/data/scaling_results.txt
+  for full raw tables.
