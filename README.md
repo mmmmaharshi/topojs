@@ -32,9 +32,9 @@ console.log(cubical.pairs);
 | Function | Description |
 |----------|-------------|
 | `computePersistentHomology(points, dims, maxDist, maxDim)` | Vietoris–Rips H₀+H₁+H₂ |
-| `computeCubicalHomology(image, width, height, maxDim)` | Cubical H₀+H₁ for 2D images |
-| `bottleneckDistance(dg1, dg2)` | L∞ bottleneck distance between diagrams |
-| `computePairwiseDistances(points, dims)` | Euclidean distance matrix |
+| `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images (param order was documented backwards as width,height -- src/core/cubical.ts's actual signature is height,width; only invisible for square images) |
+| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time (finite pairs only -- essential/infinite-persistence classes are not compared, see test/bottleneck.test.ts) |
+| `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix (n was missing from this table but is a required parameter) |
 | `toGudhi(pairs)` | Export to Gudhi text format |
 | `toJSON(pairs, pretty?)` | Export to JSON |
 | `toCSV(pairs)` | Export to CSV |
@@ -56,8 +56,16 @@ engine (`IncrementalH1`) against the naive recompute-from-scratch baseline
 | UCI Iris measurements (150 samples) | archive.ics.uci.edu | 1.34× (95% CI 1.05×–1.72×) |
 | Melbourne daily min. temperatures (1981–1990) | Australian BOM | 1.65× (95% CI 1.42×–1.95×) |
 
-All three are statistically significant (paired t-test on log-speedup, p<0.05).
-Full methodology, raw per-trial numbers, and honest caveats in `bench/data/summary.txt`.
+All three are statistically significant (paired t-test on log-speedup, p<0.05) —
+though for the two chunk-based datasets (sunspots, Melbourne), that
+significance is sensitive to residual autocorrelation between chunks of the
+same real series; `bench/benchmark.ts` now reports an effective-N-adjusted
+CI alongside the raw one, and it is not always as comfortably above 1x as
+the raw numbers suggest. Note also that these are *relative* speedups
+against this repo's own naive baseline, not an absolute performance claim —
+see "Comparison Against Prior Work" below for how the underlying batch
+engine compares to Ripser in absolute terms. Full methodology, raw
+per-trial numbers, and honest caveats in `bench/data/summary.txt`.
 All three run from one parameterized harness — reproduce all with
 `npm run bench`, or a single dataset with `npm run bench -- sunspots`
 (also `iris`, `melbourne-temp`).

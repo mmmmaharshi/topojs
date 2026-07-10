@@ -14,6 +14,21 @@ bench/benchmark.ts (dataset registry keyed by name), rather than three
 separate near-duplicate scripts -- run all with `npm run bench`, or one
 with `npm run bench -- <name>`.
 
+IMPORTANT CONTEXT, added after review so it isn't missed by only reading
+this file: every number below is a RELATIVE comparison (IncrementalH1 vs.
+this repo's OWN naive StreamingHomology baseline). Read on its own, a
+1.3x-1.9x speedup could suggest topojs is fast in absolute terms. It is
+not. Against Ripser (Bauer 2019/2021), the established state-of-the-art C++
+Vietoris-Rips reference, topojs's plain batch engine is 16x-93x SLOWER in
+absolute wall-clock time on the same real datasets (see docs/COMPARISON.md
+and bench/data/ripser_comparison_results.txt) -- and that gap widens with
+n. The two facts are not in tension (this file's incremental engine is a
+different code path than the plain batch engine Ripser was compared
+against, and "relatively faster than our own naive baseline" and
+"absolutely much slower than the field's fastest tool" can both be true
+simultaneously), but a reader who only sees "1.9x speedup!" without this
+paragraph would be misled about where topojs sits in absolute terms.
+
 Axis 1: Incremental H1 (v3) vs Phase A naive, REAL data — monthly sunspots
   Data: monthly sunspot counts 1749-1983 (2820 real months, SIDC/WDC-SILSO,
   bench/data/monthly-sunspots.csv) -- the same series used for the
@@ -53,7 +68,20 @@ Axis 2: Incremental H1 (v3) vs Phase A naive, REAL data — UCI Iris
   than Axis 1 (small window=20 leaves less O(k^2)/O(k^3) waste to cut, and
   2 of 10 repeats came in BELOW 1x, most likely JIT warmup on the first
   timed call rather than a real regression -- shown in the raw table, not
-  hidden). Re-reduced fraction: 98.9%, same pattern as every other axis --
+  hidden).
+  Reframed after review: "significant at p<0.05" here means something
+  narrower than it does for Axis 1/3. Because all 10 trials re-time the
+  IDENTICAL 150-point stream, this t-test's null hypothesis is really "the
+  mean of repeated timings of this one exact run equals 1x" -- it shows the
+  measurement is repeatable, not that a 1.3x+ speedup generalizes to other
+  real datasets of similar shape. bench/benchmark.ts now prints this caveat
+  directly after the t-test line whenever mode=repeats, so it isn't left
+  implicit for a reader skimming the raw output. Treat this axis's number as
+  a single (real, honestly-measured, but n=1-dataset) data point, not
+  independent statistical confirmation the way Axis 1/3's chunk-based
+  numbers at least partially are (see Statistical caveat above for how much
+  to trust those, too).
+  Re-reduced fraction: 98.9%, same pattern as every other axis --
   further evidence the prefix-caching mechanism itself stays saturated
   regardless of data type; only the v3 geometry-construction change carries
   the measured speedup, consistently, across real time series and real
@@ -90,6 +118,73 @@ series). Re-reduced fraction stays 98.9-99.6% in every real-data axis,
 consistently indicating the entire measured speedup comes from the v3
 geometry-construction change (skipping full O(k^2)/O(k^3) rebuild), not
 from the prefix-caching / reduction-skipping mechanism.
+
+Generalization caveat (added after external review): "real data" in this
+file means specifically these three series (monthly sunspot counts, UCI
+Iris, Melbourne daily min. temperatures) at the specific window
+sizes/thresholds tested. n=3 datasets, one series each, is not a random or
+representative sample of "real-world data" in general -- it is three
+convenience-sampled, publicly available series chosen for being real and
+structurally different from each other, not for statistical
+representativeness. Treat every claim in this file as "confirmed on these
+three real datasets", not "confirmed on real data" unqualified. Axis 4's
+own cross-dataset finding (confirmed on one dataset, ambiguous on a second,
+inverted on a third) is itself evidence that behavior is not uniform
+across even this small set -- a fourth real dataset could plausibly land
+anywhere in or outside that range. Broader generalization would need more
+datasets, ideally spanning more domains (this set has none from, e.g.,
+network/graph-derived point clouds, image-derived features, or
+higher-dimensional embeddings) -- tracked as future work, not claimed here.
+
+Statistical caveat (added after external review): the "chunks" trial design
+(Axis 1, Axis 3) splits ONE real time series into disjoint contiguous
+pieces and treats each as an independent paired trial. That is standard
+practice for getting more than one trial out of a single real series at
+all, but it is not the same thing as n independent draws -- residual
+autocorrelation can survive chunking (a run of unusually dense/sparse
+months landing in adjacent chunks, seasonal structure that doesn't respect
+chunk boundaries, etc.), which would make the reported t-statistics and 95%
+CIs overconfident. bench/benchmark.ts now measures this directly instead of
+assuming it away: it computes the lag-1 autocorrelation of the per-chunk
+log-speedups (in original chunk order) and reports an effective-N-adjusted
+t-stat/CI alongside the raw one (Zwiers & von Storch 1995 correction,
+n_eff = n*(1-r)/(1+r)). The paired-CI computation was also fixed to use the
+correct Student's-t critical value for small df instead of a fixed z=1.96,
+which was silently making every CI in this file too narrow (e.g. df=5's
+true critical value is 2.571, not 1.96).
+
+Honest result of adding this diagnostic, not just a caveat: the
+autocorrelation estimate itself is noisy at n=6-8 chunks and is NOT stable
+run to run (see bench/data/benchmark_results.txt's "NOTE ON RUN-TO-RUN
+VARIANCE" for two runs' actual numbers). On at least one observed run, the
+Melbourne-temps axis's effective-N-adjusted 95% CI dropped to
+0.902x-3.031x -- crossing 1x, i.e. NOT distinguishable from "no speedup" at
+95% confidence once chunk non-independence is accounted for -- while a
+different run showed no such issue. The correct conclusion is not "this is
+now fixed": it's that n=6-8 chunks from one real series is too few to
+reliably tell whether chunking-induced non-independence is a real problem
+for a given axis on a given run. The fixed-window speedup claims above
+should be read with that uncertainty attached, not as settled significance.
+A real fix (more, shorter chunks from a longer series where available;
+block bootstrap instead of a parametric t-test; or an explicitly designed
+independence test) is future work, tracked as an open item rather than
+silently left unaddressed.
+
+Multiple-comparisons caveat (added after external review): presenting all
+three axes together as "geometric mean speedup over StreamingHomology of
+1.34x-1.91x, all statistically significant" is a combined, three-way claim
+-- and evaluating three per-axis 95% CIs (each individually valid) without
+adjusting for testing three of them at once understates the chance that at
+least one looks significant by chance alone. bench/benchmark.ts's
+multi-dataset summary block now also reports a Bonferroni-corrected CI per
+axis (family-wise alpha=0.05, per-axis alpha=0.05/3=0.0167, using a
+general Cornish-Fisher t-quantile function since the correction needs a
+critical value beyond the fixed 97.5th-percentile table). On the runs
+measured so far, all three axes' Bonferroni-corrected CIs still exclude
+1x, so this correction does not change the qualitative conclusion here --
+but it is now computed and shown rather than assumed away, and should be
+re-checked (not just re-read) on any future run given the same
+run-to-run-noise caveat that applies to the effective-N correction above.
 
 Axis 4: Scaling sweep — does the growth RATE differ, not just a constant
   factor? Axes 1-3 above each use ONE fixed window size per dataset, so a

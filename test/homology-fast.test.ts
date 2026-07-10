@@ -31,7 +31,15 @@ function checkMatches(points: Float64Array, dims: number, maxDist: number, maxDi
 
 describe('computePersistentHomologyFast (apparent pairs) vs. computePersistentHomology (ground truth)', () => {
   it('matches on random point clouds across many seeds and densities', () => {
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+    // Bumped from 10 to 40 seeds (4x). src/index.ts's docstring for this
+    // engine claims "ad-hoc stress sweeps of 11,100 random configs... 0
+    // mismatches" -- those sweeps were real but were one-off local runs,
+    // never committed to the reproducible test suite, so `npm test` only
+    // ever verified the original 10*4=40 configs actually checked in here.
+    // 40 seeds * 4 maxDist = 160 configs keeps this fast (well under 100ms
+    // in practice) while making the coverage claim closer to something
+    // `npm test` itself actually backs up, not just docstring folklore.
+    for (let seed = 1; seed <= 40; seed++) {
       const rng = mulberry32(seed);
       const n = 20 + (seed % 5) * 5;
       const pts: [number, number][] = [];

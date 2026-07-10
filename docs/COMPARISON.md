@@ -41,12 +41,12 @@ fact, just this off-by-one in API convention.
 
 ## Results
 
-| Case | n | maxDim(H) | Ripser | TopoJS | Betti match | Speed ratio |
-|---|---|---|---|---|---|---|
-| sunspots | 60 | H0+H1+H2 | 3.3ms | 120ms | YES | 36x slower |
-| Melbourne temps | 60 | H0+H1+H2 | 1.8ms | 32ms | YES | 18x slower |
-| sunspots | 400 | H0+H1 | 7.3ms | 666ms | YES | 91x slower |
-| Melbourne temps | 400 | H0+H1 | 6.7ms | 187ms | **NO** (see below) | 28x slower |
+| Case | n | maxDim(H) | Ripser | TopoJS | Betti match (raw) | Betti match (excl. zero-persistence bars) | Speed ratio |
+|---|---|---|---|---|---|---|---|
+| sunspots | 60 | H0+H1+H2 | 3.4ms | 117ms | YES | YES | 35x slower |
+| Melbourne temps | 60 | H0+H1+H2 | 1.8ms | 29ms | YES | YES | 16x slower |
+| sunspots | 400 | H0+H1 | 7.1ms | 660ms | YES | YES | 93x slower |
+| Melbourne temps | 400 | H0+H1 | 6.3ms | 185ms | **NO** (see below) | **YES** (confirmed) | 30x slower |
 
 ### Speed, reported honestly
 
@@ -105,11 +105,19 @@ duplicate coordinates and matched Ripser's output exactly (H0 and H1, no
 mismatch) — a clean control case supporting this explanation rather than
 some other unrelated discrepancy.
 
-The H1 gap (94 vs. 90, a difference of 4) is very likely a related
-consequence of the same duplicate points (degenerate zero-length edges
-participating in degenerate triangles), but that specific mechanism was not
-traced simplex-by-simplex the way the H0 case was, so it is reported here as
-a plausible-but-not-fully-confirmed explanation, not a settled one.
+**Update: the H1 gap is now confirmed by the same mechanism, traced pair-by-pair.**
+Dumping both engines' full (birth, death) pair lists for the melbourne n=400
+case (not just the finite/essential counts) and diffing them shows the raw
+94-vs-90 H1 gap is exactly 4 pairs, all present only on TopoJS's side, and
+all zero-persistence (birth == death, up to floating-point rounding):
+`(0.026886, 0.026886)` x2, `(0.025506, 0.025506)` x1, `(0.030655, 0.030655)`
+x1. Every other H1 pair matches Ripser's output exactly. There is no
+remaining unexplained discrepancy in either dimension. `bench/compare_ripser.py`
+now automates this check: after a raw mismatch, it re-compares with
+TopoJS's zero-persistence bars (`|death - birth| < 1e-9`) excluded and prints
+a second verdict line -- for this case, `Betti-number match after excluding
+topojs's zero-persistence bars: YES`. See `bench/data/ripser_comparison_results.txt`
+for the current raw run.
 
 **This is reported as a genuine, documented convention difference between
 tools (which persistence bars near-zero-length degenerate simplices produce

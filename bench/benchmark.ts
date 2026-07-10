@@ -127,17 +127,121 @@ function benchNaiveWithDensity(
   return { ms, numEdges, numTriangles };
 }
 
+/**
+ * Inverse standard normal CDF (Acklam's algorithm, ~1e-9 relative error).
+ * Used only as the seed value for tQuantile()'s Cornish-Fisher expansion.
+ */
+function normInv(p: number): number {
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239e0];
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838e0, -2.549732539343734e0, 4.374664141464968e0, 2.938163982698783e0];
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996e0, 3.754408661907416e0];
+  const pLow = 0.02425;
+  if (p <= 0 || p >= 1) throw new RangeError('normInv: p must be in (0,1)');
+  if (p < pLow) {
+    const q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) /
+      ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1);
+  }
+  if (p <= 1 - pLow) {
+    const q = p - 0.5;
+    const r = q * q;
+    return (((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r + a[5]!) * q /
+      (((((b[0]! * r + b[1]!) * r + b[2]!) * r + b[3]!) * r + b[4]!) * r + 1);
+  }
+  const q = Math.sqrt(-2 * Math.log(1 - p));
+  return -(((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) /
+    ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1);
+}
+
+/**
+ * Two-sided Student's-t quantile for arbitrary cumulative probability p and
+ * degrees of freedom df (Cornish-Fisher expansion around the normal
+ * quantile -- Fisher & Cornish 1960, standard for this accuracy/complexity
+ * tradeoff). General-purpose replacement for the fixed T_TABLE_975 lookup
+ * below, needed because Bonferroni-correcting across multiple benchmark
+ * axes requires a critical value at alpha/m, not just alpha=0.05.
+ */
+function tQuantile(p: number, df: number): number {
+  const z = normInv(p);
+  const z2 = z * z, z3 = z2 * z, z5 = z3 * z2, z7 = z5 * z2, z9 = z7 * z2;
+  const g1 = (z3 + z) / 4;
+  const g2 = (5 * z5 + 16 * z3 + 3 * z) / 96;
+  const g3 = (3 * z7 + 19 * z5 + 17 * z3 - 15 * z) / 384;
+  const g4 = (79 * z9 + 776 * z7 + 1482 * z5 - 1920 * z3 - 945 * z) / 92160;
+  return z + g1 / df + g2 / (df * df) + g3 / (df * df * df) + g4 / (df * df * df * df);
+}
+
+// Two-sided 97.5th-percentile t critical values, df=1..30 (Student's t table).
+// Using the fixed z=1.96 (normal-approximation) critical value here was wrong
+// for the small chunk counts (n=6-10, df=5-9) this benchmark actually uses --
+// it understates the CI width at low df (e.g. true df=5 critical value is
+// 2.571, not 1.96), making "95% CI" narrower than it actually is. df>30 falls
+// back to the normal approximation, where the two are indistinguishable to
+// 3 decimal places anyway.
+const T_TABLE_975: number[] = [
+  0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+  2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+  2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+];
+function tCritical95(df: number): number {
+  const d = Math.max(1, Math.round(df));
+  return d <= 30 ? T_TABLE_975[d]! : 1.96;
+}
+
+/**
+ * Chunks split from ONE real time series are not necessarily independent
+ * trials -- residual autocorrelation can survive chunking (e.g. a run of
+ * unusually dense/sparse months landing in adjacent chunks). This computes
+ * lag-1 sample autocorrelation of the per-chunk log-speedups themselves (in
+ * their original temporal order) as a direct empirical check, rather than
+ * just assuming independence because the chunks are "disjoint".
+ */
+function lag1Autocorr(x: number[]): number {
+  const n = x.length;
+  if (n < 3) return 0;
+  const mean = x.reduce((a, b) => a + b, 0) / n;
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) den += (x[i]! - mean) ** 2;
+  for (let i = 0; i < n - 1; i++) num += (x[i]! - mean) * (x[i + 1]! - mean);
+  return den === 0 ? 0 : num / den;
+}
+
 function pairedStats(logSpeedups: number[]) {
   const n = logSpeedups.length;
   const mean = logSpeedups.reduce((a, b) => a + b, 0) / n;
   const variance = logSpeedups.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
   const se = Math.sqrt(variance) / Math.sqrt(n);
+  const tCrit = tCritical95(n - 1);
+
+  // Autocorrelation-adjusted view: if chunks carry residual AR(1)-like
+  // correlation (chunkAutocorr), the "effective" number of independent
+  // observations is smaller than n (Zwiers & von Storch 1995 effective-N
+  // correction: n_eff = n * (1-r)/(1+r)). Reported alongside the raw stats,
+  // not silently substituted for them, so a reader who trusts the raw n=6-10
+  // t-test can still see it, but is also told how much of that significance
+  // survives once residual correlation between chunks is accounted for.
+  const chunkAutocorr = lag1Autocorr(logSpeedups);
+  const rClamped = Math.max(-0.95, Math.min(0.95, chunkAutocorr));
+  const nEffRaw = (n * (1 - rClamped)) / (1 + rClamped);
+  const nEff = Math.max(2, Math.min(n, nEffRaw));
+  const seEff = Math.sqrt(variance) / Math.sqrt(nEff);
+  const tCritEff = tCritical95(nEff - 1);
+
   return {
     n,
+    mean,
+    se,
     tStat: mean / se,
     geoMean: Math.exp(mean),
-    ciLow: Math.exp(mean - 1.96 * se),
-    ciHigh: Math.exp(mean + 1.96 * se),
+    ciLow: Math.exp(mean - tCrit * se),
+    ciHigh: Math.exp(mean + tCrit * se),
+    chunkAutocorr,
+    nEff,
+    tStatEff: mean / seEff,
+    ciLowEff: Math.exp(mean - tCritEff * seEff),
+    ciHighEff: Math.exp(mean + tCritEff * seEff),
   };
 }
 
@@ -265,7 +369,10 @@ function loadIris(): { points: number[][]; logLines: string[] } {
 
 // ── runner ───────────────────────────────────────────────────────────────
 
-function runDataset(key: string): { key: string; geoMean: number; ciLow: number; ciHigh: number } {
+function runDataset(key: string): {
+  key: string; geoMean: number; ciLow: number; ciHigh: number;
+  nEff: number; ciLowEff: number; ciHighEff: number; n: number; mean: number; se: number;
+} {
   const cfg = DATASETS[key];
   if (!cfg) throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(', ')}`);
 
@@ -314,14 +421,41 @@ function runDataset(key: string): { key: string; geoMean: number; ciLow: number;
     }
   }
 
-  const { n, tStat, geoMean, ciLow, ciHigh } = pairedStats(logSpeedups);
+  const stats = pairedStats(logSpeedups);
+  const { n, mean, se, tStat, geoMean, ciLow, ciHigh, chunkAutocorr, nEff, tStatEff, ciLowEff, ciHighEff } = stats;
   const meanReReduced = reReducedFracs.reduce((a, b) => a + b, 0) / reReducedFracs.length;
 
   console.log(`geometric mean speedup: ${geoMean.toFixed(3)}x  (95% CI: ${ciLow.toFixed(3)}x .. ${ciHigh.toFixed(3)}x)`);
   console.log(`mean re-reduced fraction: ${(meanReReduced * 100).toFixed(1)}%`);
   console.log(`paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=${n - 1}: t=${tStat.toFixed(3)}`);
+  if (cfg.mode === 'repeats') {
+    // 'repeats' trials are re-timings of the IDENTICAL stream (see dataset
+    // note above): this t-test's null hypothesis is only "the mean of
+    // repeated timings of this one specific run equals 1x", i.e. it
+    // confirms the measurement is reliable/repeatable, NOT that the
+    // speedup generalizes beyond this exact dataset/ordering/config (that
+    // would require independent data, which doesn't exist here -- see
+    // CROSS-DATASET GENERALIZATION note). Printed explicitly so the t-stat
+    // above isn't read as stronger evidence than it is.
+    console.log(
+      'CAVEAT: mode=repeats -- above t-test/CI measure repeatability of one ' +
+        'fixed stream\'s timing, not generalization to other real data (n=' +
+        n + ' timed re-runs of the SAME 150-point ordering, not independent trials).',
+    );
+  }
+  if (cfg.mode === 'chunks') {
+    // Chunks are disjoint slices of ONE real series, not independent draws --
+    // report the residual correlation between them directly instead of just
+    // assuming n=chunk-count independent trials (see pairedStats docstring).
+    const flag = Math.abs(chunkAutocorr) > 0.3 ? '  [non-trivial -- see effective-N line]' : '  [low]';
+    console.log(`chunk-order lag-1 autocorrelation of log(speedup): ${chunkAutocorr.toFixed(3)}${flag}`);
+    console.log(
+      `effective-N adjusted: n_eff=${nEff.toFixed(2)} (of ${n} raw), t=${tStatEff.toFixed(3)}, ` +
+        `95% CI: ${ciLowEff.toFixed(3)}x .. ${ciHighEff.toFixed(3)}x`,
+    );
+  }
 
-  return { key, geoMean, ciLow, ciHigh };
+  return { key, geoMean, ciLow, ciHigh, nEff, ciLowEff, ciHighEff, n, mean, se };
 }
 
 // ── scaling sweep ────────────────────────────────────────────────────────
@@ -660,5 +794,25 @@ if (results.length > 1) {
   console.log('\n=== summary (all datasets) ===');
   for (const r of results) {
     console.log(`${r.key.padEnd(16)} ${r.geoMean.toFixed(3)}x  (95% CI: ${r.ciLow.toFixed(3)}x .. ${r.ciHigh.toFixed(3)}x)`);
+  }
+
+  // Multiple-comparisons correction: presenting all m=results.length axes
+  // together as a combined "speedup confirmed across independent real
+  // datasets" claim is exactly the situation Bonferroni correction is for
+  // (m simultaneous per-axis tests, family-wise error rate would exceed the
+  // nominal 5% if left uncorrected). Each axis's per-axis 95% CI above is
+  // still valid taken alone; this second CI is the one to use when citing
+  // "all three significant" as a single combined claim.
+  const m = results.length;
+  console.log(`\nBonferroni-corrected across ${m} simultaneous axes (family-wise alpha=0.05, per-axis alpha=${(0.05 / m).toFixed(4)}):`);
+  for (const r of results) {
+    const df = r.n - 1;
+    const tCritBonf = tQuantile(1 - 0.05 / m / 2, df);
+    const ciLowBonf = Math.exp(r.mean - tCritBonf * r.se);
+    const ciHighBonf = Math.exp(r.mean + tCritBonf * r.se);
+    const survives = ciLowBonf > 1 ? 'still >1x' : 'NO LONGER excludes 1x';
+    console.log(
+      `${r.key.padEnd(16)} ${r.geoMean.toFixed(3)}x  (Bonferroni 95% CI: ${ciLowBonf.toFixed(3)}x .. ${ciHighBonf.toFixed(3)}x)  ${survives}`,
+    );
   }
 }

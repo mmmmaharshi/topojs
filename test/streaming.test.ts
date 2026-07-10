@@ -51,6 +51,17 @@ describe('SlidingWindow', () => {
 });
 
 describe('StreamingHomology (Phase A / naive)', () => {
+  it('rejects invalid construction parameters (inherited via internal SlidingWindow)', () => {
+    // StreamingHomology delegates window management to SlidingWindow
+    // internally (see constructor), so it inherits that class's
+    // capacity/dims validation for free -- this test exists so that
+    // inheritance stays true if the delegation is ever refactored away
+    // (a direct test here would catch that regression; the SlidingWindow
+    // tests alone would not, since they test SlidingWindow in isolation).
+    expect(() => new StreamingHomology({ windowSize: 0, dims: 2, maxDist: 1.0 })).toThrow();
+    expect(() => new StreamingHomology({ windowSize: 10, dims: 0, maxDist: 1.0 })).toThrow();
+  });
+
   it('returns null until minPointsToCompute is reached', () => {
     const s = new StreamingHomology({ windowSize: 10, dims: 2, maxDist: 1.0, minPointsToCompute: 3 });
     expect(s.push([0, 0])).toBeNull();

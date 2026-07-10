@@ -28,7 +28,11 @@ function checkMatches(points: Float64Array, dims: number, maxDist: number, maxDi
 
 describe('computePersistentHomologyCohomology (cohomology direction) vs. computePersistentHomology (ground truth)', () => {
   it('matches on random point clouds across many seeds and densities', () => {
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+    // Bumped from 10 to 40 seeds -- see the identical note in
+    // test/homology-fast.test.ts. src/index.ts's docstring for THIS engine
+    // separately claims "13,800 configs for H1... 399-config sweep for H2,
+    // 0 mismatches", also never committed as reproducible tests before now.
+    for (let seed = 1; seed <= 40; seed++) {
       const rng = mulberry32(seed);
       const n = 20 + (seed % 5) * 5;
       const pts: [number, number][] = [];

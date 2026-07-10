@@ -197,6 +197,23 @@ export class IncrementalH1 {
   private triPair: (PersistencePair | null)[] = []; // len = triOrder.length
 
   constructor(opts: IncrementalH1Options) {
+    // Matches SlidingWindow's validation (src/streaming/sliding-window.ts) --
+    // this class doesn't delegate to SlidingWindow (it manages its own
+    // pointOrder/pointCoords FIFO for the persistent adjacency mechanism),
+    // so it never inherited that class's guard rails and previously
+    // accepted windowSize<=0, non-integer windowSize, or dims<=0 silently,
+    // leading to confusing behavior on push() (or none at all) rather than
+    // a clear error at construction time.
+    if (!Number.isInteger(opts.windowSize) || opts.windowSize < 2) {
+      throw new Error('IncrementalH1: windowSize must be an integer >= 2 (push() returns null below 2 points)');
+    }
+    if (!Number.isInteger(opts.dims) || opts.dims < 1) {
+      throw new Error('IncrementalH1: dims must be an integer >= 1');
+    }
+    if (!(opts.maxDist >= 0)) {
+      // catches negative AND NaN (NaN >= 0 is false)
+      throw new Error('IncrementalH1: maxDist must be a non-negative number');
+    }
     this.windowSize = opts.windowSize;
     this.dims = opts.dims;
     this.maxDist = opts.maxDist;
@@ -211,6 +228,9 @@ export class IncrementalH1 {
   }
 
   push(point: number[] | Float64Array): IncrementalH1Update | null {
+    if (point.length !== this.dims) {
+      throw new Error(`IncrementalH1: expected point of length ${this.dims}, got ${point.length}`);
+    }
     const coords = Array.from(point);
     const newId = this.nextId++;
 

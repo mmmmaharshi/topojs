@@ -26,6 +26,7 @@ Requires: pip install --break-system-packages ripser numpy
 import json
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -34,6 +35,11 @@ from ripser import ripser
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
+# Scratch files go in the system temp dir, not bench/, so a failed/interrupted
+# run never leaves stray artifacts in the repo (previously used bench/_tmp_*,
+# which is harmless -- .gitignore'd -- but still repo clutter on cleanup
+# failure, e.g. read-only/restricted mounts where unlink() can fail).
+TMPDIR = Path(tempfile.mkdtemp(prefix="topojs_ripser_cmp_"))
 
 
 def autocorrelation(series: np.ndarray, lag: int) -> float:
@@ -97,8 +103,8 @@ def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> No
     print(f"ripser (C++, state-of-the-art batch reference): {ripser_ms:.2f}ms  byDim={ripser_betti}")
 
     # -- topojs (via Node subprocess, exact same point cloud) --
-    csv_path = HERE / f"_tmp_{name}.csv"
-    out_path = HERE / f"_tmp_{name}_result.json"
+    csv_path = TMPDIR / f"{name}.csv"
+    out_path = TMPDIR / f"{name}_result.json"
     np.savetxt(csv_path, points, fmt="%.10f")
     # NOTE on convention mismatch: ripser's `maxdim` is the highest HOMOLOGY
     # dimension to compute (2 = H0+H1+H2). topojs's computePersistentHomology
@@ -133,6 +139,40 @@ def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> No
             print(f"  MISMATCH at dim {d}: topojs finite={t_finite} essential={t_essential}  "
                   f"ripser finite={r_finite} essential={r_essential}")
     print(f"Betti-number match across all dims: {'YES' if match else 'NO'}")
+
+    # -- reconcile via zero-persistence-bar convention, if raw counts mismatched --
+    # Root-caused (see docs/COMPARISON.md "The one real mismatch, root-caused"):
+    # coincident/duplicate points produce degenerate simplices whose birth and
+    # death filtration values are equal (a zero-persistence bar). TopoJS's
+    # computePersistentHomology emits these unconditionally (every boundary-
+    # matrix reduction pivot is a mathematically valid pair, full stop);
+    # Ripser silently drops them from its returned diagram, which is the
+    # common convention in TDA tooling (zero-persistence bars carry no
+    # information about the Betti-number curve at any filtration value) but
+    # is NOT documented as such in Ripser's own API. If the raw counts above
+    # disagreed, re-check after excluding these bars from TopoJS's side
+    # before concluding there is an algorithm bug -- a raw MISMATCH here is
+    # NOT on its own evidence of incorrect computation.
+    if not match:
+        t_pairs = topojs_result["pairs"]
+        EPS = 1e-9
+        t_nontrivial_counts: dict[str, int] = {}
+        for p in t_pairs:
+            if p["death"] == -1:
+                continue
+            if abs(p["death"] - p["birth"]) < EPS:
+                continue  # zero-persistence bar, dropped to match Ripser's convention
+            t_nontrivial_counts[str(p["dim"])] = t_nontrivial_counts.get(str(p["dim"]), 0) + 1
+        reconciled = True
+        for d in range(max_dim + 1):
+            t_essential = topojs_result["byDim"][str(d)]["essential"]
+            t_nontrivial_finite = t_nontrivial_counts.get(str(d), 0)
+            r_finite = ripser_betti[str(d)]["finite"]
+            r_essential = ripser_betti[str(d)]["essential"]
+            if (t_nontrivial_finite, t_essential) != (r_finite, r_essential):
+                reconciled = False
+        print(f"Betti-number match after excluding topojs's zero-persistence bars: "
+              f"{'YES' if reconciled else 'STILL NO -- investigate further'}")
     if ripser_ms > 0:
         print(f"speed ratio (topojs_ms / ripser_ms): {topojs_result['ms'] / ripser_ms:.1f}x "
               f"({'topojs slower' if topojs_result['ms'] > ripser_ms else 'topojs faster'})")

@@ -33,5 +33,8 @@ for (const p of result.pairs) {
   else byDim[p.dim]!.finite++;
 }
 
-writeFileSync(outPath!, JSON.stringify({ n: lines.length, dims, maxDist, maxDim, ms, byDim }, null, 2));
+writeFileSync(
+  outPath!,
+  JSON.stringify({ n: lines.length, dims, maxDist, maxDim, ms, byDim, pairs: result.pairs }, null, 2),
+);
 console.log(`topojs: n=${lines.length} ms=${ms.toFixed(2)} byDim=${JSON.stringify(byDim)}`);

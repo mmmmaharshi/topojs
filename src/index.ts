@@ -133,5 +133,13 @@ export type { TopologicalSummary } from './streaming/topological-summary.ts';
 // limit of chunking a single real series). Re-run before citing exact
 // numbers. Add new benchmark axes to that file's dataset registry, not as
 // a new standalone script.
+//
+// Statistical caveat: chunks are disjoint slices of one real series, not
+// independent draws. bench/benchmark.ts's pairedStats() now reports a
+// chunk-order autocorrelation diagnostic and an effective-N-adjusted CI
+// alongside the raw one -- on at least one observed run this widened the
+// Melbourne-temps CI enough to cross 1x. See bench/data/summary.txt
+// "Statistical caveat" section before citing any single dataset's
+// significance as settled.
 export { IncrementalH1 } from './streaming/incremental-h1.ts';
 export type { IncrementalH1Options, IncrementalH1Update } from './streaming/incremental-h1.ts';

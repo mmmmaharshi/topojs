@@ -47,7 +47,13 @@ export function computeCubicalHomology(
   vertOrder.sort((a, b) => vertVal[a]! - vertVal[b]!);
 
   // ── Build edges with birth values ──
-  interface CubicalEdge { u: number; v: number; val: number; }
+  // origIdx = raster position at construction time (horizontal edges get
+  // 0..HE-1 via i*(width-1)+j, vertical get HE..HE+VE-1 via HE+i*width+j) --
+  // this is the SAME numbering the square-building loop below independently
+  // recomputes for upperEdge/lowerEdge/leftEdge/rightEdge. It has to survive
+  // the edges.sort() below, which is why it's captured here rather than
+  // implied by array position (see origToSorted remap after the sort).
+  interface CubicalEdge { u: number; v: number; val: number; origIdx: number; }
   const edges: CubicalEdge[] = [];
 
   // Horizontal edges (i,j)-(i+1,j)
@@ -55,7 +61,7 @@ export function computeCubicalHomology(
     for (let j = 0; j < width - 1; j++) {
       const idx0 = i * width + j;
       const idx1 = i * width + j + 1;
-      edges.push({ u: idx0, v: idx1, val: Math.max(pixels[idx0]!, pixels[idx1]!) });
+      edges.push({ u: idx0, v: idx1, val: Math.max(pixels[idx0]!, pixels[idx1]!), origIdx: edges.length });
     }
   }
   // Vertical edges (i,j)-(i,j+1)
@@ -63,11 +69,27 @@ export function computeCubicalHomology(
     for (let j = 0; j < width; j++) {
       const idx0 = i * width + j;
       const idx1 = (i + 1) * width + j;
-      edges.push({ u: idx0, v: idx1, val: Math.max(pixels[idx0]!, pixels[idx1]!) });
+      edges.push({ u: idx0, v: idx1, val: Math.max(pixels[idx0]!, pixels[idx1]!), origIdx: edges.length });
     }
   }
 
   edges.sort((a, b) => a.val - b.val);
+
+  // origToSorted[rasterIdx] = position of that edge in the now-sorted
+  // `edges` array. BUG FIX: the square-building loop below computes edge
+  // references using the raster-position formulas (upperEdge = i*(width-1)+j,
+  // etc) -- those formulas describe positions in the PRE-SORT array. Using
+  // them directly as indices into the POST-SORT `edges` array (as this code
+  // used to do) silently wires each square's boundary to whichever edge
+  // happened to land at that array slot after sorting, not the edge the
+  // formula actually meant -- correct only by accident when sorting doesn't
+  // permute anything (e.g. every edge has the same filtration value, which
+  // is why this went uncaught: the only pre-existing tests use monochrome
+  // or two-tone-but-tie-preserving images). Confirmed via Euler
+  // characteristic mismatch on a real counterexample (ring-around-a-peak
+  // image) before this fix; see test/cubical.test.ts.
+  const origToSorted = new Int32Array(numEdges);
+  for (let i = 0; i < edges.length; i++) origToSorted[edges[i]!.origIdx] = i;
 
   // ── Build squares ──
   interface CubicalSquare { edges: [number, number, number, number]; val: number; }
@@ -81,10 +103,10 @@ export function computeCubicalHomology(
       const c11 = (i + 1) * width + j + 1;
       const val = Math.max(pixels[c00]!, pixels[c10]!, pixels[c01]!, pixels[c11]!);
 
-      const upperEdge = i * (width - 1) + j;
-      const lowerEdge = (i + 1) * (width - 1) + j;
-      const leftEdge = HE + i * width + j;
-      const rightEdge = HE + i * width + (j + 1);
+      const upperEdge = origToSorted[i * (width - 1) + j]!;
+      const lowerEdge = origToSorted[(i + 1) * (width - 1) + j]!;
+      const leftEdge = origToSorted[HE + i * width + j]!;
+      const rightEdge = origToSorted[HE + i * width + (j + 1)]!;
 
       squares.push({ edges: [upperEdge, lowerEdge, leftEdge, rightEdge], val });
     }
@@ -104,6 +126,19 @@ export function computeCubicalHomology(
       uf.union(e.u, e.v);
     } else {
       cycleEdges[ei] = 1;
+    }
+  }
+  // BUG FIX: essential H0 components (survivors that never merge) were never
+  // emitted -- every nonempty image reported 0 essential H0 classes, when a
+  // rectangular grid always has at least one surviving component (itself,
+  // at minimum, for h=w=1). Mirrors the equivalent loop in
+  // src/core/homology.ts's computePersistentHomology.
+  const seenRoot = new Uint8Array(V);
+  for (let i = 0; i < V; i++) {
+    const r = uf.find(i);
+    if (!seenRoot[r]) {
+      seenRoot[r] = 1;
+      h0Pairs.push({ birth: 0, death: -1, dim: 0 });
     }
   }
 

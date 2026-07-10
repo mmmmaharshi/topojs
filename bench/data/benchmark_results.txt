@@ -1,6 +1,6 @@
 
 > topojs@1.0.0 bench
-> node --experimental-transform-types bench/benchmark.ts
+> node --experimental-transform-types --expose-gc bench/benchmark.ts
 
 
 === Monthly sunspot counts (1749-1983) ===
@@ -10,15 +10,17 @@ Data-driven lag (first ACF < 1/e, scanned 1..40 months): LAG=25
 Embedded stream length: 2795 points (2D delay embedding, lag=25 months).
 windowSize=40  maxDist=0.15  mode=chunks  trials=6
    trial    naive_ms     incr_ms   speedup  reReduced%
-       0      324.71      211.54    1.535x       99.7%
-       1      575.40      328.19    1.753x       99.8%
-       2       99.70       60.70    1.642x       98.4%
-       3      253.80      117.14    2.167x       98.5%
-       4      267.61      121.32    2.206x       99.4%
-       5       44.78       21.77    2.057x       97.9%
-geometric mean speedup: 1.875x  (95% CI: 1.658x .. 2.120x)
+       0      336.68      222.07    1.516x       99.7%
+       1      602.63      340.15    1.772x       99.8%
+       2      104.49       62.59    1.669x       98.4%
+       3      270.41      124.90    2.165x       98.5%
+       4      288.31      127.46    2.262x       99.4%
+       5       48.04       21.80    2.204x       97.9%
+geometric mean speedup: 1.909x  (95% CI: 1.600x .. 2.278x)
 mean re-reduced fraction: 99.0%
-paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=5: t=10.024
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=5: t=9.401
+chunk-order lag-1 autocorrelation of log(speedup): 0.395  [non-trivial -- see effective-N line]
+effective-N adjusted: n_eff=2.60 (of 6 raw), t=6.191, 95% CI: 1.218x .. 2.992x
 
 === UCI Iris measurements (150 samples) ===
 source: archive.ics.uci.edu, embedded in src/data/realworld-datasets.ts
@@ -26,19 +28,20 @@ note: Only 150 real points exist; repeats time the SAME stream (measurement/JIT 
 Loaded 150 REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).
 windowSize=20  maxDist=0.35  mode=repeats  trials=10
    trial    naive_ms     incr_ms   speedup  reReduced%
-       0      18.809      10.913    1.724x       98.9%
-       1      18.459      10.086    1.830x       98.9%
-       2      17.862      10.612    1.683x       98.9%
-       3      18.340      10.269    1.786x       98.9%
-       4      18.035      11.248    1.603x       98.9%
-       5      18.293      10.414    1.757x       98.9%
-       6      17.790       9.735    1.827x       98.9%
-       7      18.468      10.514    1.756x       98.9%
-       8      18.855      10.406    1.812x       98.9%
-       9      17.801       9.864    1.805x       98.9%
-geometric mean speedup: 1.757x  (95% CI: 1.712x .. 1.803x)
+       0      19.950      10.234    1.949x       98.9%
+       1      19.770      10.577    1.869x       98.9%
+       2      19.697      10.895    1.808x       98.9%
+       3      18.315      11.875    1.542x       98.9%
+       4      18.873      11.121    1.697x       98.9%
+       5      19.388      11.990    1.617x       98.9%
+       6      19.576      12.108    1.617x       98.9%
+       7      19.739      11.104    1.778x       98.9%
+       8      19.008      11.731    1.620x       98.9%
+       9      19.797      11.148    1.776x       98.9%
+geometric mean speedup: 1.723x  (95% CI: 1.633x .. 1.818x)
 mean re-reduced fraction: 98.9%
-paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=9: t=42.639
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=9: t=22.990
+CAVEAT: mode=repeats -- above t-test/CI measure repeatability of one fixed stream's timing, not generalization to other real data (n=10 timed re-runs of the SAME 150-point ordering, not independent trials).
 
 === Melbourne daily min. temperatures (1981-1990) ===
 source: Australian BOM, bench/data/daily-min-temperatures.csv
@@ -47,21 +50,44 @@ Data-driven lag (first ACF < 1/e, scanned 1..60 days): LAG=46
 Embedded stream length: 3604 points (2D delay embedding, lag=46 days).
 windowSize=45  maxDist=0.15  mode=chunks  trials=8
    trial    naive_ms     incr_ms   speedup  reReduced%
-       0      106.79       55.43    1.926x       99.5%
-       1       78.53       37.73    2.081x       99.7%
-       2      106.55       55.10    1.934x       99.5%
-       3      182.73       96.13    1.901x       99.5%
-       4      197.36      101.88    1.937x       99.6%
-       5      141.24       77.06    1.833x       99.7%
-       6      116.76       61.72    1.892x       99.7%
-       7      169.25       90.87    1.863x       99.5%
-geometric mean speedup: 1.920x  (95% CI: 1.870x .. 1.971x)
+       0      116.71       58.66    1.989x       99.5%
+       1       79.66       40.12    1.986x       99.7%
+       2      112.89       55.15    2.047x       99.5%
+       3      191.78      100.31    1.912x       99.5%
+       4      208.97      110.50    1.891x       99.6%
+       5      150.39       80.08    1.878x       99.7%
+       6      123.91       63.42    1.954x       99.7%
+       7      178.32       92.24    1.933x       99.5%
+geometric mean speedup: 1.948x  (95% CI: 1.901x .. 1.996x)
 mean re-reduced fraction: 99.6%
-paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=7: t=48.697
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=7: t=65.006
+chunk-order lag-1 autocorrelation of log(speedup): 0.328  [non-trivial -- see effective-N line]
+effective-N adjusted: n_eff=4.05 (of 8 raw), t=46.261, 95% CI: 1.861x .. 2.039x
 
 === summary (all datasets) ===
-sunspots         1.875x  (95% CI: 1.658x .. 2.120x)
-iris             1.757x  (95% CI: 1.712x .. 1.803x)
-melbourne-temp   1.920x  (95% CI: 1.870x .. 1.971x)
-(node:18) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
-(Use `node --trace-warnings ...` to show where the warning was created)
+sunspots         1.909x  (95% CI: 1.600x .. 2.278x)
+iris             1.723x  (95% CI: 1.633x .. 1.818x)
+melbourne-temp   1.948x  (95% CI: 1.901x .. 1.996x)
+
+Bonferroni-corrected across 3 simultaneous axes (family-wise alpha=0.05, per-axis alpha=0.0167):
+sunspots         1.909x  (Bonferroni 95% CI: 1.497x .. 2.434x)  still >1x
+iris             1.723x  (Bonferroni 95% CI: 1.607x .. 1.847x)  still >1x
+melbourne-temp   1.948x  (Bonferroni 95% CI: 1.887x .. 2.012x)  still >1x
+
+NOTE ON RUN-TO-RUN VARIANCE OF THE AUTOCORRELATION DIAGNOSTIC (added after
+statistical review -- see bench/data/summary.txt "Statistical caveat" section
+and bench/benchmark.ts pairedStats()): the chunk-order lag-1 autocorrelation
+value itself is estimated from only 6-8 points and is NOT stable run to run.
+Separate runs measured shortly before this one found sunspots autocorrelation
+values of 0.301, 0.397, and 0.419 (n_eff ranging 2.46-3.22) and melbourne-temp
+values of -0.272 and 0.422 (n_eff ranging 3.26-8.00) across different runs of
+the identical code and data -- pure timing-noise variation, not a data change.
+On at least one observed run, the melbourne-temp axis's effective-N-adjusted
+95% CI dropped to 0.902x-3.031x, crossing 1x (not significant once the
+correction is applied); the run captured above did not show that. Re-run this
+benchmark yourself before trusting either the raw or the effective-N numbers
+for a specific dataset -- the honest reading is "n=6-8 chunks is too few to
+reliably tell whether chunking-induced non-independence is a real problem for
+this specific axis," not "the correction proves it is fine." See
+bench/data/summary.txt for the full discussion and the recommended fix (more,
+shorter chunks; block bootstrap).

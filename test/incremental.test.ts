@@ -63,6 +63,32 @@ describe('IncrementalH1 (Phase B / prefix-stable incremental reduction)', () => 
     expect(inc.push([1, 0])).not.toBeNull();
   });
 
+  it('rejects invalid construction parameters (mirrors SlidingWindow validation)', () => {
+    // Previously this class had NO constructor validation at all (unlike
+    // SlidingWindow, which it doesn't delegate to -- it manages its own
+    // FIFO for the persistent-adjacency mechanism), so windowSize<=0, a
+    // non-integer windowSize, dims<=0, or a negative/NaN maxDist would be
+    // accepted silently and fail confusingly (or not at all) later on
+    // push(), instead of failing clearly at construction time.
+    expect(() => new IncrementalH1({ windowSize: 0, dims: 2, maxDist: 1.0 })).toThrow();
+    expect(() => new IncrementalH1({ windowSize: 1, dims: 2, maxDist: 1.0 })).toThrow(); // push() can never return non-null below 2
+    expect(() => new IncrementalH1({ windowSize: -5, dims: 2, maxDist: 1.0 })).toThrow();
+    expect(() => new IncrementalH1({ windowSize: 2.5, dims: 2, maxDist: 1.0 })).toThrow();
+    expect(() => new IncrementalH1({ windowSize: 10, dims: 0, maxDist: 1.0 })).toThrow();
+    expect(() => new IncrementalH1({ windowSize: 10, dims: -1, maxDist: 1.0 })).toThrow();
+    expect(() => new IncrementalH1({ windowSize: 10, dims: 2, maxDist: -1 })).toThrow();
+    expect(() => new IncrementalH1({ windowSize: 10, dims: 2, maxDist: NaN })).toThrow();
+    // sanity: valid parameters still construct fine
+    expect(() => new IncrementalH1({ windowSize: 2, dims: 1, maxDist: 0 })).not.toThrow();
+  });
+
+  it('rejects a pushed point whose dimensionality does not match the configured dims', () => {
+    const inc = new IncrementalH1({ windowSize: 10, dims: 3, maxDist: 1.0 });
+    expect(() => inc.push([0, 0])).toThrow(); // too short
+    expect(() => inc.push([0, 0, 0, 0])).toThrow(); // too long
+    expect(() => inc.push([0, 0, 0])).not.toThrow(); // matches dims=3
+  });
+
   it('matches full recompute exactly across many random streams (small windows)', () => {
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       runDifferentialTrial(seed, 8, 0.6, 2, 40);
