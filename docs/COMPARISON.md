@@ -88,14 +88,29 @@ pure implementation-technique gap, not a precision or correctness tradeoff.
 
 **H2 does not scale in the plain engine.** An n=400 case with H2 enabled
 (`maxDim=3`, tetrahedra construction) was attempted against the plain engine
-and did not finish in 40 seconds, so it was dropped from the H0+H1+H2 cases
-above in favor of an H0+H1-only n=400 comparison (run against both engines
-for a fair comparison on the same case). Ripser computed the same case's
-H0+H1+H2 in ~72ms in an earlier probe run. Whether the cohom engine's H2
-phase (which the class docstring says exists, using the same apparent-pairs-
-style construction one dimension up) also survives n=400 where the plain
-engine's explicit tetrahedra enumeration doesn't is a separate,
-not-yet-answered question — tracked as a follow-up, not assumed either way.
+and did not finish in 40 seconds (reconfirmed at 45s in the follow-up below),
+so it was dropped from the H0+H1+H2 cases above in favor of an H0+H1-only
+n=400 comparison (run against both engines for a fair comparison on the same
+case). Ripser computed the same case's H0+H1+H2 in ~69ms.
+
+**Update: the cohom engine's H2 phase DOES survive n=400 — this was flagged
+above as an open follow-up and has now been measured, not left assumed.**
+Running `computePersistentHomologyCohomology` directly at `maxDim=3` on the
+same sunspots n=400 point cloud the plain engine couldn't finish: 9813ms,
+exact Betti-number match with Ripser across H0, H1, **and** H2 (397/3, 77/3,
+1/0 — no reconciliation needed). Speed ratio vs Ripser's 69ms is 142x —
+slower, but it *finishes*, where the plain engine simply doesn't on this
+case at all. A second dataset (Melbourne temps, same n=400, maxDim=3)
+confirms it: 1514ms, and the raw mismatch this time (394/6, 94/2, 1/0 vs.
+Ripser's 392/6, 90/2, 0/0) is the *same already-documented zero-persistence-
+bar convention* as the H0/H1 mismatch elsewhere in this document — directly
+inspected, the one "extra" H2 pair has `birth=0.096939534426...`,
+`death=0.096939534469...`, a gap of ~4.3e-11 (floating-point-noise-scale,
+i.e. zero-persistence), not a new or different discrepancy. Excluding
+zero-persistence bars, all three dimensions match on both datasets. Raw
+data in `bench/data/ripser_comparison_results.txt`. This means cohom is not
+just faster than plain at H0+H1: at n=400 with H2 enabled, it is the only
+one of the two engines that finishes in a practical amount of time at all.
 
 ### The one real mismatch, root-caused
 
@@ -166,5 +181,9 @@ is consistently faster than the plain engine (1.1x-3.3x observed, roughly
 halving the geometric-mean gap to Ripser, 35.9x → 18.5x) by re-deriving part
 of Ripser's own structural approach, at no correctness cost. H2
 (tetrahedra-based) computation does not scale past small `n` in the plain
-engine and is a real, acknowledged limitation; whether the cohom engine's H2
-phase does better is not yet measured.
+engine and is a real, acknowledged limitation — but this is specifically a
+*plain-engine* limitation, not a limitation of TopoJS's H2 computation in
+general: the cohom engine's H2 phase was measured (not left as a docstring
+claim) and finishes n=400 with correct Betti numbers on both datasets
+tested (142x and 41x slower than Ripser respectively, but it finishes,
+where the plain engine does not finish at all on the same case).

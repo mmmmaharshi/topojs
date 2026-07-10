@@ -131,7 +131,11 @@ by differential testing against the reference implementation at every push. Run
   mean gap to Ripser, 36x → 18x), and documents one real, root-caused
   convention difference (zero-persistence H0/H1 bars from exact-duplicate
   points: kept here, silently dropped by Ripser) found via the cross-check.
-  Reproduce with `python3 bench/compare_ripser.py`.
+  Also: H2 (tetrahedra) computation doesn't finish at n=400 in the plain
+  engine, but the cohom engine's H2 phase does — measured directly (142x
+  and 41x slower than Ripser on two datasets, correct Betti numbers on
+  both), closing a question this document previously left open rather than
+  assumed either way. Reproduce with `python3 bench/compare_ripser.py`.
 
 ## License
 

@@ -60,3 +60,31 @@ timing) -- re-run before citing exact multipliers. The DIRECTION (cohom
 consistently faster, roughly halving the slowdown-vs-Ripser geometric mean)
 was stable across multiple runs during this investigation; the exact
 per-case magnitude (1.1x-3.3x observed) was not.
+
+=== sunspots_n400_H0H1H2 (follow-up: does cohom's H2 phase survive n=400 where plain's doesn't?) ===
+=== n=400 points, maxDist=0.1, maxDim=2 (topojs maxDim=3, tetrahedra) ===
+ripser (C++, state-of-the-art batch reference): 69.02ms  byDim={'0': {'finite': 397, 'essential': 3}, '1': {'finite': 77, 'essential': 3}, '2': {'finite': 1, 'essential': 0}}
+topojs[plain] (pure JS, computePersistentHomology): DID NOT FINISH within 45s (reconfirms the >40s DNF already documented in docs/COMPARISON.md -- not a new result, re-checked here as the control for the comparison below)
+topojs[cohom] (pure JS, computePersistentHomologyCohomology): 9813.04ms  byDim={'0': {'finite': 397, 'essential': 3}, '1': {'finite': 77, 'essential': 3}, '2': {'finite': 1, 'essential': 0}}
+[cohom] Betti-number match across all dims (H0, H1, AND H2): YES -- exact match, no reconciliation needed
+[cohom] speed ratio (topojs_ms / ripser_ms): 142.2x (topojs slower, but FINISHES -- plain does not finish at all on this case)
+
+=== melbourne_n400_H0H1H2 (second dataset, same follow-up question) ===
+=== n=400 points, maxDist=0.1, maxDim=2 (topojs maxDim=3, tetrahedra) ===
+ripser (C++, state-of-the-art batch reference): 36.98ms  byDim={'0': {'finite': 392, 'essential': 6}, '1': {'finite': 90, 'essential': 2}, '2': {'finite': 0, 'essential': 0}}
+topojs[cohom] (pure JS, computePersistentHomologyCohomology): 1513.65ms  byDim={'0': {'finite': 394, 'essential': 6}, '1': {'finite': 94, 'essential': 2}, '2': {'finite': 1, 'essential': 0}}
+[cohom] MISMATCH at dim 0: topojs finite=394 ripser finite=392 (already-documented zero-persistence-bar convention, see docs/COMPARISON.md)
+[cohom] MISMATCH at dim 1: topojs finite=94 ripser finite=90 (same convention)
+[cohom] MISMATCH at dim 2: topojs finite=1 ripser finite=0 -- inspected directly: topojs's one H2 pair is (birth=0.09693953442663275, death=0.09693953446977831), a difference of ~4.3e-11 -- a zero-persistence bar at floating-point-noise scale, i.e. the SAME mechanism as the H0/H1 mismatches, now confirmed to extend cleanly to H2 rather than being a new/different discrepancy
+[cohom] Betti-number match after excluding topojs's zero-persistence bars (|death-birth|<1e-9): YES across all three dimensions
+[cohom] speed ratio (topojs_ms / ripser_ms): 40.9x (topojs slower, finishes in 1.5s)
+
+CONCLUSION: computePersistentHomologyCohomology's H2 phase DOES scale past n=400
+where the plain engine's explicit tetrahedra enumeration does not (previously an
+open, tracked-but-unmeasured question in docs/COMPARISON.md). Correctness holds
+on both datasets tested -- exact match on sunspots, and the melbourne mismatch is
+fully explained by the same already-root-caused zero-persistence-bar convention
+difference already documented for H0/H1, now confirmed to extend to H2 rather
+than being a new phenomenon. This closes the open follow-up question honestly:
+cohom is not just faster than plain at H0+H1, it is the only one of the two that
+can compute H0+H1+H2 at n=400 at all in a practical amount of time.
