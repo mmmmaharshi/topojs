@@ -1,0 +1,560 @@
+import { computePersistentHomology, bottleneckDistance, computePairwiseDistances } from '../src/core/homology.ts';
+import { computeCubicalHomology } from '../src/core/cubical.ts';
+import { lookupDist } from '../src/core/distance.ts';
+import { UnionFind } from '../src/core/unionfind.ts';
+import type { Points } from '../src/core/distance.ts';
+import type { PersistencePair } from '../src/core/h0.ts';
+import {
+  toGudhi,
+  toJSON,
+  toCSV,
+  toDiagramCSV,
+  summarize,
+  splitByDimension,
+} from '../src/export/persistence-diagram.ts';
+import { loadMNISTDigits, loadIrisDataset } from '../src/data/realworld-datasets.ts';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Test runner — does NOT halt the suite on first failure. Each named test
+// is isolated in its own try/catch so one regression doesn't hide the
+// pass/fail status of every other test (required for a trustworthy CI
+// signal and for reviewers re-running the suite to see the full picture).
+// ─────────────────────────────────────────────────────────────────────────
+
+let passCount = 0;
+let failCount = 0;
+const failures: string[] = [];
+
+function assert(cond: boolean, msg: string): void {
+  if (!cond) throw new Error(msg);
+  console.log(`    ok: ${msg}`);
+}
+
+function test(name: string, fn: () => void): void {
+  try {
+    fn();
+    passCount++;
+  } catch (err) {
+    failCount++;
+    const msg = err instanceof Error ? err.message : String(err);
+    failures.push(`${name}: ${msg}`);
+    console.error(`  FAIL [${name}]: ${msg}`);
+    return;
+  }
+  console.log(`  PASS [${name}]`);
+}
+
+function countByDim(pairs: { dim: number }[], dim: number): number {
+  return pairs.filter(p => p.dim === dim).length;
+}
+
+// Deterministic PRNG (mulberry32) so "random" tests are reproducible across
+// runs/machines — a Math.random()-seeded test that fails is undebuggable
+// and unreproducible, which is not acceptable for a peer-reviewed artifact.
+function mulberry32(seed: number): () => number {
+  let a = seed;
+  return function (): number {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generatePoints(pts: [number, number][]): Points {
+  const flat = new Float64Array(pts.length * 2);
+  for (let i = 0; i < pts.length; i++) {
+    flat[i * 2] = pts[i]![0];
+    flat[i * 2 + 1] = pts[i]![1];
+  }
+  return flat;
+}
+
+function circlePoints(n: number, radius: number = 1.0, cx: number = 0, cy: number = 0): Points {
+  const flat = new Float64Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const a = (2 * Math.PI * i) / n;
+    flat[i * 2] = cx + radius * Math.cos(a);
+    flat[i * 2 + 1] = cy + radius * Math.sin(a);
+  }
+  return flat;
+}
+
+/**
+ * Euler–Poincaré sanity check: for a simplicial complex truncated at
+ * dimension d, chi = sum (-1)^k * (#k-simplices) must equal
+ * sum (-1)^k * betti_k, PROVIDED every homology group up to dimension d
+ * is actually computed (no truncated/uncomputed top dimension). Callers
+ * are responsible for only invoking this where that precondition holds
+ * (see comments at each call site).
+ */
+function eulerCheck(res: {
+  pairs: PersistencePair[];
+  complex: { numVertices: number; numEdges: number; numTriangles: number; numTetrahedra: number };
+}): { chiSimplicial: number; chiBetti: number; b0: number; b1: number; b2: number } {
+  const { numVertices: V, numEdges: E, numTriangles: T, numTetrahedra: Tet } = res.complex;
+  const chiSimplicial = V - E + T - Tet;
+  const b0 = res.pairs.filter(p => p.dim === 0 && p.death < 0).length;
+  const b1 = res.pairs.filter(p => p.dim === 1 && p.death < 0).length;
+  const b2 = res.pairs.filter(p => p.dim === 2 && p.death < 0).length;
+  const chiBetti = b0 - b1 + b2;
+  return { chiSimplicial, chiBetti, b0, b1, b2 };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rips persistence — known geometric ground truths
+// ═══════════════════════════════════════════════════════════════════════
+
+test('rips: two separate points -> 2 components', () => {
+  const pts = generatePoints([[0, 0], [3, 0]]);
+  const res = computePersistentHomology(pts, 2, 5.0);
+  assert(res.complex.numVertices === 2, '2 vertices');
+  const nH0 = countByDim(res.pairs, 0);
+  assert(nH0 === 2, `2 H0 pairs (1 death + 1 essential) (got ${nH0})`);
+  const h0Deaths = res.pairs.filter(p => p.dim === 0 && p.death >= 0);
+  assert(h0Deaths.length === 1, `1 H0 death (got ${h0Deaths.length})`);
+  const h0Ess = res.pairs.filter(p => p.dim === 0 && p.death < 0);
+  assert(h0Ess.length === 1, `1 essential H0 (got ${h0Ess.length})`);
+});
+
+test('rips: three collinear points -> chain merges, no H1', () => {
+  const pts = generatePoints([[0, 0], [1, 0], [2, 0]]);
+  const res = computePersistentHomology(pts, 2, 5.0);
+  const nH0 = countByDim(res.pairs, 0);
+  assert(nH0 === 3, `3 H0 pairs (2 deaths + 1 essential) (got ${nH0})`);
+  assert(res.complex.numTriangles >= 1, 'has degenerate triangle');
+  const significantH1 = res.pairs.filter(p => p.dim === 1 && p.death - p.birth > 1e-10);
+  assert(significantH1.length === 0, `no significant H1 cycles (got ${significantH1.length})`);
+});
+
+test('rips: 12-gon at chord threshold -> single essential H1 loop', () => {
+  const pts = circlePoints(12, 1.0);
+  const chord = 2 * Math.sin(Math.PI / 12);
+  const res = computePersistentHomology(pts, 2, chord + 0.05);
+  assert(res.complex.numVertices === 12, '12 vertices');
+  assert(res.complex.numEdges === 12, `12 edges (got ${res.complex.numEdges})`);
+  assert(res.complex.numTriangles === 0, `0 triangles (got ${res.complex.numTriangles})`);
+  const nH0 = countByDim(res.pairs, 0);
+  assert(nH0 === 12, `12 H0 pairs (got ${nH0})`);
+  const nH1essential = res.pairs.filter(p => p.dim === 1 && p.death < 0).length;
+  assert(nH1essential === 1, `1 essential H1 class (got ${nH1essential})`);
+});
+
+test('rips: 12-gon at larger threshold -> H1 cycle dies at predicted birth', () => {
+  const pts = circlePoints(12, 1.0);
+  const chord = 2 * Math.sin(Math.PI / 12);
+  const nextChord = 2 * Math.sin((2 * Math.PI) / 12);
+  const res = computePersistentHomology(pts, 2, nextChord + 0.05);
+  assert(res.complex.numTriangles > 0, `some triangles (got ${res.complex.numTriangles})`);
+  const significant = res.pairs.filter(p => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1));
+  assert(significant.length === 1, `exactly 1 significant H1 class (got ${significant.length})`);
+  const sigH1 = significant[0]!;
+  assert(Math.abs(sigH1.birth - chord) < 0.01, `H1 birth ~ ${chord.toFixed(3)} (got ${sigH1.birth.toFixed(3)})`);
+  assert(sigH1.death < 0, `H1 class essential (death=-1, got ${sigH1.death})`);
+});
+
+test('rips: octahedron (6 pts on S^2) -> single essential H2 class', () => {
+  const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+  const eps = Math.SQRT2;
+  const res = computePersistentHomology(pts, 3, eps + 0.01, 3);
+  assert(res.complex.numVertices === 6, '6 vertices');
+  assert(res.complex.numEdges === 12, `12 edges (got ${res.complex.numEdges})`);
+  assert(res.complex.numTriangles === 8, `8 triangles (got ${res.complex.numTriangles})`);
+  assert(res.complex.numTetrahedra === 0, `0 tetrahedra (got ${res.complex.numTetrahedra})`);
+  const nH2 = res.pairs.filter(p => p.dim === 2).length;
+  assert(nH2 === 1, `1 H2 essential class (got ${nH2})`);
+});
+
+test('rips: octahedron + Euler-Poincare cross-check (chi = V-E+T = b0-b1+b2)', () => {
+  // Tet === 0 here (verified above), so b3 cannot be nonzero — safe to
+  // compare the full simplicial Euler characteristic against b0-b1+b2.
+  const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+  const eps = Math.SQRT2;
+  const res = computePersistentHomology(pts, 3, eps + 0.01, 3);
+  assert(res.complex.numTetrahedra === 0, 'precondition: no tetrahedra (else b3 could be nonzero)');
+  const { chiSimplicial, chiBetti, b0, b1, b2 } = eulerCheck(res);
+  assert(chiSimplicial === chiBetti, `chi_simplicial (${chiSimplicial}) === chi_betti (${chiBetti})`);
+  assert(b0 === 1 && b1 === 0 && b2 === 1, `octahedron Betti numbers (1,0,1) (got ${b0},${b1},${b2})`);
+});
+
+test('rips: octahedron tetrahedra kill the H2 cycle', () => {
+  const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+  const res = computePersistentHomology(pts, 3, 2.1, 3);
+  assert(res.complex.numTetrahedra > 0, `some tetrahedra (got ${res.complex.numTetrahedra})`);
+  const h2Killed = res.pairs.filter(p => p.dim === 2 && p.death >= 0);
+  const h2Essential = res.pairs.filter(p => p.dim === 2 && p.death < 0);
+  assert(h2Essential.length === 0, `no essential H2 (got ${h2Essential.length})`);
+  assert(h2Killed.length > 0, `some H2 pairs killed (got ${h2Killed.length})`);
+  // NOTE: at this threshold all 6 points form a 6-clique. The 3-skeleton of
+  // a 5-simplex has real H3 of rank 5 (wedge of 5 copies of S^3) which this
+  // library does not compute (H0-H2 only, per README). Euler-Poincare is
+  // therefore deliberately NOT asserted for this config — chi_simplicial
+  // would legitimately disagree with b0-b1+b2 by exactly -b3 = -5. This is
+  // a documented scope limitation, not a bug; see also the "beyond H2" note
+  // in the coverage summary at the bottom of this file.
+});
+
+test('rips: large-radius octahedron leaves H2 partially essential (smoke)', () => {
+  const scale = 2.0;
+  const pts = new Float64Array([
+    scale, 0, 0, -scale, 0, 0, 0, scale, 0, 0, -scale, 0, 0, 0, scale, 0, 0, -scale,
+  ]);
+  const eps = scale * Math.SQRT2 + 0.5;
+  const res = computePersistentHomology(pts, 3, eps, 3);
+  assert(res.pairs.length > 0, 'produces pairs without crashing');
+  console.log(
+    `    info: scale=${scale} eps=${eps}: ${res.complex.numTriangles} tri, ` +
+      `${res.complex.numTetrahedra} tet, ` +
+      `${res.pairs.filter(p => p.dim === 2 && p.death < 0).length} essential H2`,
+  );
+});
+
+test('rips: disjoint union of two 12-gons -> beta0=2, beta1=2 (no cross-talk)', () => {
+  // Reuses the exact 12-gon construction from the single-loop test above,
+  // translated far away, to confirm the algorithm keeps independent
+  // components and their cycles separate rather than accidentally merging
+  // topology across components.
+  const chord = 2 * Math.sin(Math.PI / 12);
+  const nextChord = 2 * Math.sin((2 * Math.PI) / 12);
+  const maxDist = nextChord + 0.05;
+  const a = circlePoints(12, 1.0, 0, 0);
+  const b = circlePoints(12, 1.0, 1000, 0); // translated far beyond maxDist
+  const combined = new Float64Array(a.length + b.length);
+  combined.set(a, 0);
+  combined.set(b, a.length);
+  const res = computePersistentHomology(combined, 2, maxDist, 2);
+  assert(res.complex.numVertices === 24, `24 vertices (got ${res.complex.numVertices})`);
+  const b0 = res.pairs.filter(p => p.dim === 0 && p.death < 0).length;
+  assert(b0 === 2, `beta0 = 2 (got ${b0})`);
+  const significantH1 = res.pairs.filter(p => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1));
+  assert(significantH1.length === 2, `beta1 = 2 independent loops (got ${significantH1.length})`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Property-based: Euler-Poincare over randomized small point clouds
+// ═══════════════════════════════════════════════════════════════════════
+
+test('rips: Euler-Poincare holds for randomized 4-point clouds (20 seeded trials)', () => {
+  // With n=4 points, at most 1 tetrahedron can ever form, whose own
+  // boundary (4 triangles) is never zero — so an essential H3 class is
+  // combinatorially impossible. b3=0 is therefore guaranteed exact, and
+  // comparing the full simplicial Euler characteristic to b0-b1+b2 is a
+  // sound invariant check (not just a coincidence of a hand-picked shape).
+  const rng = mulberry32(20260710);
+  const TRIALS = 20;
+  for (let t = 0; t < TRIALS; t++) {
+    const pts = new Float64Array(8);
+    for (let i = 0; i < 8; i++) pts[i] = rng() * 10 - 5;
+    const res = computePersistentHomology(pts, 2, Infinity, 3);
+    const { chiSimplicial, chiBetti } = eulerCheck(res);
+    assert(
+      chiSimplicial === chiBetti,
+      `trial ${t}: chi_simplicial (${chiSimplicial}) === chi_betti (${chiBetti})`,
+    );
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Rips — edge cases & numerical robustness
+// ═══════════════════════════════════════════════════════════════════════
+
+test('rips: empty point cloud does not crash', () => {
+  const pts = new Float64Array(0);
+  const res = computePersistentHomology(pts, 2, 5.0);
+  assert(res.complex.numVertices === 0, '0 vertices');
+  assert(res.pairs.length === 0, `0 pairs (got ${res.pairs.length})`);
+});
+
+test('rips: single point produces one essential H0 class, nothing else', () => {
+  const pts = new Float64Array([0, 0]);
+  const res = computePersistentHomology(pts, 2, 5.0);
+  assert(res.complex.numVertices === 1, '1 vertex');
+  assert(res.pairs.length === 1, `exactly 1 pair (got ${res.pairs.length})`);
+  assert(res.pairs[0]!.dim === 0 && res.pairs[0]!.death < 0, 'the pair is essential H0');
+});
+
+test('rips: coincident (zero-distance) points merge at birth=death=0', () => {
+  const pts = generatePoints([[0, 0], [0, 0], [5, 0]]);
+  const res = computePersistentHomology(pts, 2, 10.0);
+  const zeroPersistence = res.pairs.filter(p => p.dim === 0 && p.death === 0);
+  assert(zeroPersistence.length === 1, `1 zero-persistence H0 pair from duplicate points (got ${zeroPersistence.length})`);
+});
+
+test('rips: maxDist=0 only merges exactly-coincident points', () => {
+  const pts = generatePoints([[0, 0], [0, 0], [5, 0]]);
+  const res = computePersistentHomology(pts, 2, 0);
+  assert(res.complex.numEdges === 1, `1 edge at maxDist=0 (got ${res.complex.numEdges})`);
+  const b0 = res.pairs.filter(p => p.dim === 0 && p.death < 0).length;
+  assert(b0 === 2, `2 essential components remain (got ${b0})`);
+});
+
+test('rips: default parameters (maxDist=Infinity, maxDim=2) do not throw', () => {
+  const pts = generatePoints([[0, 0], [1, 1], [2, 0]]);
+  const res = computePersistentHomology(pts, 2);
+  assert(res.complex.numVertices === 3, '3 vertices under defaults');
+});
+
+test('rips: same input run twice yields byte-identical pairs (determinism)', () => {
+  const rng = mulberry32(7);
+  const n = 25;
+  const pts = new Float64Array(n * 2);
+  for (let i = 0; i < n * 2; i++) pts[i] = rng();
+  const r1 = computePersistentHomology(pts, 2, 0.6, 2);
+  const r2 = computePersistentHomology(pts, 2, 0.6, 2);
+  assert(JSON.stringify(r1.pairs) === JSON.stringify(r2.pairs), 'identical pairs across repeated runs');
+});
+
+test('rips: seeded random cloud smoke test (30 pts)', () => {
+  const rng = mulberry32(42);
+  const n = 30;
+  const flat = new Float64Array(n * 2);
+  for (let i = 0; i < n * 2; i++) flat[i] = rng();
+  const res = computePersistentHomology(flat, 2, 2.0);
+  assert(res.pairs.length > 0, 'produces pairs');
+  assert(res.complex.numVertices === n, 'all vertices accounted');
+  console.log(`    info: seeded random 30 pts: ${res.complex.numEdges} edges, ${res.complex.numTriangles} triangles`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Cubical persistence
+// ═══════════════════════════════════════════════════════════════════════
+
+test('cubical: 3x3 all-zero image -> 8 H0 merges, 0 essential H1', () => {
+  const pix = new Float64Array(9);
+  const res = computeCubicalHomology(pix, 3, 3);
+  assert(res.dims.height === 3 && res.dims.width === 3, 'dims match');
+  assert(countByDim(res.pairs, 0) === 8, `8 H0 deaths (got ${countByDim(res.pairs, 0)})`);
+  const h1ess = res.pairs.filter(p => p.dim === 1 && p.death < 0);
+  assert(h1ess.length === 0, `0 essential H1 (got ${h1ess.length})`);
+});
+
+test('cubical: 2x2 checkerboard', () => {
+  const pix = new Float64Array([0, 1, 1, 0]);
+  const res = computeCubicalHomology(pix, 2, 2);
+  const h0 = countByDim(res.pairs, 0);
+  assert(h0 === 3, `3 H0 deaths (got ${h0})`);
+  const h1ess = res.pairs.filter(p => p.dim === 1 && p.death < 0);
+  assert(h1ess.length === 0, `0 essential H1 (got ${h1ess.length})`);
+});
+
+test('cubical: single hot center pixel produces pairs without error', () => {
+  const pix = new Float64Array(9);
+  pix[4] = 10;
+  const res = computeCubicalHomology(pix, 3, 3, 1);
+  assert(res.pairs.length > 0, 'produces pairs');
+  const h0 = countByDim(res.pairs, 0);
+  assert(h0 === 8, `8 H0 deaths (got ${h0})`);
+});
+
+test('cubical: 1x1 image (0 edges, 0 squares) does not crash', () => {
+  const pix = new Float64Array([0.5]);
+  const res = computeCubicalHomology(pix, 1, 1);
+  assert(res.dims.height === 1 && res.dims.width === 1, 'dims match');
+  assert(res.pairs.length === 0, `0 pairs for a single pixel (got ${res.pairs.length})`);
+});
+
+test('cubical: non-square grid (4x9) does not crash, dims preserved', () => {
+  const rng = mulberry32(99);
+  const pix = new Float64Array(4 * 9);
+  for (let i = 0; i < pix.length; i++) pix[i] = rng();
+  const res = computeCubicalHomology(pix, 4, 9, 1);
+  assert(res.dims.height === 4 && res.dims.width === 9, `dims preserved (got ${res.dims.height}x${res.dims.width})`);
+  assert(res.pairs.length > 0, 'produces pairs');
+});
+
+test('cubical: maxDim=0 suppresses H1 even though squares exist', () => {
+  const pix = new Float64Array([0, 1, 1, 0]); // same checkerboard as above, which has a square
+  const res = computeCubicalHomology(pix, 2, 2, 0);
+  const nH1 = countByDim(res.pairs, 1);
+  assert(nH1 === 0, `0 H1 pairs when maxDim=0 (got ${nH1})`);
+});
+
+test('cubical: seeded random 10x10 smoke test', () => {
+  const rng = mulberry32(123);
+  const pix = new Float64Array(100);
+  for (let i = 0; i < 100; i++) pix[i] = rng();
+  const res = computeCubicalHomology(pix, 10, 10);
+  assert(res.pairs.length > 0, 'produces pairs');
+  assert(res.dims.height === 10 && res.dims.width === 10, 'dimensions correct');
+  console.log(
+    `    info: 10x10 seeded random cubical: ${countByDim(res.pairs, 0)} H0 deaths, ${countByDim(res.pairs, 1)} H1 total`,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Bottleneck distance
+// ═══════════════════════════════════════════════════════════════════════
+
+test('bottleneck: distance between a diagram and itself is 0', () => {
+  const d: PersistencePair[] = [
+    { dim: 0, birth: 0, death: 1 },
+    { dim: 0, birth: 0, death: 2 },
+  ];
+  assert(bottleneckDistance(d, d, 0) === 0, 'self-distance is exactly 0');
+});
+
+test('bottleneck: both diagrams empty in a dimension -> distance 0', () => {
+  const d: PersistencePair[] = [{ dim: 1, birth: 0, death: 1 }];
+  assert(bottleneckDistance(d, d, 0) === 0, 'distance is 0 when both diagrams have no dim-0 points');
+});
+
+test('bottleneck: one empty, one non-empty -> distance is Infinity', () => {
+  const a: PersistencePair[] = [{ dim: 0, birth: 0, death: 1 }];
+  const b: PersistencePair[] = [];
+  assert(bottleneckDistance(a, b, 0) === Infinity, 'distance to an empty diagram is Infinity');
+});
+
+test('bottleneck: single-point diagrams differing by delta -> distance = delta', () => {
+  const delta = 0.1;
+  const a: PersistencePair[] = [{ dim: 0, birth: 0, death: 1 }];
+  const b: PersistencePair[] = [{ dim: 0, birth: 0, death: 1 + delta }];
+  const dist = bottleneckDistance(a, b, 0, 1e6, 1e-9);
+  assert(Math.abs(dist - delta) < 1e-6, `distance ~ ${delta} (got ${dist})`);
+});
+
+test('bottleneck: distance is symmetric', () => {
+  const a: PersistencePair[] = [
+    { dim: 0, birth: 0, death: 1 },
+    { dim: 0, birth: 0, death: 3 },
+  ];
+  const b: PersistencePair[] = [
+    { dim: 0, birth: 0, death: 1.2 },
+    { dim: 0, birth: 0, death: 2.5 },
+  ];
+  const ab = bottleneckDistance(a, b, 0);
+  const ba = bottleneckDistance(b, a, 0);
+  assert(Math.abs(ab - ba) < 1e-6, `d(A,B) == d(B,A) (got ${ab} vs ${ba})`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Export / serialization round-trips
+// ═══════════════════════════════════════════════════════════════════════
+
+const SAMPLE_PAIRS: PersistencePair[] = [
+  { dim: 0, birth: 0, death: 0.5 },
+  { dim: 0, birth: 0, death: -1 },
+  { dim: 1, birth: 0.3, death: 0.9 },
+  { dim: 1, birth: 0.4, death: -1 },
+  { dim: 2, birth: 0.6, death: -1 },
+];
+
+test('export: toJSON round-trips exactly through JSON.parse', () => {
+  const json = toJSON(SAMPLE_PAIRS);
+  const parsed = JSON.parse(json);
+  assert(JSON.stringify(parsed) === JSON.stringify(SAMPLE_PAIRS), 'round-trip equality');
+});
+
+test('export: toCSV emits header + one row per pair, essential death as -1', () => {
+  const csv = toCSV(SAMPLE_PAIRS);
+  const lines = csv.split('\n');
+  assert(lines[0] === 'dim,birth,death', 'header row correct');
+  assert(lines.length === SAMPLE_PAIRS.length + 1, `${SAMPLE_PAIRS.length} data rows + header (got ${lines.length - 1} data rows)`);
+  assert(lines[2] === '0,0,-1', `essential pair serialized with death=-1 (got "${lines[2]}")`);
+});
+
+test('export: toGudhi marks essential classes as "inf"', () => {
+  const g = toGudhi(SAMPLE_PAIRS);
+  const infCount = (g.match(/inf/g) || []).length;
+  const essentialCount = SAMPLE_PAIRS.filter(p => p.death < 0).length;
+  assert(infCount === essentialCount, `"inf" appears once per essential pair (${essentialCount}, got ${infCount})`);
+});
+
+test('export: toDiagramCSV has the expected 8-column header', () => {
+  const csv = toDiagramCSV(SAMPLE_PAIRS);
+  const header = csv.split('\n')[0]!;
+  assert(header.split(',').length === 8, `8 columns (got ${header.split(',').length})`);
+});
+
+test('export: splitByDimension counts match manual filtering', () => {
+  const split = splitByDimension(SAMPLE_PAIRS);
+  assert(split.h0.length === 2, `2 H0 pairs (got ${split.h0.length})`);
+  assert(split.h1finite.length === 1, `1 finite H1 (got ${split.h1finite.length})`);
+  assert(split.h1essential.length === 1, `1 essential H1 (got ${split.h1essential.length})`);
+  assert(split.h2finite.length === 0, `0 finite H2 (got ${split.h2finite.length})`);
+  assert(split.h2essential.length === 1, `1 essential H2 (got ${split.h2essential.length})`);
+});
+
+test('export: summarize matches hand-computed statistics', () => {
+  const s = summarize(SAMPLE_PAIRS);
+  assert(s.total === 5, `total=5 (got ${s.total})`);
+  assert(s.h0 === 2, `h0=2 (got ${s.h0})`);
+  assert(s.h1 === 2, `h1=2 (got ${s.h1})`);
+  assert(s.h2 === 1, `h2=1 (got ${s.h2})`);
+  assert(s.maxDeath === 0.9, `maxDeath=0.9 ignores essential -1 deaths (got ${s.maxDeath})`);
+  assert(s.minBirth === 0, `minBirth=0 (got ${s.minBirth})`);
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Core primitives — unit level (distance matrix, union-find)
+// ═══════════════════════════════════════════════════════════════════════
+
+test('distance: computePairwiseDistances + lookupDist matches direct Euclidean calc', () => {
+  const pts = generatePoints([[0, 0], [3, 4], [6, 8]]);
+  const dm = computePairwiseDistances(pts, 2, 3);
+  assert(Math.abs(lookupDist(dm, 0, 1) - 5) < 1e-12, `dist(0,1)=5 (got ${lookupDist(dm, 0, 1)})`);
+  assert(Math.abs(lookupDist(dm, 0, 2) - 10) < 1e-12, `dist(0,2)=10 (got ${lookupDist(dm, 0, 2)})`);
+  assert(lookupDist(dm, 1, 1) === 0, 'dist(i,i)=0');
+  assert(lookupDist(dm, 2, 0) === lookupDist(dm, 0, 2), 'symmetric lookup regardless of argument order');
+});
+
+test('unionfind: union/find collapses components correctly', () => {
+  const uf = new UnionFind(5);
+  assert(uf.find(0) === 0 && uf.find(4) === 4, 'singletons are their own roots initially');
+  assert(uf.union(0, 1) === true, 'first union succeeds');
+  assert(uf.find(0) === uf.find(1), '0 and 1 share a root after union');
+  assert(uf.union(0, 1) === false, 're-union of already-joined elements returns false');
+  uf.union(2, 3);
+  assert(uf.find(0) !== uf.find(2), '{0,1} and {2,3} remain separate');
+  uf.union(1, 2);
+  assert(uf.find(0) === uf.find(3), '{0,1} and {2,3} merge into one component via 1-2 union');
+  uf.reset();
+  assert(uf.find(0) !== uf.find(1), 'reset() clears all unions');
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Real-world datasets
+// ═══════════════════════════════════════════════════════════════════════
+
+test('dataset: MNIST — 10 digits load, cubical homology runs on digit 0', () => {
+  const digits = loadMNISTDigits();
+  assert(digits.length === 10, `10 MNIST digits loaded (got ${digits.length})`);
+  assert(digits[0]!.pixels.length === 784, `first digit has 784 pixels (got ${digits[0]!.pixels.length})`);
+  assert(digits[0]!.label === 7, `first digit label is 7 (got ${digits[0]!.label})`);
+  const r = computeCubicalHomology(digits[3]!.pixels, 28, 28, 1);
+  assert(r.pairs.length > 0, 'MNIST digit cubical produces pairs');
+  assert(r.dims.height === 28 && r.dims.width === 28, 'MNIST dimensions correct');
+  console.log(`    info: MNIST digit 0: ${r.pairs.filter(p => p.dim === 0).length} H0, ${r.pairs.filter(p => p.dim === 1).length} H1`);
+});
+
+test('dataset: Iris — 150x4 loads, Rips persistence runs', () => {
+  const iris = loadIrisDataset();
+  assert(iris.length === 150 * 4, `Iris has 150x4 = 600 values (got ${iris.length})`);
+  const r = computePersistentHomology(iris, 4, 1.0, 2);
+  assert(r.pairs.length > 0, 'Iris Rips produces pairs');
+  assert(r.complex.numVertices === 150, `Iris has 150 vertices (got ${r.complex.numVertices})`);
+  console.log(
+    `    info: Iris @ eps=1.0: ${r.complex.numEdges} edges, ${r.complex.numTriangles} tri, ${r.pairs.filter(p => p.dim === 0).length} H0`,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Summary
+// ═══════════════════════════════════════════════════════════════════════
+
+console.log(`\n${passCount}/${passCount + failCount} tests passed.`);
+if (failCount > 0) {
+  console.error(`\n${failCount} FAILURE(S):`);
+  for (const f of failures) console.error(`  - ${f}`);
+  process.exit(1);
+} else {
+  console.log('All tests passed.');
+}
+
+// Known coverage gaps (documented, not silently swept under the rug):
+//  - Web Worker path (src/workers/*) is not exercised — would need a
+//    worker_threads-compatible harness distinct from the browser Worker API
+//    the source targets.
+//  - H3+ is out of scope for this library (H0-H2 only); see the note on the
+//    "octahedron tetrahedra kill the H2 cycle" test above for the one place
+//    this boundary is directly relevant to a correctness argument.

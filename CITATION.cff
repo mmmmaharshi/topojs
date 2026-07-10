@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use TopoJS in research, please cite it as below."
+authors:
+  - name: "TopoJS Contributors"
+title: "TopoJS: Pure-JavaScript Persistent Homology Library"
+version: 1.0.0
+date-released: 2026-07-09
+url: "https://github.com/your-org/topojs"
+license: MIT
+type: software

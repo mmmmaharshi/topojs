@@ -1,0 +1,40 @@
+TopoJS Scalability Analysis — 10 Axes
+======================================
+Date: 2026-07-09
+
+Axis 1: n scaling (2D random, fixed ε)
+  ε=0.3: n=10→200, 327K tet, H0+H1+H2, 4.1-5.2s at n=200
+  ε=0.8: n=10→80, 915K tet, H2, 25-30s at n=80
+
+Axis 2: ε scaling (n=100, variable ε)
+  ε=0.1→0.5: 103→36K tri, H0+H1+H2, 860μs→5.0s
+  ε=0.8: >1M tri, SKIPPED (>120s first run)
+
+Axis 3: Dimension scaling (n=80, ε=0.8√dim)
+  2D→9D: ~82K tri, ~300ms, all dims same (edge count fixed)
+
+Axis 4: Phase breakdown (n=100, ε=0.3,0.5)
+  ε=0.3: dist=72μs, build=17ms, reduce=63ms, total=80ms
+  ε=0.5: dist=67μs, build=281ms, reduce=5.3s, total=5.6s
+
+Axis 5: Cubical scaling (terrain heightmaps)
+  4×4→256×256: 13→84K H1 bars, 250μs→830ms
+  Linear O(V) scaling confirmed
+
+Axis 6: Memory profiling (n=10→150, ε=0.6)
+  n=150: 195K tri, 48MB heap
+  Measured: n=10:0.1MB, 20:0.4MB, 50:neg, 100:12MB, 150:48MB
+
+Axis 7: Worker speedup (n=100, ε=1.5)
+  Serial: 222ms; Workers: 410-550ms (0.4×-0.54× speed)
+  Parallel overhead dominates; workers NOT beneficial at this scale
+
+Axis 8: maxDim scaling (K_100, ε=1.5)
+  H0: 1.01s, H1: 1.06s (161K tri)
+  H2: SKIPPED (3.9M tet >200K limit)
+
+Axis 9: Regression notes (no-op)
+
+Axis 10: Dense vs sparse H1
+  DenseWorkingCol 2-5× faster than sparse Int32Array XOR
+  n=100/ε=1.0: dense 648ms vs sparse 2.03s (3.12×)
