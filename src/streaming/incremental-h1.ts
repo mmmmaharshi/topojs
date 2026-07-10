@@ -69,10 +69,10 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * exactly the same shape of sorted edge/triangle lists as before, just
  * built for less work. Re-benchmark after any further change here; this
  * class's whole reason to exist is measured speed, not claimed speed — see
- * bench/data/summary.txt and bench/incremental-benchmark.ts (one
- * parameterized harness covering sunspots/Iris/Melbourne-temp via a dataset
- * registry -- `npm run bench:incremental` for all, `npm run bench:incremental
- * -- <name>` for one) for current numbers, not this comment. Earlier
+ * bench/data/summary.txt and bench/benchmark.ts (one parameterized harness
+ * covering sunspots/Iris/Melbourne-temp via a dataset registry --
+ * `npm run bench` for all, `npm run bench -- <name>` for one) for current
+ * numbers, not this comment. Earlier
  * synthetic i.i.d.-random benchmarks for this class have been removed as
  * part of a repo-wide real-data-only policy; new benchmark axes belong in
  * that file's dataset registry, not a new standalone script.

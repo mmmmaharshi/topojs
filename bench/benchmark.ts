@@ -22,9 +22,9 @@
  *     SAME stream. This measures measurement/JIT noise, not data diversity
  *     -- stated honestly in the per-dataset note, not dressed up.
  *
- * Run all real-data benchmarks:  node --experimental-transform-types bench/incremental-benchmark.ts
- * Run just one:                 node --experimental-transform-types bench/incremental-benchmark.ts sunspots
- * List available datasets:      node --experimental-transform-types bench/incremental-benchmark.ts --list
+ * Run all real-data benchmarks:  npm run bench
+ * Run just one:                 npm run bench -- sunspots
+ * List available datasets:      npm run bench -- --list
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

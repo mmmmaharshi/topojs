@@ -123,10 +123,10 @@ export type { TopologicalSummary } from './streaming/topological-summary.ts';
 // All performance claims for this class are now benchmarked against real,
 // externally-sourced data only (earlier synthetic i.i.d.-random benchmarks
 // and their output data have been removed). See bench/data/summary.txt for
-// full methodology and bench/incremental-benchmark.ts (one parameterized
-// harness, dataset registry covers sunspots, UCI Iris, and Melbourne daily
-// min temps -- run all with `npm run bench:incremental`, or a single
-// dataset with `npm run bench:incremental -- <name>`) for the three
+// full methodology and bench/benchmark.ts (one parameterized harness,
+// dataset registry covers sunspots, UCI Iris, and Melbourne daily min
+// temps -- run all with `npm run bench`, or a single dataset with
+// `npm run bench -- <name>`) for the three
 // independent real-data measurements: geometric mean speedup over
 // StreamingHomology of 1.34x-1.91x, all statistically significant (paired
 // t-test on log-speedup, p<0.05) despite small chunk counts (the practical

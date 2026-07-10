@@ -1,0 +1,67 @@
+
+> topojs@1.0.0 bench
+> node --experimental-transform-types bench/benchmark.ts
+
+
+=== Monthly sunspot counts (1749-1983) ===
+source: SIDC/WDC-SILSO, bench/data/monthly-sunspots.csv
+Loaded 2820 REAL monthly sunspot readings (SIDC/WDC-SILSO, 1749-1983).
+Data-driven lag (first ACF < 1/e, scanned 1..40 months): LAG=25
+Embedded stream length: 2795 points (2D delay embedding, lag=25 months).
+windowSize=40  maxDist=0.15  mode=chunks  trials=6
+   trial    naive_ms     incr_ms   speedup  reReduced%
+       0      324.71      211.54    1.535x       99.7%
+       1      575.40      328.19    1.753x       99.8%
+       2       99.70       60.70    1.642x       98.4%
+       3      253.80      117.14    2.167x       98.5%
+       4      267.61      121.32    2.206x       99.4%
+       5       44.78       21.77    2.057x       97.9%
+geometric mean speedup: 1.875x  (95% CI: 1.658x .. 2.120x)
+mean re-reduced fraction: 99.0%
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=5: t=10.024
+
+=== UCI Iris measurements (150 samples) ===
+source: archive.ics.uci.edu, embedded in src/data/realworld-datasets.ts
+note: Only 150 real points exist; repeats time the SAME stream (measurement/JIT noise, not data diversity).
+Loaded 150 REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).
+windowSize=20  maxDist=0.35  mode=repeats  trials=10
+   trial    naive_ms     incr_ms   speedup  reReduced%
+       0      18.809      10.913    1.724x       98.9%
+       1      18.459      10.086    1.830x       98.9%
+       2      17.862      10.612    1.683x       98.9%
+       3      18.340      10.269    1.786x       98.9%
+       4      18.035      11.248    1.603x       98.9%
+       5      18.293      10.414    1.757x       98.9%
+       6      17.790       9.735    1.827x       98.9%
+       7      18.468      10.514    1.756x       98.9%
+       8      18.855      10.406    1.812x       98.9%
+       9      17.801       9.864    1.805x       98.9%
+geometric mean speedup: 1.757x  (95% CI: 1.712x .. 1.803x)
+mean re-reduced fraction: 98.9%
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=9: t=42.639
+
+=== Melbourne daily min. temperatures (1981-1990) ===
+source: Australian BOM, bench/data/daily-min-temperatures.csv
+Loaded 3650 REAL daily minimum temperatures (Melbourne, Australia BOM, 1981-1990).
+Data-driven lag (first ACF < 1/e, scanned 1..60 days): LAG=46
+Embedded stream length: 3604 points (2D delay embedding, lag=46 days).
+windowSize=45  maxDist=0.15  mode=chunks  trials=8
+   trial    naive_ms     incr_ms   speedup  reReduced%
+       0      106.79       55.43    1.926x       99.5%
+       1       78.53       37.73    2.081x       99.7%
+       2      106.55       55.10    1.934x       99.5%
+       3      182.73       96.13    1.901x       99.5%
+       4      197.36      101.88    1.937x       99.6%
+       5      141.24       77.06    1.833x       99.7%
+       6      116.76       61.72    1.892x       99.7%
+       7      169.25       90.87    1.863x       99.5%
+geometric mean speedup: 1.920x  (95% CI: 1.870x .. 1.971x)
+mean re-reduced fraction: 99.6%
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=7: t=48.697
+
+=== summary (all datasets) ===
+sunspots         1.875x  (95% CI: 1.658x .. 2.120x)
+iris             1.757x  (95% CI: 1.712x .. 1.803x)
+melbourne-temp   1.920x  (95% CI: 1.870x .. 1.971x)
+(node:18) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
