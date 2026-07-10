@@ -1,0 +1,26 @@
+
+=== sunspots_n60: n=60 points, maxDist=0.15, maxDim=2 ===
+ripser (C++, state-of-the-art batch reference): 3.34ms  byDim={'0': {'finite': 58, 'essential': 2}, '1': {'finite': 10, 'essential': 0}, '2': {'finite': 0, 'essential': 0}}
+topojs (pure JS, this repo): 120.34ms  byDim={'0': {'finite': 58, 'essential': 2}, '1': {'finite': 10, 'essential': 0}, '2': {'finite': 0, 'essential': 0}, '3': {'finite': 0, 'essential': 0}}
+Betti-number match across all dims: YES
+speed ratio (topojs_ms / ripser_ms): 36.1x (topojs slower)
+
+=== melbourne_n60: n=60 points, maxDist=0.15, maxDim=2 ===
+ripser (C++, state-of-the-art batch reference): 1.76ms  byDim={'0': {'finite': 59, 'essential': 1}, '1': {'finite': 13, 'essential': 0}, '2': {'finite': 0, 'essential': 0}}
+topojs (pure JS, this repo): 32.33ms  byDim={'0': {'finite': 59, 'essential': 1}, '1': {'finite': 13, 'essential': 0}, '2': {'finite': 0, 'essential': 0}, '3': {'finite': 0, 'essential': 0}}
+Betti-number match across all dims: YES
+speed ratio (topojs_ms / ripser_ms): 18.4x (topojs slower)
+
+=== sunspots_n400_H0H1only: n=400 points, maxDist=0.1, maxDim=1 ===
+ripser (C++, state-of-the-art batch reference): 7.30ms  byDim={'0': {'finite': 397, 'essential': 3}, '1': {'finite': 77, 'essential': 3}}
+topojs (pure JS, this repo): 665.54ms  byDim={'0': {'finite': 397, 'essential': 3}, '1': {'finite': 77, 'essential': 3}}
+Betti-number match across all dims: YES
+speed ratio (topojs_ms / ripser_ms): 91.1x (topojs slower)
+
+=== melbourne_n400_H0H1only: n=400 points, maxDist=0.1, maxDim=1 ===
+ripser (C++, state-of-the-art batch reference): 6.74ms  byDim={'0': {'finite': 392, 'essential': 6}, '1': {'finite': 90, 'essential': 2}}
+topojs (pure JS, this repo): 186.85ms  byDim={'0': {'finite': 394, 'essential': 6}, '1': {'finite': 94, 'essential': 2}}
+  MISMATCH at dim 0: topojs finite=394 essential=6  ripser finite=392 essential=6
+  MISMATCH at dim 1: topojs finite=94 essential=2  ripser finite=90 essential=2
+Betti-number match across all dims: NO
+speed ratio (topojs_ms / ripser_ms): 27.7x (topojs slower)

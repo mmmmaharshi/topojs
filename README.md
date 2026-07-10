@@ -80,6 +80,21 @@ unions, complete graphs), edge cases, and streaming/incremental correctness veri
 by differential testing against the reference implementation at every push. Run
 `npm run test:coverage` for a live report.
 
+## Comparison Against Prior Work
+
+- `docs/RELATED_WORK.md` positions the streaming engine (`IncrementalH1`)
+  against published prior work — vineyards (Cohen-Steiner/Edelsbrunner/
+  Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest
+  existing streaming-persistent-homology framework (Moitra/Malott/Wilsey
+  2023) — and states plainly what is and is not novel here.
+- `docs/COMPARISON.md` cross-checks the batch engine
+  (`computePersistentHomology`) against [Ripser](https://arxiv.org/abs/1908.02518)
+  on real data: correctness matches on data with no coincident points,
+  18x–91x slower than Ripser (expected, not hidden), and documents one real,
+  root-caused convention difference (zero-persistence H0 bars from
+  exact-duplicate points: kept here, silently dropped by Ripser) found via
+  the cross-check. Reproduce with `python3 bench/compare_ripser.py`.
+
 ## License
 
 MIT
