@@ -86,6 +86,19 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * noisy on Melbourne temp data, inverted on the smallest/noisiest (Iris)
  * data. Treat the asymptotic claim as an open question, not settled.
  *
+ * PRECISE COMPLEXITY, not just the shorthand above: see docs/COMPLEXITY.md
+ * for a step-by-step derivation from this file's actual code (not just this
+ * comment). Short version: this class's per-push geometry-update cost is
+ * really Theta(E+T) + O(k) + O(deg(new)^2), where E/T are the CURRENT
+ * window's realized edge/triangle counts -- not flatly O(k), and the
+ * Theta(E+T) term can degrade to the naive baseline's own worst case when
+ * E/T approach their k^2/k^3 maxima. Also: the naive baseline itself
+ * (buildRipsComplex, src/core/complex.ts) does NOT do a flat O(k^3)
+ * triangle enumeration -- it uses bit-set adjacency intersection, cost
+ * O(E*k/w), which is data-dependent too. docs/COMPLEXITY.md shows this is
+ * the real reason the two engines' measured growth rates end up closer
+ * than an unqualified "O(k) vs O(k^3)" framing would predict.
+ *
  * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
  * recomputed fresh via union-find on every push — that step is already
  * O(E α(n)), not the bottleneck, so there is nothing to gain by making it

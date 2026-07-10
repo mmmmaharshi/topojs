@@ -42,6 +42,13 @@ export interface StreamingUpdate {
  * real-time use; for larger windows this is the exact inefficiency the
  * incremental phase exists to remove. Benchmark before using with large
  * windows or high-frequency streams.
+ *
+ * Precisely: edge construction is an unconditional Theta(k^2) (buildRipsComplex,
+ * src/core/complex.ts) but triangle construction uses bit-set adjacency
+ * intersection, cost O(E*k/w) -- data-dependent, NOT a flat Theta(k^3) as a
+ * quick worst-case shorthand might suggest. See docs/COMPLEXITY.md for the
+ * full derivation and why it matters for interpreting IncrementalH1's
+ * measured speedup.
  */
 export class StreamingHomology {
   private readonly window: SlidingWindow;

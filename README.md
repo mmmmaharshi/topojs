@@ -82,6 +82,13 @@ by differential testing against the reference implementation at every push. Run
 
 ## Comparison Against Prior Work
 
+- `docs/COMPLEXITY.md` derives `IncrementalH1`'s per-push cost precisely
+  from the actual code — `Θ(E+T) + O(k) + O(deg(new)²)`, not a flat `O(k)`
+  — and shows why that predicts (and explains) the mixed real-data scaling
+  results: the naive baseline's own triangle construction is also
+  data-dependent (bit-set intersection, not a flat `O(k³)`), so the two
+  engines' real growth rates end up closer than an unqualified complexity
+  argument would suggest.
 - `docs/RELATED_WORK.md` positions the streaming engine (`IncrementalH1`)
   against published prior work — vineyards (Cohen-Steiner/Edelsbrunner/
   Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest
