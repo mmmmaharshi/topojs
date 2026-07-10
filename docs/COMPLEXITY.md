@@ -127,7 +127,65 @@ modest separation, not a different complexity class made visible). The
 re-sort) — a genuine, measured advantage, just not the "different growth
 class" framing an unqualified complexity argument might suggest.
 
-## 4. Space complexity: the trade-off nobody had measured yet
+## 4. Regime map: does density actually predict the breakeven?
+
+Section 3 established that the speedup is *conditional* on complex sparsity
+in theory, but the sparsity-explains-it hypothesis was checked directly
+against two fixed-density datasets and rejected. This section replaces
+that indirect check with a direct one: instead of comparing two datasets
+that happen to differ in density, **directly control density** by sweeping
+`maxDist` (the lever that determines it) across a wide range, at fixed
+window sizes, on all three real datasets, and plot density against measured
+speedup.
+
+Method (`npm run bench -- --regime [dataset]`, `bench/data/regime_results.txt`):
+for each dataset, at 1-2 representative window sizes, `maxDist` was swept
+from sparse (≈0.2%-3% realized triangle density) to dense (≈70-88% of the
+complete-complex maximum), each point measured as a paired naive-vs-
+incremental trial (3 trials/point) on real data chunks. 35 (density,
+speedup) points collected total.
+
+**Result: no clean density threshold was found.** Speedup stayed at
+1.1x-2.6x across the entire density range on sunspots (0.2%→88%, still
+1.88x at the densest point tested) and Melbourne temps (0.2%→37%). Only 2
+of 35 points fell below 1x (Melbourne k=40 at 3.6% density: 0.68x; Iris
+k=20 at 43.3% density: 0.65x) — both isolated, surrounded on either side by
+higher-*and*-lower-density points that stayed comfortably above 1x, which
+is the signature of measurement noise (short timed windows, few trials —
+the same noise pattern already documented for Iris elsewhere in this repo),
+not a systematic density effect. If density cleanly predicted the
+breakeven, failures would cluster at the high-density end; they do not —
+they occur at scattered densities with no pattern.
+
+**This falsifies the premise this section set out to test**, not just the
+Section 3 hypothesis: there is no evidence in this data that v3 "stops
+being worth it" above some density threshold, within the ranges tested
+(up to 88% of the theoretical maximum, well into what should be a
+dense-complex regime by any reasonable definition). The theoretical
+worst-case bound from Section 2 (v3 degrades to the naive baseline's
+class as `E,T → k²,k³`) is still mathematically correct, but "worst case"
+and "what real windowed point-cloud data actually produces" appear to be
+further apart than expected — even data engineered to be dense via a large
+`maxDist` does not erase the constant-factor advantage v3 gets from linear
+scan/merge over bit-set intersection (Section 3). Put plainly: the
+regime-map project was supposed to produce a predictive rule ("use v3
+below X% density"); the honest result is that no such rule is supported by
+this data, and the practical guidance is closer to "v3's speed advantage
+appears robust across the density ranges tested on real data" than any
+density-based caveat. This is a stronger, more useful result than the
+predictive-rule this section originally set out to find, precisely because
+it survived an attempt to falsify it rather than being assumed.
+
+**What this does not establish:** only 3 datasets, 2 window sizes each,
+`maxDist` up to a ceiling constrained by benchmark runtime (windowSize=80
+combined with the highest tested `maxDist` did not complete within a
+reasonable time budget and was excluded — see `bench/benchmark.ts`'s
+`regimeMaxDists` comments). Larger windows, higher ambient dimensions, or
+adversarially constructed point clouds (e.g., deliberately near-complete
+graphs) might still reveal the theoretical worst case in practice. This
+section reports what was measured, not a universal guarantee.
+
+## 5. Space complexity: the trade-off nobody had measured yet
 
 Everything above is about TIME. `IncrementalH1`'s whole design is a
 time/space trade-off — it buys speed by keeping the *previous* push's full
@@ -171,21 +229,25 @@ that axis are inverted from their costs on the CPU axis. This is not
 discussed anywhere else in this repository before this document and should
 be treated as a real limitation of `IncrementalH1`, not a footnote.
 
-## 5. Honest summary
+## 6. Honest summary
 
 - The `Θ(k) + O(deg(new)²)` "new point" cost saving is unconditional and
   proven from the code (Section 2) — this part of the original complexity
   claim holds without qualification.
-- The "avoid rebuilding the existing complex" saving is real but
+- The "avoid rebuilding the existing complex" saving is *theoretically*
   **conditional on complex sparsity** (`E = o(k²)` or `T = o(k³)`), not
   unconditional — worst case it degrades to the same asymptotic class as
   the naive baseline's own (also data-dependent, not flatly `O(k³)`)
   triangle-enumeration cost.
 - No formal proof is offered here (or claimed anywhere else in this
   codebase) that real-world sliding-window data typically produces sparse
-  enough complexes for the conditional saving to dominate. The measured
-  evidence is mixed on the two real datasets checked (Section 3), and this
-  is stated as an open question, not resolved by this document.
+  enough complexes for the conditional saving to dominate — but a direct
+  empirical test of that condition (Section 4, sweeping density from <1%
+  to 88% of maximum via `maxDist`) found NO density threshold at which the
+  speedup broke down across 35 measured points on 3 real datasets. The
+  theoretical conditionality stands as a worst-case bound; the practical
+  evidence, checked directly rather than assumed, does not show that
+  worst case materializing in the ranges tested.
 - This analysis directly explains, rather than merely restates, the mixed
   empirical scaling-sweep result in `bench/data/summary.txt` Axis 4 — the
   two engines' complexity classes are closer to each other than the
@@ -193,8 +255,14 @@ be treated as a real limitation of `IncrementalH1`, not a footnote.
   baseline's own bit-set optimization (Section 1) and real-data density
   (Section 3) are both accounted for precisely.
 - The time saving is bought with real, measured memory cost — up to
-  ~3500x more heap per instance at windowSize=80 on real data (Section 4).
+  ~3500x more heap per instance at windowSize=80 on real data (Section 5).
   Any claim that `IncrementalH1` is a strict improvement over the naive
   baseline is false without qualifying which resource (time or space) and
   at what scale; it is a trade-off, not a strict improvement, and should be
   presented as such.
+- Net practical guidance: on the real data and window-size ranges tested
+  in this repository, `IncrementalH1`'s speed advantage held up robustly
+  regardless of complex density, and its cost is memory, not a density
+  cliff. This is a more specific and better-supported claim than either
+  "always faster" or "only faster when sparse" — both of which this
+  document tested directly and found unsupported or overstated.

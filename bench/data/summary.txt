@@ -173,4 +173,36 @@ Axis 5: Memory sweep -- the speed win is a TIME/SPACE trade-off, not a
   a real limitation for many-concurrent-window use cases (e.g. one window
   per sensor across a large fleet), where StreamingHomology's near-zero
   retained state may be preferable despite its slower per-push time. See
-  docs/COMPLEXITY.md Section 4 for the full writeup.
+  docs/COMPLEXITY.md Section 5 for the full writeup.
+
+Axis 6: Regime map -- does density actually predict when the speedup
+  breaks down? Axis 4's honest reading was that the speedup is only
+  THEORETICALLY conditional on complex sparsity, with no proof or
+  disproof that real data hits the dense regime where it would fail. This
+  axis tests that directly: instead of comparing two datasets that happen
+  to differ in density, directly CONTROL density by sweeping maxDist (the
+  lever) from sparse (<1%) to dense (up to 88% of the theoretical max)
+  triangle density, at fixed window sizes, on all three real datasets.
+  Method: `npm run bench -- --regime [dataset]`, 3 trials per (windowSize,
+  maxDist) point, 35 points total across sunspots/melbourne/iris. Raw
+  output: bench/data/regime_results.txt.
+  Result: NO density threshold was found. Speedup stayed 1.1x-2.6x across
+  the ENTIRE density range on sunspots (0.2%->88%, still 1.88x at the
+  densest point) and Melbourne temps (0.2%->37%). Only 2 of 35 points fell
+  below 1x (Melbourne k=40 at 3.6% density: 0.68x; Iris k=20 at 43.3%
+  density: 0.65x) -- both isolated outliers surrounded by higher-density
+  points that stayed well above 1x, the signature of measurement noise
+  (small trial counts, same pattern already documented for Iris elsewhere
+  in this repo), not a systematic density effect: failures did not cluster
+  at the high-density end the way a real sparsity-driven breakdown would
+  predict.
+  This is an initial hypothesis of this project's own that got tested and
+  came back unsupported -- reported as such, not hidden. The practical
+  upshot is stronger than what was being looked for: rather than a
+  density-based usage caveat, the evidence says the speed advantage held
+  up robustly across the density ranges actually tested on real data.
+  Caveat: only 3 datasets, 2 window sizes each, maxDist range bounded by
+  benchmark runtime (very dense + large-window combinations did not finish
+  in a reasonable time and were excluded from the sweep) -- this is not a
+  universal guarantee, see docs/COMPLEXITY.md Section 4 for the full
+  writeup and its explicit "what this does not establish" caveat.

@@ -88,10 +88,16 @@ by differential testing against the reference implementation at every push. Run
   results: the naive baseline's own triangle construction is also
   data-dependent (bit-set intersection, not a flat `O(k³)`), so the two
   engines' real growth rates end up closer than an unqualified complexity
-  argument would suggest. It also measures the *space* side of the
-  trade-off (`npm run bench -- --memory <dataset>`): `IncrementalH1` uses
-  up to ~3500x more heap per instance than the naive engine at
-  windowSize=80 on real data — a real limitation, not just a speed win.
+  argument would suggest. A follow-up regime map (`npm run bench --
+  --regime`) directly controlled complex density (0.2%→88% of max) across
+  all three real datasets to test whether density predicts the speedup's
+  breakdown — it does not, in the ranges tested: speedup held at
+  1.1x–2.6x across the whole density range on two of three datasets, with
+  no clustering of failures at high density. It also measures the *space*
+  side of the trade-off (`npm run bench -- --memory <dataset>`):
+  `IncrementalH1` uses up to ~3500x more heap per instance than the naive
+  engine at windowSize=80 on real data — a real limitation, not just a
+  speed win.
 - `docs/RELATED_WORK.md` positions the streaming engine (`IncrementalH1`)
   against published prior work — vineyards (Cohen-Steiner/Edelsbrunner/
   Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest

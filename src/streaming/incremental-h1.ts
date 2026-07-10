@@ -99,6 +99,16 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * the real reason the two engines' measured growth rates end up closer
  * than an unqualified "O(k) vs O(k^3)" framing would predict.
  *
+ * DOES DENSITY PREDICT THE BREAKDOWN? Tested directly (`npm run bench --
+ * --regime`, docs/COMPLEXITY.md Section 4): swept realized triangle density
+ * from <1% to 88% of the theoretical maximum via maxDist, on all three real
+ * datasets. NO density threshold was found -- speedup held at 1.1x-2.6x
+ * across the full range on two of three datasets, no clustering of
+ * failures at high density. The theoretical worst-case conditionality
+ * above still stands as a bound, but real data tested here did not
+ * approach it in the ranges checked. Not a universal guarantee -- see that
+ * section's explicit caveats (dataset count, window-size range tested).
+ *
  * SPACE, not just time: this class is NOT a strict improvement over
  * StreamingHomology -- it is a time/space trade-off. It keeps the previous
  * push's full edge/triangle lists AND reduced-column state alive between
