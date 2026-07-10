@@ -21,17 +21,13 @@
   },
   "scripts": {
     "build": "tsc",
-    "bench": "node --experimental-transform-types bench/bench.ts",
-    "bench:paper": "node --experimental-transform-types bench/paper-bench.ts",
-    "bench:scalability": "node --experimental-transform-types bench/scalability.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "demo:streaming": "node --experimental-transform-types bench/streaming-poc.ts",
     "demo:real-data": "node --experimental-transform-types bench/real-data-validation.ts",
-    "bench:incremental": "node --experimental-transform-types bench/incremental-benchmark.ts",
-    "bench:fast": "node --experimental-transform-types bench/homology-fast-benchmark.ts",
-    "bench:cohom": "node --experimental-transform-types bench/homology-cohomology-benchmark.ts"
+    "bench:incremental:real-data": "node --experimental-transform-types bench/incremental-real-data-benchmark.ts",
+    "bench:incremental:iris": "node --experimental-transform-types bench/incremental-iris-benchmark.ts",
+    "bench:incremental:melbourne-temp": "node --experimental-transform-types bench/incremental-melbourne-temp-benchmark.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

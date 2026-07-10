@@ -16,28 +16,17 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  *
  *   PREFIX-STABLE INCREMENTAL REDUCTION.
  *
- * On each push, the new window's edge and triangle filtration lists are
- * rebuilt (same O(k^2)+O(k^3) geometry cost as the naive Phase A baseline
- * — that part is NOT optimized here). Those new lists are diffed by
- * identity (stable point IDs, not array positions) against the previous
- * push's lists to find the longest common prefix: the run of triangles
- * (and, separately, edges) that are identical, in the same relative order,
- * to last time.
- *
  * Standard column-reduction persistence has the property that a column's
  * reduced form depends ONLY on columns strictly before it in filtration
- * order. So any triangle within that common prefix is PROVABLY unaffected
- * by whatever changed later — its cached reduced column and persistence
- * pair are simply copied forward, no recomputation. Only the SUFFIX (from
- * the first point of divergence onward — which includes every genuinely
- * new/removed simplex, plus any old survivor that comes after the earliest
- * change) is re-reduced from its raw boundary, using the standard reduction
- * loop from src/core/homology.ts.
+ * order. So any triangle within the longest-common-identity-prefix shared
+ * with the previous push's filtration order is PROVABLY unaffected by
+ * whatever changed later — its cached reduced column and persistence pair
+ * are simply copied forward, no recomputation. Only the SUFFIX (from the
+ * first point of divergence onward) is re-reduced from its raw boundary,
+ * using the standard reduction loop from src/core/homology.ts.
  *
  * This is correct by construction (it's the same proven algorithm, just
- * skipping a provably-unaffected prefix), not a heuristic. Its speedup is
- * real but data-dependent — see bench/incremental-benchmark.ts for
- * measured numbers, not a claimed complexity bound.
+ * skipping a provably-unaffected prefix), not a heuristic.
  *
  * IMPLEMENTATION NOTE (v2): an earlier version of this class used
  * Map<string,...> keyed by string-concatenated point IDs for the identity
@@ -45,29 +34,46 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * SLOWER than the naive Phase A baseline across every tested configuration
  * (up to ~50x slower) — not because the algorithm was wrong (it passed every
  * differential test), but because Map/string overhead ate any savings from
- * skipped re-reduction. This version does the entire hot path (edge/triangle
+ * skipped re-reduction. v2 did the entire hot path (edge/triangle
  * enumeration, boundary lookup, identity diffing) with typed arrays and
- * plain number comparisons — no Maps, no string keys — mirroring the dense
- * integer-indexed approach the Phase A baseline itself uses. Stable point
- * IDs are still used, but only compared as plain numbers, never hashed as
- * strings.
+ * plain number comparisons — but still rebuilt the ENTIRE edge/triangle
+ * geometry from scratch every push (O(k^2) distance + O(k^3) triangle
+ * enumeration), same as the Phase A baseline. That full-rebuild cost was
+ * explicitly flagged as "NOT optimized here" in this docstring and measured
+ * to dominate: the "re-reduced %" diagnostic stayed at 70-99.8% for i.i.d.
+ * random streams, meaning the *reduction*-skipping mechanism had little
+ * left to skip once geometry rebuild ate most of the budget anyway.
  *
- * MEASURED RESULT (bench/incremental-benchmark.ts, 5 seeds x 2 density
- * regimes x 5 window sizes, mean of 200 steady-state pushes per trial):
- * mean speedup over Phase A ranges 1.09x-2.85x, positive in all 10
- * configurations tested, though individual trials vary (some single runs
- * dip below 1x — see the benchmark's min..max column). IMPORTANTLY: the
- * "re-reduced %" diagnostic stays high (70-99.8%) in every configuration,
- * meaning the prefix-caching mechanism itself skips little work for i.i.d.
- * random streams (a new point easily forms at least one short/early
- * edge, collapsing the safe prefix almost every push) — most of the
- * measured speedup comes from this being a tighter implementation in
- * general, not from the incremental algorithm's core idea paying off yet.
- * A data stream with more temporal/spatial locality (so new simplices
- * concentrate late in filtration order) would be expected to show the
- * mechanism itself contribute more. Re-benchmark after any further change
- * here; this class's whole reason to exist is measured speed, not claimed
- * speed.
+ * IMPLEMENTATION NOTE (v3 — incremental geometry): a sliding window evicts
+ * exactly one point and admits exactly one point per push. Point
+ * coordinates never change once assigned a stable id, so the existence and
+ * filtration value of any edge or triangle among points that were ALREADY
+ * in the window and remain in it is IDENTICAL to what it was last push —
+ * recomputing it is pure waste. Only two things can change the geometry:
+ * (1) the evicted point's incident edges/triangles disappear, (2) the new
+ * point's incident edges/triangles appear (a new triangle must include the
+ * new point: any triangle among points that were already co-resident in an
+ * earlier window would already have been enumerated then). So this version:
+ *   - filters the evicted point out of the previous edge/triangle lists
+ *     (O(previous size)) instead of rebuilding them,
+ *   - computes the new point's distances to the surviving points only
+ *     (O(k), not O(k^2)),
+ *   - enumerates new triangles only among PAIRS of the new point's
+ *     neighbors that are themselves adjacent (O(deg(new)^2), not O(k^3)),
+ *     using persistent per-point adjacency sets (`neighborsOf`) maintained
+ *     incrementally across pushes,
+ *   - merges the (already-sorted) survivors with the (small, freshly
+ *     sorted) new candidates in one linear pass, instead of an O(m log m)
+ *     full re-sort.
+ * The prefix-stable reduction below this block is UNCHANGED — it consumes
+ * exactly the same shape of sorted edge/triangle lists as before, just
+ * built for less work. Re-benchmark after any further change here; this
+ * class's whole reason to exist is measured speed, not claimed speed — see
+ * bench/data/summary.txt and the three real-data benchmark scripts
+ * (bench/incremental-real-data-benchmark.ts, bench/incremental-iris-
+ * benchmark.ts, bench/incremental-melbourne-temp-benchmark.ts) for current
+ * numbers, not this comment. Earlier synthetic i.i.d.-random benchmarks for
+ * this class have been removed as part of a repo-wide real-data-only policy.
  *
  * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
  * recomputed fresh via union-find on every push — that step is already
@@ -131,6 +137,12 @@ export class IncrementalH1 {
   private pointCoords: number[][] = []; // aligned 1:1 with pointOrder
   private nextId = 0;
 
+  // persistent adjacency: stable id -> set of currently-adjacent stable ids
+  // (within maxDist), for every point currently in the window. Maintained
+  // incrementally (only touched for the evicted id and the new id each
+  // push), so it never costs more than O(k) total per push to keep in sync.
+  private neighborsOf: Map<number, Set<number>> = new Map();
+
   // cached filtration state from the previous push
   private edgeOrder: EdgeRec[] = [];
   private triOrder: TriRec[] = [];
@@ -154,98 +166,207 @@ export class IncrementalH1 {
 
   push(point: number[] | Float64Array): IncrementalH1Update | null {
     const coords = Array.from(point);
-    const id = this.nextId++;
-    this.pointOrder.push(id);
+    const newId = this.nextId++;
+
+    const wasFull = this.pointOrder.length === this.windowSize;
+    const evictedId = wasFull ? this.pointOrder[0]! : null;
+
+    this.pointOrder.push(newId);
     this.pointCoords.push(coords);
     if (this.pointOrder.length > this.windowSize) {
       this.pointOrder.shift();
       this.pointCoords.shift();
     }
     const k = this.pointOrder.length;
-    if (k < 2) return null;
 
-    const ids = this.pointOrder;
-    const coordsArr = this.pointCoords;
+    // Evict from the persistent adjacency structure right away — cheap
+    // (touches only the evicted point's own neighbor list).
+    if (evictedId !== null) {
+      const evictedNeighbors = this.neighborsOf.get(evictedId);
+      if (evictedNeighbors) {
+        for (const nb of evictedNeighbors) this.neighborsOf.get(nb)?.delete(evictedId);
+      }
+      this.neighborsOf.delete(evictedId);
+    }
+
+    if (k < 2) {
+      this.neighborsOf.set(newId, new Set());
+      return null;
+    }
+
     const dims = this.dims;
 
-    // --- dense k×k pairwise distance matrix (same cost as Phase A's own build) ---
-    const dist = new Float64Array(k * k);
-    for (let i = 0; i < k; i++) {
-      const pi = coordsArr[i]!;
-      for (let j = i + 1; j < k; j++) {
-        const pj = coordsArr[j]!;
-        let s = 0;
-        for (let d = 0; d < dims; d++) {
-          const diff = pi[d]! - pj[d]!;
-          s += diff * diff;
+    // --- INCREMENTAL geometry update (see v3 docstring note above) --------
+
+    // Filter out edges/triangles incident to the evicted point, WHILE
+    // remembering each survivor's index in the ORIGINAL (pre-filter)
+    // this.edgeOrder — survivingTrisUnfiltered's e1/e2/e3 reference that
+    // original index space, not the post-filter one, so the two must be
+    // kept distinct until the remap below.
+    const survivingEdges: EdgeRec[] = [];
+    const survivingEdgeOrigIdx: number[] = [];
+    for (let i = 0; i < this.edgeOrder.length; i++) {
+      const e = this.edgeOrder[i]!;
+      if (evictedId !== null && (e.idA === evictedId || e.idB === evictedId)) continue;
+      survivingEdges.push(e);
+      survivingEdgeOrigIdx.push(i);
+    }
+    const survivingTrisUnfiltered =
+      evictedId === null
+        ? this.triOrder
+        : this.triOrder.filter((t) => t.idA !== evictedId && t.idB !== evictedId && t.idC !== evictedId);
+
+    // New point's neighbors: O(k) distance computations against every other
+    // point still in the window (only the new point pays this, not all k).
+    const newNeighbors = new Set<number>();
+    this.neighborsOf.set(newId, newNeighbors);
+    const newEdgeCandidates: EdgeRec[] = [];
+    for (let i = 0; i < this.pointOrder.length - 1; i++) {
+      const otherId = this.pointOrder[i]!;
+      const otherCoord = this.pointCoords[i]!;
+      let s = 0;
+      for (let d = 0; d < dims; d++) {
+        const diff = coords[d]! - otherCoord[d]!;
+        s += diff * diff;
+      }
+      const v = Math.sqrt(s);
+      if (v <= this.maxDist) {
+        newNeighbors.add(otherId);
+        this.neighborsOf.get(otherId)!.add(newId);
+        newEdgeCandidates.push({ idA: Math.min(newId, otherId), idB: Math.max(newId, otherId), val: v });
+      }
+    }
+    newEdgeCandidates.sort(cmpEdge);
+
+    // Every id that can appear in a NEW triangle this push (must include
+    // newId itself). The pair-index built below is scoped to just this
+    // small set, not all k points.
+    const relevant = new Set<number>(newNeighbors);
+    relevant.add(newId);
+
+    // Merge survivingEdges (already sorted from last push) with
+    // newEdgeCandidates (sorted, small) into the final sorted edge list —
+    // O(total edges), not an O(k log k) full re-sort. While merging:
+    // (a) remember each surviving edge's old-index -> new-index remap
+    //     (positions shift because of the filter/merge), needed to fix up
+    //     survivingTris' boundary-edge indices below;
+    // (b) record a small pair-index for any edge whose both endpoints are
+    //     in `relevant` — exactly what's needed to resolve the boundary
+    //     edges of the new triangles built further down.
+    const newEdges: EdgeRec[] = new Array(survivingEdges.length + newEdgeCandidates.length);
+    // Indexed by ORIGINAL position in this.edgeOrder (pre-filter) — that is
+    // the index space survivingTrisUnfiltered's e1/e2/e3 were written in.
+    const oldEdgeIdxToNew = new Int32Array(this.edgeOrder.length).fill(-1);
+    const pairIndex = new Map<number, Map<number, number>>();
+    const recordPair = (e: EdgeRec, idx: number): void => {
+      if (relevant.has(e.idA) && relevant.has(e.idB)) {
+        let inner = pairIndex.get(e.idA);
+        if (!inner) {
+          inner = new Map();
+          pairIndex.set(e.idA, inner);
         }
-        const v = Math.sqrt(s);
-        dist[i * k + j] = v;
-        dist[j * k + i] = v;
+        inner.set(e.idB, idx);
+      }
+    };
+    {
+      let i = 0;
+      let j = 0;
+      let w = 0;
+      while (i < survivingEdges.length && j < newEdgeCandidates.length) {
+        const a = survivingEdges[i]!;
+        const b = newEdgeCandidates[j]!;
+        if (cmpEdge(a, b) <= 0) {
+          newEdges[w] = a;
+          oldEdgeIdxToNew[survivingEdgeOrigIdx[i]!] = w;
+          recordPair(a, w);
+          i++;
+        } else {
+          newEdges[w] = b;
+          recordPair(b, w);
+          j++;
+        }
+        w++;
+      }
+      while (i < survivingEdges.length) {
+        const a = survivingEdges[i]!;
+        newEdges[w] = a;
+        oldEdgeIdxToNew[survivingEdgeOrigIdx[i]!] = w;
+        recordPair(a, w);
+        i++;
+        w++;
+      }
+      while (j < newEdgeCandidates.length) {
+        const b = newEdgeCandidates[j]!;
+        newEdges[w] = b;
+        recordPair(b, w);
+        j++;
+        w++;
       }
     }
 
-    // --- build + sort new edge list (local indices, no Maps/strings) ---
-    interface EdgeBuild extends EdgeRec {
-      li: number;
-      lj: number;
-    }
-    const newEdgesBuild: EdgeBuild[] = [];
-    for (let i = 0; i < k; i++) {
-      const idI = ids[i]!;
-      for (let j = i + 1; j < k; j++) {
-        const v = dist[i * k + j]!;
-        if (v <= this.maxDist) {
-          const idJ = ids[j]!;
-          newEdgesBuild.push({
-            idA: Math.min(idI, idJ),
-            idB: Math.max(idI, idJ),
-            val: v,
-            li: i,
-            lj: j,
-          });
-        }
-      }
-    }
-    newEdgesBuild.sort(cmpEdge);
-    const newEdges: EdgeRec[] = newEdgesBuild;
+    const getEdgeIdx = (x: number, y: number): number => {
+      const lo = Math.min(x, y);
+      const hi = Math.max(x, y);
+      return pairIndex.get(lo)?.get(hi) ?? -1;
+    };
 
-    // edgeIndexOf[i*k+j] = index into newEdges for the edge between local
-    // positions i and j (symmetric), or -1 if not present (exceeds maxDist).
-    const edgeIndexOf = new Int32Array(k * k).fill(-1);
-    for (let idx = 0; idx < newEdgesBuild.length; idx++) {
-      const e = newEdgesBuild[idx]!;
-      edgeIndexOf[e.li * k + e.lj] = idx;
-      edgeIndexOf[e.lj * k + e.li] = idx;
+    // Remap surviving triangles' boundary-edge indices to their new
+    // positions (identity/value unchanged, only array position shifts).
+    const survivingTris: TriRec[] = new Array(survivingTrisUnfiltered.length);
+    for (let ci = 0; ci < survivingTrisUnfiltered.length; ci++) {
+      const t = survivingTrisUnfiltered[ci]!;
+      survivingTris[ci] = {
+        idA: t.idA,
+        idB: t.idB,
+        idC: t.idC,
+        val: t.val,
+        e1: oldEdgeIdxToNew[t.e1]!,
+        e2: oldEdgeIdxToNew[t.e2]!,
+        e3: oldEdgeIdxToNew[t.e3]!,
+      };
     }
 
-    // --- build + sort new triangle list (boundary edge indices resolved directly) ---
-    const newTris: TriRec[] = [];
-    for (let i = 0; i < k; i++) {
-      for (let j = i + 1; j < k; j++) {
-        const eij = edgeIndexOf[i * k + j]!;
-        if (eij < 0) continue;
-        for (let l = j + 1; l < k; l++) {
-          const eil = edgeIndexOf[i * k + l]!;
-          if (eil < 0) continue;
-          const ejl = edgeIndexOf[j * k + l]!;
-          if (ejl < 0) continue;
-          const val = Math.max(newEdges[eij]!.val, newEdges[eil]!.val, newEdges[ejl]!.val);
-          const a = ids[i]!;
-          const b = ids[j]!;
-          const c = ids[l]!;
-          // sort the 3 stable ids ascending for a canonical identity
-          let idA = a;
-          let idB = b;
-          let idC = c;
-          if (idA > idB) { const t = idA; idA = idB; idB = t; }
-          if (idB > idC) { const t = idB; idB = idC; idC = t; }
-          if (idA > idB) { const t = idA; idA = idB; idB = t; }
-          newTris.push({ idA, idB, idC, val, e1: eij, e2: eil, e3: ejl });
-        }
+    // New triangles provably must include the new point: every pair of the
+    // new point's neighbors that are themselves adjacent forms exactly one
+    // new triangle. O(deg(new)^2) worst case, not O(k^3).
+    const newNeighborsArr = Array.from(newNeighbors);
+    const newTriCandidates: TriRec[] = [];
+    for (let a = 0; a < newNeighborsArr.length; a++) {
+      const p = newNeighborsArr[a]!;
+      for (let b = a + 1; b < newNeighborsArr.length; b++) {
+        const q = newNeighborsArr[b]!;
+        if (!this.neighborsOf.get(p)!.has(q)) continue;
+        let idA = newId;
+        let idB = p;
+        let idC = q;
+        if (idA > idB) { const t = idA; idA = idB; idB = t; }
+        if (idB > idC) { const t = idB; idB = idC; idC = t; }
+        if (idA > idB) { const t = idA; idA = idB; idB = t; }
+        const e1 = getEdgeIdx(idA, idB);
+        const e2 = getEdgeIdx(idA, idC);
+        const e3 = getEdgeIdx(idB, idC);
+        const val = Math.max(newEdges[e1]!.val, newEdges[e2]!.val, newEdges[e3]!.val);
+        newTriCandidates.push({ idA, idB, idC, val, e1, e2, e3 });
       }
     }
-    newTris.sort(cmpTri);
+    newTriCandidates.sort(cmpTri);
+
+    // Merge survivingTris (already sorted) with newTriCandidates (sorted,
+    // small) — O(total triangles), yields the same total order as a full
+    // sort would.
+    const newTris: TriRec[] = new Array(survivingTris.length + newTriCandidates.length);
+    {
+      let i = 0;
+      let j = 0;
+      let w = 0;
+      while (i < survivingTris.length && j < newTriCandidates.length) {
+        if (cmpTri(survivingTris[i]!, newTriCandidates[j]!) <= 0) newTris[w++] = survivingTris[i++]!;
+        else newTris[w++] = newTriCandidates[j++]!;
+      }
+      while (i < survivingTris.length) newTris[w++] = survivingTris[i++]!;
+      while (j < newTriCandidates.length) newTris[w++] = newTriCandidates[j++]!;
+    }
+    // --- end incremental geometry update; everything below is unchanged ---
 
     // --- longest common (identity) prefixes vs. the previous push ---
     let edgeSafeCount = 0;
@@ -324,6 +445,7 @@ export class IncrementalH1 {
     }
 
     // --- H0, recomputed fresh each push (cheap; not the optimization target) ---
+    const ids = this.pointOrder;
     const parent = new Int32Array(k);
     for (let i = 0; i < k; i++) parent[i] = i;
     const find = (x: number): number => {
@@ -356,7 +478,7 @@ export class IncrementalH1 {
       }
     }
     const seen = new Uint8Array(k);
-      for (let i = 0; i < k; i++) {
+    for (let i = 0; i < k; i++) {
       const r = find(i);
       if (!seen[r]) {
         seen[r] = 1;

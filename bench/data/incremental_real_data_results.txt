@@ -1,0 +1,21 @@
+
+> topojs@1.0.0 bench:incremental:real-data
+> node --experimental-transform-types bench/incremental-real-data-benchmark.ts
+
+Loaded 2820 REAL monthly sunspot readings (SIDC/WDC-SILSO, 1749-1983).
+Data-driven lag (first ACF < 1/e, scanned 1..40 months): LAG=25
+Embedded stream length: 2795 points (2D delay embedding, lag=25 months).
+windowSize=40  maxDist=0.15  chunks=6  chunk_len=465  timed_steps/chunk=150
+
+  trial(chunk)    naive_ms     incr_ms   speedup  reReduced%
+             0      321.94      214.48    1.501x       99.7%
+             1      583.20      335.35    1.739x       99.8%
+             2      103.30       60.45    1.709x       98.4%
+             3      260.59      118.79    2.194x       98.5%
+             4      276.26      120.58    2.291x       99.4%
+             5       48.08       22.18    2.168x       97.9%
+
+geometric mean speedup (REAL data): 1.910x  (95% CI: 1.665x .. 2.192x)
+mean re-reduced fraction on REAL data: 99.0%
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=5: t=9.230
+(n=6 chunks -- small N because there is only one real series to chunk; treat as indicative, not a large-sample claim)

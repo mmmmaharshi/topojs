@@ -1,0 +1,23 @@
+
+> topojs@1.0.0 bench:incremental:melbourne-temp
+> node --experimental-transform-types bench/incremental-melbourne-temp-benchmark.ts
+
+Loaded 3650 REAL daily minimum temperatures (Melbourne, Australia BOM, 1981-1990).
+Data-driven lag (first ACF < 1/e, scanned 1..60 days): LAG=46
+Embedded stream length: 3604 points (2D delay embedding, lag=46 days).
+windowSize=45  maxDist=0.15  chunks=8  chunk_len=450  timed_steps/chunk=150
+
+  trial(chunk)    naive_ms     incr_ms   speedup  reReduced%
+             0      119.16      111.69    1.067x       99.5%
+             1       76.05       55.26    1.376x       99.7%
+             2      110.88       68.17    1.626x       99.5%
+             3      180.54       95.43    1.892x       99.5%
+             4      195.52       98.79    1.979x       99.6%
+             5      145.65       73.73    1.976x       99.7%
+             6      112.11       57.16    1.961x       99.7%
+             7      164.15       92.91    1.767x       99.5%
+
+geometric mean speedup (REAL Melbourne temp data): 1.672x  (95% CI: 1.435x .. 1.949x)
+mean re-reduced fraction: 99.6%
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=7: t=6.595
+(n=8 chunks from one real series -- treat as indicative, not a large-sample claim)

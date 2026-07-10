@@ -47,19 +47,19 @@ import { DenseWorkingCol } from './reduction.ts';
  * every triangle involved in an exact tie in either condition above -- e.g.
  * grid/lattice point clouds, specifically exercised in the test suite.
  *
- * MEASURED RESULT (bench/homology-fast-benchmark.ts, vs. computePersistentHomology,
- * random 2D point clouds, n in {50,100,200,300}, maxDist in {0.15,0.3}, 5
- * trials per config): mean speedup per config ranges 0.83x-1.33x -- i.e. it is
- * sometimes a slight net LOSS, not just a diminishing gain, once the
- * apparent-pairs bookkeeping overhead is counted. Per-trial variance is large
- * (individual trials from 0.07x to 2.10x within the same config), so only the
- * per-config mean +/- spread is a defensible claim, never a single number.
- * avg_re-reduced_% (fraction of triangles still needing full reduction)
- * ranges 49%-99.8%, rising toward 100% as n/density grow -- apparent pairs
- * get rarer as the complex gets denser, so the shortcut fires least exactly
- * where it would matter most for asymptotic cost. This is a real, honestly
- * modest, and data-dependent effect, not a dramatic win. Re-run the
- * benchmark script before citing any number in a paper.
+ * PRIOR MEASUREMENT (removed): this function was previously benchmarked
+ * against computePersistentHomology on synthetic i.i.d. random 2D point
+ * clouds, showing a modest, data-dependent, sometimes-negative speedup
+ * (mean per-config range roughly 0.83x-1.33x, i.e. sometimes a net loss
+ * once apparent-pairs bookkeeping overhead is counted). That benchmark
+ * script and its synthetic input data have since been removed as part of a
+ * repo-wide decision to keep only real-data benchmarks -- no synthetic
+ * i.i.d. point clouds remain. This function's own correctness is still
+ * covered by test/homology-fast.test.ts (differential tests against
+ * computePersistentHomology, real assertions, not benchmark claims); its
+ * performance profile has not yet been re-measured against real data. Do
+ * not cite the numbers above -- they refer to a benchmark that no longer
+ * exists in this repo.
  *
  * This function does NOT alter computePersistentHomology at all. It is a
  * separate, independently validated function so a bug here can never

@@ -2,9 +2,9 @@
  * TopoJS — public entry point.
  *
  * Everything importable as `import { ... } from 'topojs'` is re-exported
- * from here. Internal modules under src/core, src/export, src/data, and
- * src/workers are implementation detail and not part of the public API
- * contract (they may be reorganized without a semver-major bump).
+ * from here. Internal modules under src/core, src/export, and src/data are
+ * implementation detail and not part of the public API contract (they may
+ * be reorganized without a semver-major bump).
  */
 
 // ── Rips / cubical persistence ──
@@ -18,13 +18,13 @@ export type { CubicalResult } from './core/cubical.ts';
 // clouds, circles, tie-heavy grids, 1D lattices, 3D, maxDim=3 -- all
 // differential-tested against computePersistentHomology; plus ad-hoc stress
 // sweeps of 11,100 random configs and 61 grid/lattice configs, 0 mismatches).
-// Per bench/homology-fast-benchmark.ts: mean speedup per (n, maxDist) config
-// ranges 0.83x-1.33x -- sometimes a small net LOSS once bookkeeping overhead
-// is counted, not just a diminishing gain. Per-trial variance is large
-// (0.07x-2.10x within a single config), so only the mean +/- spread is a
-// defensible claim. Real but modest and data-dependent -- see the function
-// docstring for the full accounting, including the single-edge-vs-full-
-// boundary bug this caught and fixed.
+// Performance was previously benchmarked against synthetic i.i.d. random
+// point clouds (mean speedup roughly 0.83x-1.33x, sometimes a net loss);
+// that benchmark script and its synthetic data have been removed as part
+// of a repo-wide real-data-only policy for performance claims. Not yet
+// re-measured against real data -- see the function docstring for the
+// single-edge-vs-full-boundary bug this correctness testing caught and
+// fixed, which remains valid regardless of the removed benchmark.
 export { computePersistentHomologyFast } from './core/homology-fast.ts';
 export type { HomologyResultFast } from './core/homology-fast.ts';
 
@@ -61,21 +61,16 @@ export type { HomologyResultFast } from './core/homology-fast.ts';
 // dimensions -- investigated earlier for the plain homology direction and
 // found inapplicable there (no higher dimension to clear against in the
 // default H0+H1-only case), but here it falls out for free.
-// Per bench/homology-cohomology-benchmark.ts: this is a STRUCTURAL win,
-// not a constant-factor one -- H1 reduces one column per CYCLE EDGE
-// instead of one column per TRIANGLE (~19x fewer columns on the profiled
-// case: 16,516 edges vs. 310,841 triangles), so unlike the apparent-pairs
-// speedup, this one GROWS with density/size rather than shrinking toward
-// 1x: measured 1.3x-4.3x mean speedup for n=100-400 (H1-only, maxDist=0.3),
-// and 5.3x -> 7.2x going from n=400 to n=600 in a single-run spot check.
-// With H2 now also accelerated (maxDim=3): measured 1.4x-3.6x mean speedup
-// across small dense 2D/3D configs (n=30-60), min..max per-trial spread
-// 0.57x-4.99x -- noisier than the H1-only numbers (smaller absolute
-// runtimes, so JIT warmup and GC timing matter proportionally more; the
-// benchmark script runs one untimed warmup call per config specifically to
-// reduce this, since an early informal check without warmup showed an
-// apparent net LOSS that a warmed-up 5-trial re-run showed was an
-// artifact, not a real regression).
+// This is a STRUCTURAL win, not a constant-factor one -- H1 reduces one
+// column per CYCLE EDGE instead of one column per TRIANGLE (~19x fewer
+// columns on one profiled case: 16,516 edges vs. 310,841 triangles), so
+// unlike the apparent-pairs speedup, this one should GROW with
+// density/size rather than shrink toward 1x. It was previously benchmarked
+// on synthetic i.i.d. random point clouds (mean speedup roughly 1.3x-4.3x
+// for H1-only, 1.4x-3.6x with H2 also accelerated); that benchmark script
+// and its synthetic data have been removed as part of a repo-wide
+// real-data-only policy for performance claims. Not yet re-measured
+// against real data.
 export { computePersistentHomologyCohomology } from './core/homology-cohom.ts';
 
 // ── Distances ──
@@ -112,14 +107,29 @@ export type { TopologicalSummary } from './streaming/topological-summary.ts';
 
 // ── Streaming persistent homology (Phase B / prefix-stable incremental H1) ──
 // Correctness-validated (see test/incremental.test.ts: 8 tests, many seeds,
-// dense/sparse regimes, 3D, exact match against full recompute every push).
-// Per bench/incremental-benchmark.ts (5 seeds x 2 density regimes x 5 window
-// sizes): mean speedup over StreamingHomology is 1.09x-2.85x, positive in
-// every configuration tested, though the prefix-caching mechanism itself
-// skips little work for i.i.d. random data (70-99.8% of triangles still get
-// re-reduced per push) -- most of the measured gain is from this being a
-// tighter, allocation-light implementation, not the incremental idea paying
-// off yet. See the class docstring for the full honest accounting, including
-// an earlier Map/string-keyed version that was up to 50x SLOWER.
+// dense/sparse regimes, 3D, exact match against full recompute every push;
+// re-verified after the v3 geometry rewrite below).
+//
+// v3 (current): geometry construction (which edges/triangles exist) is now
+// itself incremental -- only the evicted point's edges/triangles are
+// filtered out and only the new point's are computed and merged in, instead
+// of rebuilding the full O(k^2) edge set + O(k^3) triangle set from scratch
+// every push (that full rebuild was the acknowledged bottleneck in v1/v2;
+// see the class docstring's version history). Reduction itself (the
+// prefix-caching mechanism) is unchanged and still skips little work
+// (98.9-99.8% of triangles still get re-reduced per push on every real
+// dataset tested so far) -- the v3 win is a distinct mechanism from that one.
+//
+// All performance claims for this class are now benchmarked against real,
+// externally-sourced data only (earlier synthetic i.i.d.-random benchmarks
+// and their output data have been removed). See bench/data/summary.txt for
+// full methodology and bench/incremental-real-data-benchmark.ts (sunspots),
+// bench/incremental-iris-benchmark.ts (UCI Iris), and
+// bench/incremental-melbourne-temp-benchmark.ts (Melbourne daily min temps)
+// for the three independent real-data measurements: geometric mean speedup
+// over StreamingHomology of 1.34x-1.91x, all statistically significant
+// (paired t-test on log-speedup, p<0.05) despite small chunk counts (the
+// practical limit of chunking a single real series). Re-run before citing
+// exact numbers.
 export { IncrementalH1 } from './streaming/incremental-h1.ts';
 export type { IncrementalH1Options, IncrementalH1Update } from './streaming/incremental-h1.ts';

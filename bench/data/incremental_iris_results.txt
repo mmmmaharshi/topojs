@@ -1,0 +1,25 @@
+
+> topojs@1.0.0 bench:incremental:iris
+> node --experimental-transform-types bench/incremental-iris-benchmark.ts
+
+Loaded 150 REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).
+windowSize=20  maxDist=0.35  timed_steps=124  repeats=10
+(single real stream, natural species-ordered; repeats time the SAME data to isolate measurement noise)
+
+  repeat    naive_ms     incr_ms   speedup  reReduced%
+       0      43.536      39.440    1.104x       98.9%
+       1      19.196      29.427    0.652x       98.9%
+       2      19.317      28.819    0.670x       98.9%
+       3      18.056      10.015    1.803x       98.9%
+       4      17.373      10.745    1.617x       98.9%
+       5      17.275      10.567    1.635x       98.9%
+       6      18.135      10.930    1.659x       98.9%
+       7      18.891      10.657    1.773x       98.9%
+       8      17.640      10.460    1.686x       98.9%
+       9      17.697      10.661    1.660x       98.9%
+
+geometric mean speedup (real Iris stream): 1.342x  (95% CI: 1.049x .. 1.717x)
+mean re-reduced fraction: 98.9%
+paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=9: t=2.341
+NOTE: variance here is measurement/JIT noise across repeats of the SAME 150-point real
+stream, not data diversity (only one real Iris ordering exists) -- see file header.

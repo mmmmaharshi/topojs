@@ -10,7 +10,6 @@
 - **Pure JavaScript** — single-file bundle (~7 KB raw, ~2.8 KB gzipped — see `demo/topojs-bundle.mjs`), runs in any ES2020 environment
 - **Optimized** — DenseWorkingCol bit-vector reduction (2.5–6× faster than sparse), `Math.clz32` pivot, row-offset distance lookup
 - **Real-world datasets** — MNIST digits, Iris flowers, terrain DEMs, natural image patches, torus/sphere 3D scans
-- **Web Workers (experimental)** — multi-threaded triangle enumeration path for very large point clouds; at the scales benchmarked so far (n≤150, see `bench/data/axis7_workers.csv`) thread/message overhead outweighs the parallel gain (0.4–0.54× vs. serial), so it is not enabled by default — see `bench/data/summary.txt` Axis 7
 
 ## Quick Start
 
@@ -42,46 +41,32 @@ console.log(cubical.pairs);
 | `summarize(pairs)` | Statistics (counts, max death, min birth) |
 | `splitByDimension(pairs)` | Separate H₀/H₁/H₂, finite/essential |
 
-## Benchmark Results
+## Streaming / Incremental H1 Benchmarks (real data only)
 
-| Configuration | Time |
-|---------------|------|
-| 200 points, ε=0.3, H₀+H₁+H₂ | 3.6 s |
-| 80 points, ε=0.8, H₀+H₁+H₂ | 29 s |
-| 256×256 cubical terrain | 883 ms |
-| 100 pts, ε=1.0 H₁ (dense vs sparse) | 605 ms vs 1.9 s (3.2×) |
+All performance claims in this repo are now benchmarked against real,
+externally-sourced data rather than synthetic/i.i.d. random point clouds
+(earlier synthetic benchmarks and their output data have been removed).
+Three independent real-data benchmarks compare the incremental streaming
+engine (`IncrementalH1`) against the naive recompute-from-scratch baseline
+(`StreamingHomology`):
 
-Full 10-axis scalability analysis with CSVs in `bench/data/`.
+| Dataset | Real source | Geometric mean speedup |
+|---------|-------------|------------------------|
+| Monthly sunspot counts (1749–1983) | SIDC/WDC-SILSO | 1.91× (95% CI 1.67×–2.19×) |
+| UCI Iris measurements (150 samples) | archive.ics.uci.edu | 1.34× (95% CI 1.05×–1.72×) |
+| Melbourne daily min. temperatures (1981–1990) | Australian BOM | 1.65× (95% CI 1.42×–1.95×) |
+
+All three are statistically significant (paired t-test on log-speedup, p<0.05).
+Full methodology, raw per-trial numbers, and honest caveats in `bench/data/summary.txt`.
+Reproduce with `npm run bench:incremental:real-data`, `npm run bench:incremental:iris`,
+`npm run bench:incremental:melbourne-temp`.
 
 ## Test Coverage
 
-39 tests across ground-truth topology (known Betti numbers for circles, octahedra,
-disjoint unions), edge cases, and a property-based Euler-Poincare invariant check
-(20 seeded random trials). Run `npm run test:coverage` for a live report; core
-algorithm files (`src/core/`) are 80-100% statement coverage, with the exception
-of `reduction.ts`'s standalone sparse-column functions, which are exercised via
-`bench/ablation.ts` rather than the unit suite (the production path uses
-`DenseWorkingCol` directly, not those wrapper functions).
-
-## Comparison vs. Ripser (Python/C++ reference implementation)
-
-Verified against [ripser.py](https://github.com/scikit-tda/ripser.py) (Cython/C++) on identical
-point clouds — Betti numbers (β0, β1) match exactly in every case tested. Reproduce with
-`python bench/comparison.py` (requires `pip install ripser`); raw output in
-`bench/data/ripser_comparison.txt`.
-
-| Case | n | dims | ε | Ripser (ms) | TopoJS (ms) | Ratio | β0/β1 match |
-|------|---|------|---|-------------|-------------|-------|-------------|
-| circle_30 | 30 | 2 | 1.5 | 1.6±0.4 | 22.0±7.5 | 14.1× | ✓ |
-| random_50_2d | 50 | 2 | 0.5 | 1.9±0.4 | 23.1±10.7 | 12.1× | ✓ |
-| random_100_2d | 100 | 2 | 0.3 | 3.2±0.9 | 25.8±12.1 | 8.1× | ✓ |
-| random_100_2d_dense | 100 | 2 | 0.8 | 5.9±1.5 | 686.1±61.3 | 116.7× | ✓ |
-| random_150_3d | 150 | 3 | 1.0 | 13.4±0.9 | 8408.3±236.1 | 625.2× | ✓ |
-
-TopoJS trades raw speed (a pure-JS, dependency-free implementation is 8–625× slower than a
-compiled C++ backend, worsening with density and dimension) for zero install footprint and
-in-browser execution — the point of the library is portability, not beating optimized native
-solvers on runtime.
+Ground-truth topology tests (known Betti numbers for circles, octahedra, disjoint
+unions, complete graphs), edge cases, and streaming/incremental correctness verified
+by differential testing against the reference implementation at every push. Run
+`npm run test:coverage` for a live report.
 
 ## License
 
