@@ -127,7 +127,51 @@ modest separation, not a different complexity class made visible). The
 re-sort) — a genuine, measured advantage, just not the "different growth
 class" framing an unqualified complexity argument might suggest.
 
-## 4. Honest summary
+## 4. Space complexity: the trade-off nobody had measured yet
+
+Everything above is about TIME. `IncrementalH1`'s whole design is a
+time/space trade-off — it buys speed by keeping the *previous* push's full
+edge/triangle lists and reduced-column state alive so the next push can diff
+against them instead of recomputing. `StreamingHomology` (naive) does the
+opposite: it discards its entire complex after every push and holds nothing
+but the raw window contents between calls.
+
+Measured directly (`npm run bench -- --memory <dataset>`, `bench/data/
+memory_results.txt`; `process.memoryUsage().heapUsed` delta, median of 7
+fresh builds per point, `--expose-gc` forcing collection immediately before
+and after each build to reduce — not eliminate — measurement noise):
+
+| Dataset | windowSize | naive MB | incremental MB | ratio |
+|---|---|---|---|---|
+| sunspots | 10 | 0.005 | 0.020 | 4.2x |
+| sunspots | 20 | 0.008 | 0.201 | 24.8x |
+| sunspots | 40 | 0.004 | 0.732 | 204x |
+| sunspots | 80 | 0.001 | 4.864 | 3484x |
+| Melbourne temps | 10 | 0.004 | 0.011 | 2.7x |
+| Melbourne temps | 20 | 0.002 | 0.035 | 15.0x |
+| Melbourne temps | 40 | 0.002 | 0.333 | 142x |
+| Melbourne temps | 80 | 0.001 | 1.942 | 1361x |
+| Iris | 5 | 0.002 | 0.006 | 2.6x |
+| Iris | 10 | 0.005 | 0.024 | 4.7x |
+| Iris | 20 | 0.008 | 0.204 | 24.1x |
+
+**This is a real, consistent, and previously undocumented cost.** The naive
+engine's heap footprint stays near-zero at every window size tested (it
+retains almost nothing between pushes, by design); `IncrementalH1`'s grows
+roughly in line with `T` (triangle count) — consistent with Section 2's
+identification of `reducedCols`/`triPair`/`edgeOrder`/`triOrder` as O(E+T)
+persistent state — reaching nearly 5MB per instance at windowSize=80 on the
+sunspot data, thousands of times the naive engine's footprint at the same
+window size. For a single stream this is very likely irrelevant in absolute
+terms (a few MB), but it means `IncrementalH1` does **not** scale to large
+numbers of concurrent windows (e.g., one window per sensor across a large
+fleet) the same way the naive engine does — that use case would need to
+budget memory per window, not just CPU time, and the two engines' costs on
+that axis are inverted from their costs on the CPU axis. This is not
+discussed anywhere else in this repository before this document and should
+be treated as a real limitation of `IncrementalH1`, not a footnote.
+
+## 5. Honest summary
 
 - The `Θ(k) + O(deg(new)²)` "new point" cost saving is unconditional and
   proven from the code (Section 2) — this part of the original complexity
@@ -148,3 +192,9 @@ class" framing an unqualified complexity argument might suggest.
   headline "O(k) vs O(k²)/O(k³)" framing suggests, once the naive
   baseline's own bit-set optimization (Section 1) and real-data density
   (Section 3) are both accounted for precisely.
+- The time saving is bought with real, measured memory cost — up to
+  ~3500x more heap per instance at windowSize=80 on real data (Section 4).
+  Any claim that `IncrementalH1` is a strict improvement over the naive
+  baseline is false without qualifying which resource (time or space) and
+  at what scale; it is a trade-off, not a strict improvement, and should be
+  presented as such.

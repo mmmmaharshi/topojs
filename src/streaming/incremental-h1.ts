@@ -99,6 +99,18 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * the real reason the two engines' measured growth rates end up closer
  * than an unqualified "O(k) vs O(k^3)" framing would predict.
  *
+ * SPACE, not just time: this class is NOT a strict improvement over
+ * StreamingHomology -- it is a time/space trade-off. It keeps the previous
+ * push's full edge/triangle lists AND reduced-column state alive between
+ * pushes (that is the whole mechanism); StreamingHomology discards
+ * everything but the raw window contents after each push. Measured
+ * directly (`npm run bench -- --memory <dataset>`, docs/COMPLEXITY.md
+ * Section 4): up to ~3500x more heap per instance than StreamingHomology
+ * at windowSize=80 on real data. Fine for one or a few concurrent windows;
+ * a real limitation for use cases with many concurrent windows (e.g. one
+ * per sensor across a fleet), where StreamingHomology's near-zero retained
+ * state may be the better choice despite its slower per-push time.
+ *
  * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
  * recomputed fresh via union-find on every push — that step is already
  * O(E α(n)), not the bottleneck, so there is nothing to gain by making it

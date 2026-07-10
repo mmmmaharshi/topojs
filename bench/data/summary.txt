@@ -145,4 +145,32 @@ Axis 4: Scaling sweep — does the growth RATE differ, not just a constant
   open question for further work (larger window-size ranges, more trials,
   and/or a formal complexity proof -- see project punch list), not a
   settled result. Re-run before citing; see bench/data/scaling_results.txt
-  for full raw tables.
+  for full raw tables. A precise, code-derived explanation for WHY the
+  results are mixed (not just that they are) is in docs/COMPLEXITY.md --
+  short version: the naive baseline's own triangle construction is also
+  data-dependent (bit-set intersection, not a flat O(k^3)), so the two
+  engines are closer to each other in complexity class than the headline
+  numbers above suggest, once that and real-data density are both
+  accounted for precisely.
+
+Axis 5: Memory sweep -- the speed win is a TIME/SPACE trade-off, not a
+  strict improvement. IncrementalH1 keeps the previous push's full edge/
+  triangle lists AND reduced-column state alive between pushes (the whole
+  mechanism the speedup depends on); StreamingHomology discards everything
+  but the raw window contents after every push. Measured directly
+  (`npm run bench -- --memory <dataset>`, median of 7 fresh-instance heap
+  deltas per point, --expose-gc forcing collection before/after each to
+  reduce noise; bench/data/memory_results.txt):
+    sunspots:    4.2x (k=10) -> 24.8x (k=20) -> 204x (k=40) -> 3484x (k=80)
+    melbourne:   2.7x (k=10) -> 15.0x (k=20) -> 142x (k=40) -> 1361x (k=80)
+    iris:        2.6x (k=5)  -> 4.7x (k=10)  -> 24.1x (k=20)
+  Consistent across all three real datasets: the memory ratio grows sharply
+  with window size, reaching ~1300x-3500x at the largest window sizes
+  tested. This was not measured or discussed anywhere in this repo before
+  now. It does not invalidate the speedup claims in Axes 1-4 (time and
+  space are different resources), but it means IncrementalH1 is a genuine
+  trade-off, not a strict win -- fine for one or a few concurrent windows,
+  a real limitation for many-concurrent-window use cases (e.g. one window
+  per sensor across a large fleet), where StreamingHomology's near-zero
+  retained state may be preferable despite its slower per-push time. See
+  docs/COMPLEXITY.md Section 4 for the full writeup.

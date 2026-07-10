@@ -25,7 +25,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "demo:real-data": "node --experimental-transform-types bench/real-data-validation.ts",
-    "bench": "node --experimental-transform-types bench/benchmark.ts"
+    "bench": "node --experimental-transform-types --expose-gc bench/benchmark.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

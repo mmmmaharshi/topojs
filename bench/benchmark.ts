@@ -26,6 +26,7 @@
  * Run just one:                 npm run bench -- sunspots
  * List available datasets:      npm run bench -- --list
  * Scaling sweep (see below):    npm run bench -- --scaling melbourne-temp
+ * Memory sweep (see below):     npm run bench -- --memory melbourne-temp
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -393,6 +394,95 @@ function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10)
   console.log('not a constant-factor optimization, is what is being measured.');
 }
 
+// ── memory sweep ─────────────────────────────────────────────────────────
+// Everything above measures TIME only. This measures SPACE: heap used by a
+// fully-warmed-up engine instance holding one window's worth of state, for
+// both engines, across a range of real window sizes.
+//
+// Caveat stated up front: process.memoryUsage().heapUsed is inherently
+// noisy (V8 heap growth in chunks, GC timing, JIT-compiled code taking
+// space too) -- this is NOT a precise byte-accounting of either engine's
+// data structures. It is run with --expose-gc (see package.json's "bench"
+// script) so a manual global.gc() can be forced immediately before each
+// measurement, which reduces but does not eliminate the noise. Treat
+// these as order-of-magnitude comparisons, not exact figures -- and this
+// script says so in its own output, not just here.
+
+function forceGc(): void {
+  const g = (globalThis as { gc?: () => void }).gc;
+  if (typeof g === 'function') g();
+}
+
+function measureHeapMBOnce(build: () => unknown): number {
+  forceGc();
+  const before = process.memoryUsage().heapUsed;
+  const handle = build();
+  forceGc();
+  const after = process.memoryUsage().heapUsed;
+  // Keep a reference alive until after the second measurement so V8 can't
+  // collect it early and understate the delta.
+  void handle;
+  return (after - before) / (1024 * 1024);
+}
+
+/**
+ * Single heap-delta samples are noisy (GC timing, V8 heap chunking) even
+ * with forced GC -- median of several repeated builds is far more stable
+ * than any one sample. Discards fresh-instance construction cost variance
+ * by rebuilding from scratch each repeat (matches how these engines are
+ * actually used -- one instance per window, not reused across windows).
+ */
+function measureHeapMBMedian(build: () => unknown, repeats = 7): number {
+  const samples = Array.from({ length: repeats }, () => measureHeapMBOnce(build));
+  samples.sort((a, b) => a - b);
+  return samples[Math.floor(samples.length / 2)]!;
+}
+
+function runMemorySweep(key: string, windowSizes: number[]): void {
+  const cfg = DATASETS[key];
+  if (!cfg) throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(', ')}`);
+
+  const hasGc = typeof (globalThis as { gc?: () => void }).gc === 'function';
+  console.log(`\n=== MEMORY SWEEP: ${cfg.name} ===`);
+  console.log(`source: ${cfg.source}`);
+  console.log(`(process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; ${hasGc ? 'manual GC forced before/after each build via --expose-gc' : 'NO --expose-gc detected, run via `npm run bench` for a manual-GC measurement -- these numbers will be substantially noisier without it'})`);
+
+  const { points, logLines } = cfg.load();
+  for (const l of logLines) console.log(l);
+
+  console.log();
+  console.log('windowSize'.padStart(10) + 'naive_MB'.padStart(12) + 'incr_MB'.padStart(12) + 'ratio(incr/naive)'.padStart(20));
+
+  for (const windowSize of windowSizes) {
+    const warmup = windowSize + 5;
+    if (points.length < warmup) {
+      console.log(`${String(windowSize).padStart(10)}  skipped -- not enough real data to fill this window`);
+      continue;
+    }
+    const naiveMB = measureHeapMBMedian(() => {
+      const s = new StreamingHomology({ windowSize, dims: cfg.dims, maxDist: cfg.maxDist, maxDim: 2 });
+      for (let i = 0; i < warmup; i++) s.push(points[i]!);
+      return s;
+    });
+    const incrMB = measureHeapMBMedian(() => {
+      const s = new IncrementalH1({ windowSize, dims: cfg.dims, maxDist: cfg.maxDist });
+      for (let i = 0; i < warmup; i++) s.push(points[i]!);
+      return s;
+    });
+    const ratio = naiveMB > 0 ? incrMB / naiveMB : NaN;
+    console.log(
+      String(windowSize).padStart(10) + naiveMB.toFixed(3).padStart(12) + incrMB.toFixed(3).padStart(12) +
+        (Number.isFinite(ratio) ? ratio.toFixed(2) : 'n/a').padStart(20),
+    );
+  }
+  console.log();
+  console.log('IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:');
+  console.log('it keeps the previous push\'s full edge/triangle lists AND reduced-column state alive between');
+  console.log('pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of');
+  console.log('that, it only keeps the raw window contents and discards all derived state after each push.');
+  console.log('This is the space side of the time/space trade-off the class docstring does not currently discuss.');
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 
 const arg = process.argv[2];
@@ -410,6 +500,16 @@ if (arg === '--scaling') {
   if (!cfg) throw new Error(`unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(', ')}`);
   const windowSizes = sizesArg ? sizesArg.split(',').map(Number) : cfg.scalingWindowSizes;
   runScalingSweep(dsKey, windowSizes, cfg.scalingTrials ?? 10);
+  process.exit(0);
+}
+
+if (arg === '--memory') {
+  const dsKey = process.argv[3] ?? 'melbourne-temp';
+  const sizesArg = process.argv[4];
+  const cfg = DATASETS[dsKey];
+  if (!cfg) throw new Error(`unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(', ')}`);
+  const windowSizes = sizesArg ? sizesArg.split(',').map(Number) : cfg.scalingWindowSizes;
+  runMemorySweep(dsKey, windowSizes);
   process.exit(0);
 }
 

@@ -1,0 +1,54 @@
+
+=== MEMORY SWEEP: Monthly sunspot counts (1749-1983) ===
+source: SIDC/WDC-SILSO, bench/data/monthly-sunspots.csv
+(process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; manual GC forced before/after each build via --expose-gc)
+Loaded 2820 REAL monthly sunspot readings (SIDC/WDC-SILSO, 1749-1983).
+Data-driven lag (first ACF < 1/e, scanned 1..40 months): LAG=25
+Embedded stream length: 2795 points (2D delay embedding, lag=25 months).
+
+windowSize    naive_MB     incr_MB   ratio(incr/naive)
+        10       0.002       0.017                7.62
+        20       0.004       0.202               52.16
+        40       0.004       0.830              231.45
+        80       0.001       4.864             3483.95
+
+IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:
+it keeps the previous push's full edge/triangle lists AND reduced-column state alive between
+pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of
+that, it only keeps the raw window contents and discards all derived state after each push.
+This is the space side of the time/space trade-off the class docstring does not currently discuss.
+
+=== MEMORY SWEEP: Melbourne daily min. temperatures (1981-1990) ===
+source: Australian BOM, bench/data/daily-min-temperatures.csv
+(process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; manual GC forced before/after each build via --expose-gc)
+Loaded 3650 REAL daily minimum temperatures (Melbourne, Australia BOM, 1981-1990).
+Data-driven lag (first ACF < 1/e, scanned 1..60 days): LAG=46
+Embedded stream length: 3604 points (2D delay embedding, lag=46 days).
+
+windowSize    naive_MB     incr_MB   ratio(incr/naive)
+        10       0.002       0.009                4.31
+        20       0.001       0.033               25.61
+        40       0.001       0.333              340.61
+        80       0.002       1.943             1189.85
+
+IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:
+it keeps the previous push's full edge/triangle lists AND reduced-column state alive between
+pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of
+that, it only keeps the raw window contents and discards all derived state after each push.
+This is the space side of the time/space trade-off the class docstring does not currently discuss.
+
+=== MEMORY SWEEP: UCI Iris measurements (150 samples) ===
+source: archive.ics.uci.edu, embedded in src/data/realworld-datasets.ts
+(process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; manual GC forced before/after each build via --expose-gc)
+Loaded 150 REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).
+
+windowSize    naive_MB     incr_MB   ratio(incr/naive)
+         5       0.002       0.006                2.66
+        10       0.005       0.027                5.63
+        20       0.005       0.205               44.70
+
+IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:
+it keeps the previous push's full edge/triangle lists AND reduced-column state alive between
+pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of
+that, it only keeps the raw window contents and discards all derived state after each push.
+This is the space side of the time/space trade-off the class docstring does not currently discuss.
