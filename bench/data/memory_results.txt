@@ -28,9 +28,9 @@ Still does NOT eliminate the time/space trade-off: edgeOrder (array of
 EdgeRec objects), neighborsOf (Map<number,Set<number>>), and pointCoords
 (array of small arrays) remain unpooled, and IncrementalH1 still retains
 meaningfully more than StreamingHomology's near-zero footprint. See
-docs/COMPLEXITY.md Section 5c for the full writeup and the reasoning for
-stopping here rather than continuing to pool the remaining, much smaller
-contributors.
+README.md's "Space, not just time" section for the summary writeup and
+the reasoning for stopping here rather than continuing to pool the
+remaining, much smaller contributors.
 
 ---
 
@@ -57,11 +57,11 @@ datasets and both larger window sizes. It does NOT eliminate the
 time/space trade-off: IncrementalH1 still retains far more state than
 StreamingHomology (which keeps almost nothing), because edgeOrder and
 triOrder (arrays of small JS objects, one per edge/triangle) were not
-touched by this change -- see the follow-up note in docs/COMPLEXITY.md
-Section 5 for why those were left alone (a much larger, riskier refactor
-threaded through the entire push() method, versus this change's much
-narrower footprint at the storage boundary only) and whether pooling them
-too is worth the risk. (This footnote is now superseded for triOrder --
+touched by this change -- see README.md's "Space, not just time" section
+for why those were left alone at this point (a much larger, riskier
+refactor threaded through the entire push() method, versus this change's
+much narrower footprint at the storage boundary only) and whether pooling
+them too is worth the risk. (This footnote is now superseded for triOrder --
 see UPDATE 2 above -- but kept accurate to what UPDATE 1 alone achieved.)
 
 === MEMORY SWEEP: Monthly sunspot counts (1749-1983) [CURRENT, after both pooling fixes] ===

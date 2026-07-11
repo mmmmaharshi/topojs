@@ -20,8 +20,9 @@ this repo's OWN naive StreamingHomology baseline). Read on its own, a
 1.3x-1.9x speedup could suggest topojs is fast in absolute terms. It is
 not. Against Ripser (Bauer 2019/2021), the established state-of-the-art C++
 Vietoris-Rips reference, topojs's plain batch engine is 16x-93x SLOWER in
-absolute wall-clock time on the same real datasets (see docs/COMPARISON.md
-and bench/data/ripser_comparison_results.txt) -- and that gap widens with
+absolute wall-clock time on the same real datasets (see README.md's
+"Against Ripser" section and bench/data/ripser_comparison_results.txt) --
+and that gap widens with
 n. The two facts are not in tension (this file's incremental engine is a
 different code path than the plain batch engine Ripser was compared
 against, and "relatively faster than our own naive baseline" and
@@ -238,11 +239,12 @@ Axis 4: Scaling sweep — does the growth RATE differ, not just a constant
   asymptotic gap across all real data tested -- on some real datasets/window
   ranges it looks close to a constant-factor win instead. This is a genuine
   open question for further work (larger window-size ranges, more trials,
-  and/or a formal complexity proof -- see project punch list), not a
-  settled result. Re-run before citing; see bench/data/scaling_results.txt
-  for full raw tables. A precise, code-derived explanation for WHY the
-  results are mixed (not just that they are) is in docs/COMPLEXITY.md --
-  short version: the naive baseline's own triangle construction is also
+  and/or a formal complexity proof), not a settled result. Re-run before
+  citing; see bench/data/scaling_results.txt for full raw tables. A
+  precise, code-derived explanation for WHY the results are mixed (not
+  just that they are) is in README.md's "Comparison Against Prior Work"
+  section -- short version: the naive baseline's own triangle construction
+  is also
   data-dependent (bit-set intersection, not a flat O(k^3)), so the two
   engines are closer to each other in complexity class than the headline
   numbers above suggest, once that and real-data density are both
@@ -281,8 +283,8 @@ Axis 5: Memory sweep -- the speed win is a TIME/SPACE trade-off, not a
   0.205MB->0.088MB at k=20) -- ratios now ~1300x (sunspots) / ~427x
   (melbourne) at k=80, down from ~3484x/~1361x. Current numbers are in
   bench/data/memory_results.txt's main tables; pre-optimization numbers
-  kept there too, not deleted, for the record. See docs/COMPLEXITY.md
-  Section 5b for the full writeup. This closed most, not all, of the gap --
+  kept there too, not deleted, for the record. See README.md's "Space, not
+  just time" section for the summary writeup. This closed most, not all, of the gap --
   edgeOrder/triOrder (arrays of small objects, one per edge/triangle) were
   named together as the remaining risk, not yet measured individually.
 
@@ -301,8 +303,8 @@ Axis 5: Memory sweep -- the speed win is a TIME/SPACE trade-off, not a
   1361x->25.7x), iris(k=20) 0.205MB->0.028MB (7.3x). This closes the large
   majority of the originally-documented gap -- smaller window sizes
   (10/20/40) are now genuinely at the harness's own noise floor. See
-  docs/COMPLEXITY.md Section 5c for the full writeup, including why
-  edgeOrder/neighborsOf/pointCoords were left unpooled (no longer one
+  README.md's "Space, not just time" section for the summary writeup,
+  including why edgeOrder/neighborsOf/pointCoords were left unpooled (no longer one
   dominant target, and neighborsOf's Set-based O(1) lookups are a real
   constraint on any replacement). The time/space trade-off is much smaller
   now, not eliminated.
@@ -336,5 +338,6 @@ Axis 6: Regime map -- does density actually predict when the speedup
   Caveat: only 3 datasets, 2 window sizes each, maxDist range bounded by
   benchmark runtime (very dense + large-window combinations did not finish
   in a reasonable time and were excluded from the sweep) -- this is not a
-  universal guarantee, see docs/COMPLEXITY.md Section 4 for the full
-  writeup and its explicit "what this does not establish" caveat.
+  universal guarantee, see README.md's "Complexity, measured not just
+  claimed" section for the summary writeup and its explicit "what this
+  does not establish" caveat.

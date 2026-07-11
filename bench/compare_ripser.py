@@ -137,7 +137,9 @@ def run_topojs_engine(name: str, engine: str, points: np.ndarray, max_dist: floa
     print(f"[{engine}] Betti-number match across all dims: {'YES' if match else 'NO'}")
 
     # -- reconcile via zero-persistence-bar convention, if raw counts mismatched --
-    # Root-caused (see docs/COMPARISON.md "The one real mismatch, root-caused"):
+    # Root-caused (see README.md's "Against Ripser" section -- the fuller
+    # writeup used to live in a separate docs/COMPARISON.md, since removed
+    # in favor of a single README):
     # coincident/duplicate points produce degenerate simplices whose birth and
     # death filtration values are equal (a zero-persistence bar). TopoJS's
     # engines emit these unconditionally (every boundary-matrix reduction
@@ -230,9 +232,16 @@ def main():
     # coboundary + apparent pairs, Bauer 2019), which is exactly the kind of
     # structural advantage this repo's own computePersistentHomologyCohomology
     # partially re-derives (see its docstring). Both engines are compared at
-    # H0+H1 here for a fair apples-to-apples read on the same case; whether
-    # the cohom engine also survives the H2/n=400 case the plain engine
-    # couldn't is a separate, not-yet-answered question (see punch list).
+    # H0+H1 here for a fair apples-to-apples read on the same case.
+    #
+    # RESOLVED (was previously "not-yet-answered" here): whether the cohom
+    # engine also survives the H2/n=400 case the plain engine couldn't was
+    # answered by a separate measurement -- yes, it finishes, at 142x and
+    # 41x slower than Ripser on two datasets with correct Betti numbers on
+    # both. See README.md's "Against Ripser" section. This script itself
+    # was never extended to add that H2/n=400 cohom case directly; it's
+    # still H0+H1-only below for that reason, not because the question is
+    # open.
     all_results += run_case("sunspots_n400_H0H1only", sunspots[:400], max_dist=0.1, max_dim=1)
     all_results += run_case("melbourne_n400_H0H1only", melbourne[:400], max_dist=0.1, max_dim=1)
 
