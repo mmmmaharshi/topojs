@@ -115,13 +115,15 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * pushes (that is the whole mechanism); StreamingHomology discards
  * everything but the raw window contents after each push. Measured
  * directly (`npm run bench -- --memory <dataset>`, docs/COMPLEXITY.md
- * Section 5): up to ~1300x more heap per instance than StreamingHomology at
- * windowSize=80 on real data (down from an originally-measured ~3500x --
- * see Section 5b for the reducedCols/triPair pooling fix that closed most
- * of that gap, a ~2.3x-2.7x reduction verified across all three datasets).
- * Still a real, unresolved trade-off, not eliminated by that fix: fine for
- * one or a few concurrent windows; a real limitation for use cases with
- * many concurrent windows (e.g. one per sensor across a fleet), where
+ * Section 5): up to ~150x more heap per instance than StreamingHomology at
+ * windowSize=80 on real data (down from an originally-measured ~3500x, via
+ * two follow-up storage-layout fixes -- Section 5b pooled reducedCols/
+ * triPair, Section 5c then pooled triOrder specifically after direct
+ * measurement showed it was ~83% of what 5b left behind -- together a
+ * 7.3x-52.5x reduction verified across all three datasets tested). Still a
+ * real, unresolved trade-off, not eliminated by these fixes: fine for one
+ * or a few concurrent windows; a real limitation for use cases with many
+ * concurrent windows (e.g. one per sensor across a fleet), where
  * StreamingHomology's near-zero retained state may be the better choice
  * despite its slower per-push time.
  *
@@ -195,12 +197,63 @@ export class IncrementalH1 {
 
   // cached filtration state from the previous push
   private edgeOrder: EdgeRec[] = [];
-  private triOrder: TriRec[] = [];
   private pivotOfEdgeIdx: Int32Array = new Int32Array(0); // len = edgeOrder.length
+
+  // triOrder used to be `TriRec[]` -- one separate 7-field JS object PER
+  // TRIANGLE, retained between every push. A direct process-isolated
+  // measurement (build an instance, strip everything BUT this field, measure
+  // heap) found this was by far the dominant remaining cost after the
+  // reducedCols/triPair pooling fix below: on the sunspots dataset at
+  // windowSize=80, triOrder alone accounted for ~1.58MB of the ~1.9MB total
+  // retained state (triCount=15916 there, vs edgeOrder's much smaller
+  // ~0.21MB at edgeCount=1496) -- so this field, specifically, is where a
+  // pooling fix actually pays off; edgeOrder was deliberately left as an
+  // array of objects (its contribution is ~7-8x smaller, not worth the same
+  // risk/effort here). Same pooled-typed-array treatment as reducedCols/
+  // triPair: 7 parallel arrays instead of one object per triangle. Same
+  // low-risk pattern too -- the transient per-push computation (newTris)
+  // still uses TriRec[] objects exactly as before; only what's READ from
+  // and WRITTEN to `this.*` at the retained-state boundary changed.
+  private triIdA: Int32Array = new Int32Array(0);
+  private triIdB: Int32Array = new Int32Array(0);
+  private triIdC: Int32Array = new Int32Array(0);
+  private triVal: Float64Array = new Float64Array(0);
+  private triE1: Int32Array = new Int32Array(0); // index into edgeOrder
+  private triE2: Int32Array = new Int32Array(0);
+  private triE3: Int32Array = new Int32Array(0);
+
+  /** Pack a transient TriRec[] into the pooled SoA representation. */
+  private packTriOrder(tris: TriRec[]): void {
+    const n = tris.length;
+    const idA = new Int32Array(n);
+    const idB = new Int32Array(n);
+    const idC = new Int32Array(n);
+    const val = new Float64Array(n);
+    const e1 = new Int32Array(n);
+    const e2 = new Int32Array(n);
+    const e3 = new Int32Array(n);
+    for (let i = 0; i < n; i++) {
+      const t = tris[i]!;
+      idA[i] = t.idA;
+      idB[i] = t.idB;
+      idC[i] = t.idC;
+      val[i] = t.val;
+      e1[i] = t.e1;
+      e2[i] = t.e2;
+      e3[i] = t.e3;
+    }
+    this.triIdA = idA;
+    this.triIdB = idB;
+    this.triIdC = idC;
+    this.triVal = val;
+    this.triE1 = e1;
+    this.triE2 = e2;
+    this.triE3 = e3;
+  }
 
   // reducedCols and triPair used to be `(Int32Array | null)[]` / `(PersistencePair
   // | null)[]` -- one separate small heap object (TypedArray+ArrayBuffer, or a
-  // {birth,death,dim} object) PER TRIANGLE, retained between every push. That is
+  // {birth,death,dim} object) PER TRIANGLE, retained between every push. That was
   // the single largest contributor to the ~3500x memory blowup vs StreamingHomology
   // documented in docs/COMPLEXITY.md Section 5 (confirmed by measuring before/after
   // this change -- see bench/data/memory_results.txt): T separate TypedArray objects
@@ -217,9 +270,9 @@ export class IncrementalH1 {
   // Byte-identical output is guaranteed by construction, not just by testing,
   // because the actual math never touches these fields directly.
   private colPool: Int32Array = new Int32Array(0); // concatenated sparse column contents
-  private colOffset: Int32Array = new Int32Array(0); // len = triOrder.length
-  private colLength: Int32Array = new Int32Array(0); // len = triOrder.length
-  private triPairHas: Uint8Array = new Uint8Array(0); // len = triOrder.length
+  private colOffset: Int32Array = new Int32Array(0); // len = triIdA.length
+  private colLength: Int32Array = new Int32Array(0); // len = triIdA.length
+  private triPairHas: Uint8Array = new Uint8Array(0); // len = triIdA.length
   private triPairBirth: Float64Array = new Float64Array(0);
   private triPairDeath: Float64Array = new Float64Array(0);
 
@@ -349,10 +402,22 @@ export class IncrementalH1 {
       survivingEdges.push(e);
       survivingEdgeOrigIdx.push(i);
     }
-    const survivingTrisUnfiltered =
-      evictedId === null
-        ? this.triOrder
-        : this.triOrder.filter((t) => t.idA !== evictedId && t.idB !== evictedId && t.idC !== evictedId);
+    // Filter to ORIGINAL INDICES (into the pooled triIdA/B/C/val/e1/e2/e3
+    // arrays from last push) that survive eviction, instead of building an
+    // array of TriRec-shaped objects directly -- avoids materializing T
+    // objects just to read them once in the remap loop below. This is the
+    // same role survivingTrisUnfiltered played before triOrder was pooled,
+    // just index-based instead of object-based.
+    const triCount = this.triIdA.length;
+    const survivingTriOrigIdx: number[] = [];
+    if (evictedId === null) {
+      for (let i = 0; i < triCount; i++) survivingTriOrigIdx.push(i);
+    } else {
+      for (let i = 0; i < triCount; i++) {
+        if (this.triIdA[i] === evictedId || this.triIdB[i] === evictedId || this.triIdC[i] === evictedId) continue;
+        survivingTriOrigIdx.push(i);
+      }
+    }
 
     // New point's neighbors: O(k) distance computations against every other
     // point still in the window (only the new point pays this, not all k).
@@ -450,17 +515,20 @@ export class IncrementalH1 {
 
     // Remap surviving triangles' boundary-edge indices to their new
     // positions (identity/value unchanged, only array position shifts).
-    const survivingTris: TriRec[] = new Array(survivingTrisUnfiltered.length);
-    for (let ci = 0; ci < survivingTrisUnfiltered.length; ci++) {
-      const t = survivingTrisUnfiltered[ci]!;
+    // Reads straight from the pooled arrays via each survivor's original
+    // index -- same cost as reading TriRec object fields did before, just
+    // through a different storage layout.
+    const survivingTris: TriRec[] = new Array(survivingTriOrigIdx.length);
+    for (let ci = 0; ci < survivingTriOrigIdx.length; ci++) {
+      const oi = survivingTriOrigIdx[ci]!;
       survivingTris[ci] = {
-        idA: t.idA,
-        idB: t.idB,
-        idC: t.idC,
-        val: t.val,
-        e1: oldEdgeIdxToNew[t.e1]!,
-        e2: oldEdgeIdxToNew[t.e2]!,
-        e3: oldEdgeIdxToNew[t.e3]!,
+        idA: this.triIdA[oi]!,
+        idB: this.triIdB[oi]!,
+        idC: this.triIdC[oi]!,
+        val: this.triVal[oi]!,
+        e1: oldEdgeIdxToNew[this.triE1[oi]!]!,
+        e2: oldEdgeIdxToNew[this.triE2[oi]!]!,
+        e3: oldEdgeIdxToNew[this.triE3[oi]!]!,
       };
     }
 
@@ -519,11 +587,11 @@ export class IncrementalH1 {
 
     let triSafeCountRaw = 0;
     while (
-      triSafeCountRaw < this.triOrder.length &&
+      triSafeCountRaw < triCount &&
       triSafeCountRaw < newTris.length &&
-      this.triOrder[triSafeCountRaw]!.idA === newTris[triSafeCountRaw]!.idA &&
-      this.triOrder[triSafeCountRaw]!.idB === newTris[triSafeCountRaw]!.idB &&
-      this.triOrder[triSafeCountRaw]!.idC === newTris[triSafeCountRaw]!.idC
+      this.triIdA[triSafeCountRaw] === newTris[triSafeCountRaw]!.idA &&
+      this.triIdB[triSafeCountRaw] === newTris[triSafeCountRaw]!.idB &&
+      this.triIdC[triSafeCountRaw] === newTris[triSafeCountRaw]!.idC
     ) {
       triSafeCountRaw++;
     }
@@ -653,7 +721,7 @@ export class IncrementalH1 {
     // immediately after this, instead of being what's retained until the
     // next push.
     this.edgeOrder = newEdges;
-    this.triOrder = newTris;
+    this.packTriOrder(newTris);
     this.pivotOfEdgeIdx = newPivotOfEdgeIdx;
     this.packReducedCols(newReducedCols);
     this.packTriPair(newTriPair);

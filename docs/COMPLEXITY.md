@@ -271,15 +271,79 @@ Consistent 2.3x-2.7x reduction across all three datasets at their largest
 tested window size. Full before/after data in `bench/data/
 memory_results.txt` (original numbers kept, not deleted, for the record).
 
-**What this does not fix.** `edgeOrder`/`triOrder` (arrays of small JS
-objects, one per edge/triangle) were deliberately left untouched — pooling
-those too would require threading a much larger refactor through nearly
-every line of `push()` (the merge/filter/comparison logic all reads and
-writes `EdgeRec`/`TriRec` objects directly), a real correctness risk versus
-this change's narrow footprint at the storage boundary only. The
-time/space trade-off named in Section 5 is real and not eliminated by this
-fix — `IncrementalH1` still retains far more state than `StreamingHomology`
-at every window size tested, just less than it used to.
+**What this does not fix (as of this point in the narrative — see Section
+5c immediately below for a follow-up that fixed most of it).**
+`edgeOrder`/`triOrder` (arrays of small JS objects, one per edge/triangle)
+were left untouched here — pooling either would require touching more of
+`push()` than the reducedCols/triPair fix did, a real correctness risk
+versus this change's narrow footprint at the storage boundary only.
+
+### 5c. Follow-up 2: pooling `triOrder` specifically closes most of the rest
+
+Section 5b named `edgeOrder`/`triOrder` together as the remaining unpooled
+state without measuring which one actually mattered. Rather than guess,
+a direct process-isolated diagnostic settled it: build a fully-warmed
+instance, strip every retained field EXCEPT one (via direct property
+replacement, each configuration run in its own fresh process to avoid GC
+cross-contamination between measurements), measure heap. Result, on the
+sunspots dataset at windowSize=80 (triCount=15916, edgeCount=1496 there):
+
+| Field kept alone | Heap retained | Share of ~1.9MB total |
+|---|---|---|
+| `triOrder` | ~1.58 MB | ~83% |
+| `edgeOrder` | ~0.21 MB | ~11% |
+| `neighborsOf`, `pointCoords`, pooled `colPool`/`triPair` fields, `pivotOfEdgeIdx` | ~0.09-0.11 MB each | ~5-6% each |
+
+`triOrder` alone accounted for the large majority of what Section 5b's fix
+left behind — expected in retrospect (`T` triangles vastly outnumber `E`
+edges at this window size/density, and each `TriRec` carries 7 fields vs
+`EdgeRec`'s 3), but not assumed: measured directly, the same discipline
+used everywhere else in this document. This reprioritized the fix: pool
+`triOrder` (`triIdA`/`triIdB`/`triIdC`/`triVal`/`triE1`/`triE2`/`triE3`,
+seven parallel typed arrays via a new `packTriOrder`), leave `edgeOrder`
+as-is (its contribution, ~7-8x smaller, doesn't justify the same risk).
+
+Same low-risk pattern as Section 5b: the transient per-push computation
+(`newTris`, still built and sorted/merged as an array of `TriRec` objects
+exactly as before) is completely unchanged; only the two points where
+`push()` reads the *previous* push's `triOrder` (the eviction filter and
+the identity-prefix check) and the one point where it writes the *new*
+`triOrder` were touched, to read from / write to the pooled arrays
+instead of an array of objects. Verified with the existing 20-seed
+differential test suite plus a new long-running stress test (3 seeds ×
+200 pushes each, checked at every push) added specifically because a bug
+in the prefix-copy-forward bookkeeping could plausibly only surface after
+many push cycles, not the first few — both pass (124/124 total).
+
+Combined effect of both fixes (5b + 5c), original → current, at windowSize=80:
+
+| Dataset | original | after both fixes | total reduction | ratio original → current |
+|---|---|---|---|---|
+| sunspots | 4.864 MB | 0.209 MB | 23.3x | 3484x → 150x |
+| Melbourne temps | 1.943 MB | 0.037 MB | 52.5x | 1361x → 25.7x |
+| Iris (windowSize=20) | 0.205 MB | 0.028 MB | 7.3x | 44.7x → 11.3x |
+
+This closes the large majority of the originally-documented gap — smaller
+window sizes (10/20/40) are now genuinely down at the harness's own noise
+floor (single-digit-to-low-double-digit KB deltas), so windowSize=80 is
+the only point still cleanly readable; full tables including the noisy
+smaller points, not cherry-picked, are in `bench/data/memory_results.txt`.
+
+**Where this stops, and why.** `edgeOrder`, `neighborsOf`
+(`Map<number,Set<number>>`), and `pointCoords` (array of small arrays)
+remain unpooled. Each contributes roughly the same order of magnitude now
+(~0.01-0.02MB each at windowSize=80, per the table above, now that
+`triOrder`'s much larger share is gone) — there is no longer one dominant
+target the way `triOrder` was, and `neighborsOf` specifically is used for
+O(1) adjacency lookups in the new-triangle-enumeration hot path
+(`this.neighborsOf.get(p)!.has(q)`), so replacing its `Set`s with something
+more compact would need to preserve that lookup cost, a non-trivial
+constraint a flat pooled array doesn't trivially satisfy. Diminishing
+returns plus rising risk is the honest reason to stop here rather than
+continue chasing the remaining, much smaller contributors. The time/space
+trade-off named in Section 5 is real and substantially smaller now, not
+eliminated: `IncrementalH1` still retains meaningfully more than
+`StreamingHomology`'s near-zero footprint at every window size tested.
 
 ## 6. Honest summary
 
@@ -306,16 +370,19 @@ at every window size tested, just less than it used to.
   headline "O(k) vs O(k²)/O(k³)" framing suggests, once the naive
   baseline's own bit-set optimization (Section 1) and real-data density
   (Section 3) are both accounted for precisely.
-- The time saving is bought with real, measured memory cost — up to
-  ~1300x more heap per instance at windowSize=80 on real data (Section 5;
-  down from an originally-measured ~3500x after a follow-up storage-layout
-  fix, Section 5b — pooling `reducedCols`/`triPair` cut retained memory by
-  2.3x-2.7x across all three datasets, without touching the reduction
-  algorithm). Any claim that `IncrementalH1` is a strict improvement over
-  the naive baseline is false without qualifying which resource (time or
-  space) and at what scale; it is a trade-off, not a strict improvement,
-  and should be presented as such — the fix in Section 5b makes the
-  trade-off less severe, it does not remove it.
+- The time saving is bought with real, measured memory cost — up to ~150x
+  more heap per instance at windowSize=80 on real data (Section 5; down
+  from an originally-measured ~3500x, via two follow-up storage-layout
+  fixes, Sections 5b and 5c — pooling `reducedCols`/`triPair` then
+  `triOrder` specifically, the latter found via direct measurement to be
+  ~83% of what 5b left behind, together cutting retained memory 7.3x-52.5x
+  across the three datasets tested, without touching the reduction
+  algorithm at all). Any claim that `IncrementalH1` is a strict improvement
+  over the naive baseline is still false without qualifying which resource
+  (time or space) and at what scale; it is a trade-off, not a strict
+  improvement — the fixes in 5b/5c make the trade-off much less severe,
+  they do not remove it, and Section 5c explains directly why pooling
+  further (edgeOrder, neighborsOf, pointCoords) was not attempted.
 - Net practical guidance: on the real data and window-size ranges tested
   in this repository, `IncrementalH1`'s speed advantage held up robustly
   regardless of complex density, and its cost is memory, not a density

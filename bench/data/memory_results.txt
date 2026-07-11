@@ -1,4 +1,40 @@
-UPDATE: these numbers reflect IncrementalH1 AFTER the reducedCols/triPair
+UPDATE 2: a SECOND pooling fix was applied after the first (see UPDATE
+below) -- triOrder specifically, not edgeOrder. A process-isolated
+diagnostic (build an instance, strip everything BUT one field, measure
+heap; see the commit that introduced this) found triOrder (T separate
+7-field TriRec objects) was ~83% of the ~1.9MB retained state remaining
+after UPDATE 1's fix, versus edgeOrder's much smaller ~11% -- so triOrder,
+specifically, was pooled into 7 parallel typed arrays (triIdA/B/C, triVal,
+triE1/E2/E3), while edgeOrder was deliberately left as an array of objects
+(its contribution wasn't big enough to justify the added risk). Same
+low-risk pattern as before: reduction algorithm untouched, only the
+retained-state storage boundary changed. Verified via the same 123/123 (now
+124/124, one new long-running stress test added) passing test suite.
+
+COMBINED effect of both fixes, ORIGINAL -> after both, at windowSize=80:
+  sunspots:        4.864 MB -> 0.209 MB  (23.3x less)  ratio: 3484x -> 149.9x
+  melbourne-temp:   1.943 MB -> 0.037 MB  (52.5x less)  ratio: 1361x -> 25.7x
+  iris (windowSize=20): 0.205 MB -> 0.028 MB (7.3x less)
+
+This closes the large majority of the originally-documented gap. Smaller
+window sizes (10, 20, 40) are now genuinely noise-dominated in the
+measurement (absolute deltas are down to single-digit-to-low-double-digit
+KB, comparable to the harness's own documented noise floor) -- windowSize=80
+is the only point still large enough to read cleanly; see the current main
+tables below for the honest picture at every size, including the noisy
+smaller ones (not cherry-picked to only show the clean result).
+
+Still does NOT eliminate the time/space trade-off: edgeOrder (array of
+EdgeRec objects), neighborsOf (Map<number,Set<number>>), and pointCoords
+(array of small arrays) remain unpooled, and IncrementalH1 still retains
+meaningfully more than StreamingHomology's near-zero footprint. See
+docs/COMPLEXITY.md Section 5c for the full writeup and the reasoning for
+stopping here rather than continuing to pool the remaining, much smaller
+contributors.
+
+---
+
+UPDATE 1: these numbers reflect IncrementalH1 AFTER the reducedCols/triPair
 pooling optimization (src/streaming/incremental-h1.ts) -- retained per-
 triangle state (previously one separate Int32Array+ArrayBuffer object and
 one separate {birth,death,dim} object PER TRIANGLE, kept alive between
@@ -25,9 +61,10 @@ touched by this change -- see the follow-up note in docs/COMPLEXITY.md
 Section 5 for why those were left alone (a much larger, riskier refactor
 threaded through the entire push() method, versus this change's much
 narrower footprint at the storage boundary only) and whether pooling them
-too is worth the risk.
+too is worth the risk. (This footnote is now superseded for triOrder --
+see UPDATE 2 above -- but kept accurate to what UPDATE 1 alone achieved.)
 
-=== MEMORY SWEEP: Monthly sunspot counts (1749-1983) ===
+=== MEMORY SWEEP: Monthly sunspot counts (1749-1983) [CURRENT, after both pooling fixes] ===
 source: SIDC/WDC-SILSO, bench/data/monthly-sunspots.csv
 (process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; manual GC forced before/after each build via --expose-gc)
 Loaded 2820 REAL monthly sunspot readings (SIDC/WDC-SILSO, 1749-1983).
@@ -35,18 +72,20 @@ Data-driven lag (first ACF < 1/e, scanned 1..40 months): LAG=25
 Embedded stream length: 2795 points (2D delay embedding, lag=25 months).
 
 windowSize    naive_MB     incr_MB   ratio(incr/naive)
-        10       0.005       0.014                2.86
-        20       0.002       0.090               59.47
-        40       0.004       0.326               90.93
-        80       0.001       1.786             1278.85
+        10       0.005       0.012                2.52
+        20       0.002       0.028               12.84
+        40       0.002       0.071               45.66
+        80       0.001       0.209              149.90
 
 IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:
 it keeps the previous push's full edge/triangle lists AND reduced-column state alive between
 pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of
 that, it only keeps the raw window contents and discards all derived state after each push.
 This is the space side of the time/space trade-off the class docstring does not currently discuss.
+windowSize=10/20/40 deltas are now small enough (KB, not MB) to be noise-dominated -- only
+windowSize=80 is comfortably above the harness's own documented noise floor.
 
-=== MEMORY SWEEP: Melbourne daily min. temperatures (1981-1990) ===
+=== MEMORY SWEEP: Melbourne daily min. temperatures (1981-1990) [CURRENT, after both pooling fixes] ===
 source: Australian BOM, bench/data/daily-min-temperatures.csv
 (process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; manual GC forced before/after each build via --expose-gc)
 Loaded 3650 REAL daily minimum temperatures (Melbourne, Australia BOM, 1981-1990).
@@ -54,10 +93,10 @@ Data-driven lag (first ACF < 1/e, scanned 1..60 days): LAG=46
 Embedded stream length: 3604 points (2D delay embedding, lag=46 days).
 
 windowSize    naive_MB     incr_MB   ratio(incr/naive)
-        10       0.002       0.010                4.53
-        20       0.011       0.018                1.56
-        40      -0.025       0.141                 n/a
-        80       0.002       0.746              426.99
+        10       0.004       0.010                2.49
+        20       0.007       0.014                2.03
+        40       0.006       0.045                6.94
+        80       0.001       0.037               25.67
 
 IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:
 it keeps the previous push's full edge/triangle lists AND reduced-column state alive between
@@ -65,15 +104,15 @@ pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomolog
 that, it only keeps the raw window contents and discards all derived state after each push.
 This is the space side of the time/space trade-off the class docstring does not currently discuss.
 
-=== MEMORY SWEEP: UCI Iris measurements (150 samples) ===
+=== MEMORY SWEEP: UCI Iris measurements (150 samples) [CURRENT, after both pooling fixes] ===
 source: archive.ics.uci.edu, embedded in src/data/realworld-datasets.ts
 (process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; manual GC forced before/after each build via --expose-gc)
 Loaded 150 REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).
 
 windowSize    naive_MB     incr_MB   ratio(incr/naive)
-         5       0.002       0.006                2.90
-        10       0.003       0.015                4.43
-        20       0.002       0.088               46.27
+         5       0.002       0.008                3.54
+        10       0.005       0.009                1.77
+        20       0.002       0.028               11.31
 
 IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:
 it keeps the previous push's full edge/triangle lists AND reduced-column state alive between
@@ -81,7 +120,13 @@ pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomolog
 that, it only keeps the raw window contents and discards all derived state after each push.
 This is the space side of the time/space trade-off the class docstring does not currently discuss.
 
---- PRE-OPTIMIZATION NUMBERS (kept for the record, not deleted) ---
-sunspots:        windowSize=10/20/40/80 -> 0.017/0.202/0.830/4.864 MB, ratio 7.62/52.16/231.45/3483.95
-melbourne-temp:  windowSize=10/20/40/80 -> 0.009/0.033/0.333/1.943 MB, ratio 4.31/25.61/340.61/1189.85
-iris:            windowSize=5/10/20     -> 0.006/0.027/0.205 MB,       ratio 2.66/5.63/44.70
+--- HISTORY (kept for the record, not deleted) ---
+PRE-OPTIMIZATION (original):
+  sunspots:        windowSize=10/20/40/80 -> 0.017/0.202/0.830/4.864 MB, ratio 7.62/52.16/231.45/3483.95
+  melbourne-temp:  windowSize=10/20/40/80 -> 0.009/0.033/0.333/1.943 MB, ratio 4.31/25.61/340.61/1189.85
+  iris:            windowSize=5/10/20     -> 0.006/0.027/0.205 MB,       ratio 2.66/5.63/44.70
+AFTER FIX 1 ONLY (reducedCols/triPair pooled, triOrder still unpooled):
+  sunspots:        windowSize=10/20/40/80 -> 0.014/0.090/0.326/1.786 MB, ratio 2.86/59.47/90.93/1278.85
+  melbourne-temp:  windowSize=10/20/40/80 -> 0.010/0.018/0.141/0.746 MB, ratio 4.53/1.56/n-a/426.99
+  iris:            windowSize=5/10/20     -> 0.006/0.015/0.088 MB,       ratio 2.90/4.43/46.27
+AFTER FIX 2 (triOrder ALSO pooled) -- see CURRENT tables above.

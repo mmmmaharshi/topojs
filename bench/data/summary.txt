@@ -282,10 +282,30 @@ Axis 5: Memory sweep -- the speed win is a TIME/SPACE trade-off, not a
   (melbourne) at k=80, down from ~3484x/~1361x. Current numbers are in
   bench/data/memory_results.txt's main tables; pre-optimization numbers
   kept there too, not deleted, for the record. See docs/COMPLEXITY.md
-  Section 5b for the full writeup. This closes most, not all, of the gap --
+  Section 5b for the full writeup. This closed most, not all, of the gap --
   edgeOrder/triOrder (arrays of small objects, one per edge/triangle) were
-  deliberately left alone as a larger, riskier refactor not attempted here;
-  the time/space trade-off is smaller now, not eliminated.
+  named together as the remaining risk, not yet measured individually.
+
+  FOLLOW-UP 2: measured which of edgeOrder/triOrder actually mattered
+  before deciding whether to touch either (process-isolated diagnostic:
+  build an instance, strip every field but one, measure heap in a fresh
+  process per config). Result on sunspots at k=80: triOrder alone ~1.58MB
+  (~83% of the ~1.9MB total), edgeOrder alone ~0.21MB (~11%). So triOrder
+  specifically was pooled too (7 parallel typed arrays: triIdA/B/C/val/
+  e1/e2/e3, packTriOrder) -- edgeOrder was left alone since its share
+  didn't justify the risk. Same low-risk storage-boundary-only pattern;
+  124/124 tests pass including a new long-running stress test (3 seeds x
+  200 pushes) added specifically for this change. Combined effect of both
+  fixes, original -> current, at k=80: sunspots 4.864MB->0.209MB (23.3x,
+  ratio 3484x->150x), melbourne 1.943MB->0.037MB (52.5x, ratio
+  1361x->25.7x), iris(k=20) 0.205MB->0.028MB (7.3x). This closes the large
+  majority of the originally-documented gap -- smaller window sizes
+  (10/20/40) are now genuinely at the harness's own noise floor. See
+  docs/COMPLEXITY.md Section 5c for the full writeup, including why
+  edgeOrder/neighborsOf/pointCoords were left unpooled (no longer one
+  dominant target, and neighborsOf's Set-based O(1) lookups are a real
+  constraint on any replacement). The time/space trade-off is much smaller
+  now, not eliminated.
 
 Axis 6: Regime map -- does density actually predict when the speedup
   breaks down? Axis 4's honest reading was that the speedup is only
