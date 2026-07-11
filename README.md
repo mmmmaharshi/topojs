@@ -29,17 +29,50 @@ console.log(cubical.pairs);
 
 ## API
 
+### Batch homology
+
 | Function | Description |
 |----------|-------------|
 | `computePersistentHomology(points, dims, maxDist, maxDim)` | Vietoris–Rips H₀+H₁+H₂ |
+| `computePersistentHomologyFast(points, dims, maxDist, maxDim)` | Same Rips H₀+H₁(+H₂) result, H1 accelerated via the "apparent pairs" shortcut. Correctness-validated against `computePersistentHomology` (8 tests + an 11,100-config stress sweep, 0 mismatches) — see `src/core/homology-fast.ts`. Not yet benchmarked against real data (an earlier synthetic-data benchmark was removed as part of this repo's real-data-only policy). |
+| `computePersistentHomologyCohomology(points, dims, maxDist, maxDim)` | Same Rips result again, H1 *and* H2 both accelerated via persistent cohomology (the dual/coboundary-direction technique that makes Ripser fast, derived from Bauer 2019 arXiv:1908.02518). A structural win, not just a constant factor — H1 reduces one column per cycle *edge* instead of one per *triangle*. Correctness-validated (12 tests, a 13,800-config H1 stress sweep, a separate 399-config H2-specific sweep, all 0 mismatches) — see `src/core/homology-cohom.ts`'s docstring for two real bugs caught and fixed during development. |
 | `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images (param order was documented backwards as width,height -- src/core/cubical.ts's actual signature is height,width; only invisible for square images) |
-| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time. Matches finite pairs to each other or the diagonal, and essential (infinite-persistence) pairs to each other by birth value (differing essential counts → `Infinity`). Two real bugs were found and fixed here: essential pairs used to be silently ignored entirely, and the finite-pair matching was asymmetric (`bottleneckDistance(A,B)` could differ from `(B,A)`) — both fixed and cross-validated against an independent brute-force reference, see `src/core/bottleneck.ts`'s docstring and `test/bottleneck.test.ts`. |
+
+### Distances & comparison
+
+| Function | Description |
+|----------|-------------|
 | `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix (n was missing from this table but is a required parameter) |
+| `lookupDist(matrix, i, j)` | O(1) lookup of one pairwise distance from the matrix `computePairwiseDistances` returns, without recomputing it |
+| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time. Matches finite pairs to each other or the diagonal, and essential (infinite-persistence) pairs to each other by birth value (differing essential counts → `Infinity`). Two real bugs were found and fixed here: essential pairs used to be silently ignored entirely, and the finite-pair matching was asymmetric (`bottleneckDistance(A,B)` could differ from `(B,A)`) — both fixed and cross-validated against an independent brute-force reference, see `src/core/bottleneck.ts`'s docstring and `test/bottleneck.test.ts`. |
+
+### Export / serialization
+
+| Function | Description |
+|----------|-------------|
 | `toGudhi(pairs)` | Export to Gudhi text format |
 | `toJSON(pairs, pretty?)` | Export to JSON |
 | `toCSV(pairs)` | Export to CSV |
+| `toDiagramCSV(pairs)` | Export to a fixed 8-column per-dimension CSV layout (H₀/H₁/H₂ side by side). Does NOT represent dim≥3 pairs — that's an explicitly documented limitation of this function's fixed schema, not a bug; use `toCSV`/`toJSON` instead if dim≥3 pairs matter. |
 | `summarize(pairs)` | Statistics (counts, max death, min birth). `total` is guaranteed to equal `h0+h1+h2+higher` for any input, including dim≥3 pairs from external data — previously silently broke this invariant, see `src/export/persistence-diagram.ts` |
 | `splitByDimension(pairs)` | Separate H₀/H₁/H₂ (finite/essential) plus a `higher` bucket for dim≥3 pairs — no pair is ever dropped, unlike before |
+
+### Streaming / incremental homology
+
+| Function / Class | Description |
+|----------|-------------|
+| `SlidingWindow` | Fixed-capacity ring buffer of the most recent points, feeding both streaming engines below |
+| `StreamingHomology` | "Phase A" naive baseline — recomputes full persistent homology on the entire window from scratch on every `push()`. Correct and simple, the reference every incremental engine below is differential-tested against. |
+| `IncrementalH1` | "Phase B" prefix-stable incremental engine — updates H₀+H₁ without a full recompute on every push (H2 is out of scope for this class). Correctness-validated (8 tests, exact match against full recompute every push, many seeds/regimes). Geometric-mean speedup over `StreamingHomology` on three independent real datasets: 1.34×–1.91× (see the benchmark table below) — but this speed comes with a real memory trade-off, see "Space, not just time" below. |
+| `summarizeForStreaming(update)` | Convenience summary (Betti numbers, counts) of one `push()` result from either streaming engine, without hand-rolling the aggregation yourself |
+
+### Example datasets
+
+| Function | Description |
+|----------|-------------|
+| `loadMNISTDigits()` | A small bundled sample of MNIST handwritten-digit images, for trying Rips/cubical persistence on real image data without an external download |
+| `loadIrisDataset()` | The UCI Iris flower measurements (150 samples), a standard small real-world point cloud |
+| `generateTerrain(size, octaves)` | Procedural fractal-Brownian-motion terrain heightmap generator, for synthetic-but-structured cubical-complex examples |
 
 ## Streaming / Incremental H1 Benchmarks (real data only)
 
