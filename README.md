@@ -33,7 +33,7 @@ console.log(cubical.pairs);
 |----------|-------------|
 | `computePersistentHomology(points, dims, maxDist, maxDim)` | Vietoris–Rips H₀+H₁+H₂ |
 | `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images (param order was documented backwards as width,height -- src/core/cubical.ts's actual signature is height,width; only invisible for square images) |
-| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time (finite pairs only -- essential/infinite-persistence classes are not compared, see test/bottleneck.test.ts) |
+| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time. Matches finite pairs to each other or the diagonal, and essential (infinite-persistence) pairs to each other by birth value (differing essential counts → `Infinity`). Two real bugs were found and fixed here: essential pairs used to be silently ignored entirely, and the finite-pair matching was asymmetric (`bottleneckDistance(A,B)` could differ from `(B,A)`) — both fixed and cross-validated against an independent brute-force reference, see `src/core/bottleneck.ts`'s docstring and `test/bottleneck.test.ts`. |
 | `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix (n was missing from this table but is a required parameter) |
 | `toGudhi(pairs)` | Export to Gudhi text format |
 | `toJSON(pairs, pretty?)` | Export to JSON |
