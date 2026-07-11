@@ -180,7 +180,7 @@ describe('buildRipsComplex: grid-accelerated path matches brute force exactly', 
   });
 
   it('produces byte-identical edges to independent brute force (grid branch, n >= GRID_MIN_N)', () => {
-    // GRID_MIN_N is 1000 (see complex.ts) -- these n values are chosen to
+    // GRID_MIN_N is 700 (see complex.ts) -- these n values are chosen to
     // sit above that threshold so buildRipsComplex actually routes through
     // SpatialGrid here, not just the brute-force fallback the test above
     // already covers. Fewer trials than the small-n test since each one is
@@ -241,16 +241,16 @@ describe('buildRipsComplex: grid-accelerated path matches brute force exactly', 
 
   it('triangle/tetrahedron filtration values are bit-identical to a direct distance recomputation, ABOVE GRID_MIN_N (sparse edgeIndex branch)', () => {
     // The existing test with this name (below) only exercises n=20, which
-    // is comfortably under GRID_MIN_N=1000 -- so buildRipsComplex's
-    // edgeIndex there is always the DENSE Int32Array branch. This test
-    // specifically targets n >= GRID_MIN_N with maxDim=3 (triangles AND
-    // tetrahedra), which routes through the SPARSE Map<number,number>
-    // edgeIndex branch instead (added when the dense n*n array was found,
-    // during a codebase audit, to reintroduce an unconditional O(n^2)
-    // memory floor for exactly this large-n regime). Kept at a modest n
-    // (just above the threshold, not the 20,000 the audit's own worst-case
-    // memory arithmetic used) to keep the O(n^2) independent brute-force
-    // distance recomputation below fast.
+    // is comfortably under EDGE_INDEX_DENSE_MAX_N=1000 -- so
+    // buildRipsComplex's edgeIndex there is always the DENSE Int32Array
+    // branch. This test specifically targets n >= EDGE_INDEX_DENSE_MAX_N
+    // with maxDim=3 (triangles AND tetrahedra), which routes through the
+    // SPARSE Map<number,number> edgeIndex branch instead (added when the
+    // dense n*n array was found, during a codebase audit, to reintroduce an
+    // unconditional O(n^2) memory floor for exactly this large-n regime).
+    // Kept at a modest n (just above the threshold, not the 20,000 the
+    // audit's own worst-case memory arithmetic used) to keep the O(n^2)
+    // independent brute-force distance recomputation below fast.
     const rng = mulberry32(20260714);
     const n = 1050;
     const dims = 3;
@@ -259,6 +259,57 @@ describe('buildRipsComplex: grid-accelerated path matches brute force exactly', 
     // tetrahedra actually form -- unlike the edge-only grid tests elsewhere
     // in this file, which only need SOME edges, not full simplicial
     // structure up to dimension 3.
+    const boxSize = 8;
+    for (let i = 0; i < n * dims; i++) pts[i] = rng() * boxSize;
+    const maxDist = 1.2;
+    const complex = buildRipsComplex(pts, dims, maxDist, 3);
+    expect(complex.triangles.length, 'sanity: this config must exercise triangles').toBeGreaterThan(0);
+    expect(complex.tetrahedra.length, 'sanity: this config must exercise tetrahedra').toBeGreaterThan(0);
+
+    function dist(i: number, j: number): number {
+      let sq = 0;
+      for (let d = 0; d < dims; d++) {
+        const diff = pts[i * dims + d]! - pts[j * dims + d]!;
+        sq += diff * diff;
+      }
+      return Math.sqrt(sq);
+    }
+
+    for (const tri of complex.triangles) {
+      const [u, v, w] = tri.verts;
+      const expected = Math.max(dist(u, v), dist(u, w), dist(v, w));
+      expect(tri.val).toBe(expected);
+    }
+    for (const tet of complex.tetrahedra) {
+      const vertSet = new Set<number>();
+      for (const triIdx of tet.triangles) {
+        for (const vtx of complex.triangles[triIdx]!.verts) vertSet.add(vtx);
+      }
+      expect(vertSet.size).toBe(4);
+      const verts = Array.from(vertSet);
+      let expected = 0;
+      for (let a = 0; a < 4; a++) {
+        for (let b = a + 1; b < 4; b++) expected = Math.max(expected, dist(verts[a]!, verts[b]!));
+      }
+      expect(tet.val).toBe(expected);
+    }
+  });
+
+  it('triangle/tetrahedron filtration values are bit-identical to a direct distance recomputation, IN THE GRID_MIN_N..EDGE_INDEX_DENSE_MAX_N GAP (grid edge-building + dense edgeIndex, together)', () => {
+    // GRID_MIN_N (edge-building) and EDGE_INDEX_DENSE_MAX_N (edgeIndex
+    // memory layout) are separate constants in complex.ts -- GRID_MIN_N was
+    // lowered to 700 after a spatial-grid.ts key-encoding change moved its
+    // measured crossover, while EDGE_INDEX_DENSE_MAX_N stayed at 1000
+    // (verified independently for a different reason, unaffected by that
+    // change). That split makes n in [700, 1000) a genuinely new
+    // combination: grid-accelerated edge-building feeding INTO the dense
+    // Int32Array edgeIndex branch, which never happened while both were the
+    // same threshold. Same differential-recomputation method as the n=1050
+    // test above, at n=800 (inside the gap).
+    const rng = mulberry32(20260715);
+    const n = 800;
+    const dims = 3;
+    const pts = new Float64Array(n * dims);
     const boxSize = 8;
     for (let i = 0; i < n * dims; i++) pts[i] = rng() * boxSize;
     const maxDist = 1.2;

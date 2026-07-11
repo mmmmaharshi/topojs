@@ -146,13 +146,29 @@ with the original fix's own stated rationale: removing per-point
 string-allocation-and-hashing overhead was expected to lower exactly
 this threshold.
 
-DECISION: GRID_MIN_N is left at 1000, unchanged, for now. It is
-demonstrably conservative (no regression -- correctness is unaffected
-either way, see test/spatial-grid.test.ts) but leaves real speedup on
-the table for n in roughly [650, 1000). Not lowered here because
-GRID_MIN_N also gates a second, unrelated decision -- complex.ts's
-dense-vs-sparse edgeIndex memory strategy (finding #16) -- which has
-never been benchmarked at a lower threshold. Retuning GRID_MIN_N without
-checking that interaction would silently move a memory/perf trade-off
-this file was never scoped to evaluate. Recalibrating both together is
-a separate task.
+DECISION (superseded, see UPDATE below): initially left GRID_MIN_N at
+1000, unchanged, since it also gated a second, unrelated decision --
+complex.ts's dense-vs-sparse edgeIndex memory strategy (finding #16) --
+that had never been benchmarked at a lower threshold, and retuning the
+shared constant would have silently moved that too.
+
+UPDATE: rather than accept that as a permanent trade-off, complex.ts's
+single GRID_MIN_N was split into two independent constants:
+GRID_MIN_N (edge-building, this benchmark) and EDGE_INDEX_DENSE_MAX_N
+(triangle/tetrahedron edgeIndex memory layout, finding #16). Each now
+governs only the decision it was actually benchmarked for:
+
+  - GRID_MIN_N lowered to 700 (just above the new ~600-650 crossover
+    measured above), capturing the previously-unclaimed speedup for
+    n in [700, 1000).
+  - EDGE_INDEX_DENSE_MAX_N left at 1000, exactly as originally verified
+    for finding #16 -- completely unaffected by this change, since it is
+    no longer coupled to GRID_MIN_N.
+
+This means n in [700, 1000) is now a new combination -- grid-accelerated
+edge-building feeding into the dense Int32Array edgeIndex branch -- that
+never occurred while both were one threshold. Covered by a new
+differential test in test/spatial-grid.test.ts ("...IN THE
+GRID_MIN_N..EDGE_INDEX_DENSE_MAX_N GAP...", n=800, maxDim=3, checked
+against a direct distance recomputation). Full test suite (168 tests)
+and lint/typecheck pass unchanged.

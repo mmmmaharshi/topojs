@@ -79,13 +79,20 @@ interface TempEdge {
  * allocation) that brute force doesn't, so it is NOT a strict win at every
  * n.** Isolated edge-building-only benchmarks (both approaches building the
  * same full edge array, JIT-warmed, averaged over repeated trials) across
- * two density regimes found a consistent crossover around n≈900-1000:
+ * two density regimes originally found a crossover around n≈900-1000 with
+ * the grid's first implementation (string-keyed `Map<string, number[]>`).
+ * A later fix (see spatial-grid.ts's class docstring) replaced those keys
+ * with packed BigInt keys specifically to cut this per-point overhead; a
+ * re-run with finer n steps confirmed the crossover moved down to
+ * n≈600-650 in both regimes (bench/data/edge_building_results.txt has the
+ * full numbers):
  *
- *   n=60:    0.07x-0.30x (grid 3-14x SLOWER -- per-point overhead dominates)
- *   n=400:   0.18x-0.56x (still slower)
- *   n=1000:  1.45x-1.64x (grid wins, modestly)
- *   n=2000:  2.67x-2.81x
- *   n=3000:  4.04x-4.25x (win grows with n, as expected for O(n)-ish vs O(n²))
+ *   n=400:  0.58x-0.68x (grid still slower)
+ *   n=600:  0.93x-1.00x (breakeven)
+ *   n=700:  0.96x-1.19x (grid winning, though choppy right at the boundary
+ *                        in the denser regime)
+ *   n=1000: 1.47x-1.72x (grid clearly winning)
+ *   n=3000: 4.04x-4.67x (win grows with n, as expected for O(n)-ish vs O(n²))
  *
  * This means this repo's own current benchmark datasets (n=60-400 in
  * bench/compare_ripser.py and bench/benchmark.ts) are ALL below the
@@ -97,6 +104,17 @@ interface TempEdge {
  * as before this optimization existed. See spatial-grid.ts's own docstring
  * for why the grid is correctness-safe (candidate superset, not an
  * approximation) independent of this performance threshold.
+ *
+ * GRID_MIN_N and EDGE_INDEX_DENSE_MAX_N below are deliberately SEPARATE
+ * constants, not one shared threshold: they gate two independently-
+ * benchmarked decisions (edge-building strategy vs. edgeIndex memory
+ * layout) that happen to both be keyed on n, but were verified at
+ * different times against different data. Coupling them would mean any
+ * future retune of one silently moves the other without re-verification --
+ * exactly what happened here: this file's own edge-building crossover
+ * moved after a change to spatial-grid.ts, while the edgeIndex memory
+ * threshold (verified separately for finding #16) was never re-benchmarked
+ * and has no reason to move on the same schedule.
  */
 export interface RipsComplex {
   n: number;
@@ -112,15 +130,38 @@ function triKey(u: number, v: number, w: number, n: number): number {
 /**
  * n threshold below which buildRipsComplex uses brute force even when
  * maxDist is finite/positive -- set just above the measured crossover
- * (~900-1000, see this file's top docstring) where the grid's per-point
- * Map/array overhead stops being worth it. This is a deliberately simple,
- * single-density-agnostic constant rather than an adaptive estimate: both
- * regimes measured (sparse and moderate density) crossed over in the same
- * n≈900-1000 neighborhood, so a fixed conservative cutoff is a reasonable,
- * honest choice rather than over-engineering a density predictor for a
- * boundary that didn't move much between the two regimes actually tested.
+ * (~600-650 with the current BigInt-keyed grid, see this file's top
+ * docstring and bench/data/edge_building_results.txt) where the grid's
+ * per-point Map/array overhead stops being worth it. This is a
+ * deliberately simple, single-density-agnostic constant rather than an
+ * adaptive estimate: both regimes measured (sparse and moderate density)
+ * crossed over in the same n≈600-650 neighborhood, so a fixed conservative
+ * cutoff is a reasonable, honest choice over engineering a density
+ * predictor for a boundary that didn't move much between the two regimes
+ * actually tested. Governs ONLY the edge-building strategy -- see
+ * EDGE_INDEX_DENSE_MAX_N below for why that's a separate constant.
  */
-const GRID_MIN_N = 1000;
+const GRID_MIN_N = 700;
+
+/**
+ * n threshold below which the triangle/tetrahedron edgeIndex lookup (below)
+ * uses a flat, O(1)-indexed Int32Array instead of a sparse Map<number,
+ * number> -- set at the ORIGINAL GRID_MIN_N value (1000) this was verified
+ * against when finding #16 fixed the O(n^2) unconditional-allocation bug
+ * (a flat n*n array is ~4MB at n=1000, worth the O(1) indexing on this hot
+ * path; a sparse Map trades some per-lookup hashing cost for a footprint
+ * that tracks |E| instead of n^2).
+ *
+ * Deliberately NOT reusing GRID_MIN_N: the two thresholds happen to have
+ * started at the same value, but they answer different questions
+ * (edge-building throughput vs. triangle/tetrahedron-lookup memory) and
+ * were verified independently -- GRID_MIN_N has since moved (a spatial-grid.ts
+ * key-encoding change lowered its crossover; see this file's top
+ * docstring), while nothing has changed the n*n-vs-Map memory trade-off
+ * this constant protects. Coupling them would have silently moved this
+ * one too, untested.
+ */
+const EDGE_INDEX_DENSE_MAX_N = 1000;
 
 export function buildRipsComplex(
   points: Points,
@@ -167,24 +208,23 @@ export function buildRipsComplex(
   const edges: EdgeEntry[] = tempEdges.map(e => ({ u: e.u, v: e.v, val: e.val }));
 
   // Dense u*n+v keyspace -> flat Int32Array lookup when n is small (below
-  // the SAME GRID_MIN_N threshold used to decide brute-force vs spatial-grid
-  // edge-building, deliberately reused rather than a new independent
-  // threshold -- that's exactly where a large, sparse point cloud becomes
-  // possible). Always queried with u < v (matches insertion order below), so
-  // no symmetric fill is needed.
+  // EDGE_INDEX_DENSE_MAX_N -- a separate constant from GRID_MIN_N above, see
+  // its docstring for why). Always queried with u < v (matches insertion
+  // order below), so no symmetric fill is needed.
   //
   // BUG FIX: this used to be `new Int32Array(n * n)` UNCONDITIONALLY,
   // regardless of n or of how sparse the actual edge set is -- reintroducing
   // an O(n^2) MEMORY floor exactly in the large-sparse regime the spatial
   // grid exists to serve (1.6GB at n=20,000, before any triangles are even
-  // considered). Found during a codebase audit. Below GRID_MIN_N, n^2 is
-  // small (at most 1,000,000 entries, ~4MB) and the flat array's O(1) direct
-  // indexing is worth it on this hot path (called 2-3x per triangle
+  // considered). Found during a codebase audit. Below EDGE_INDEX_DENSE_MAX_N,
+  // n^2 is small (at most 1,000,000 entries, ~4MB) and the flat array's O(1)
+  // direct indexing is worth it on this hot path (called 2-3x per triangle
   // candidate, more for tetrahedra); at or above it, a sparse
   // Map<number,number> trades some per-lookup hashing cost for a footprint
   // that tracks |E| instead of n^2 -- the same time/space trade-off
   // rationale as the grid itself.
-  const edgeIndexDense: Int32Array | null = n < GRID_MIN_N ? new Int32Array(n * n).fill(-1) : null;
+  const edgeIndexDense: Int32Array | null =
+    n < EDGE_INDEX_DENSE_MAX_N ? new Int32Array(n * n).fill(-1) : null;
   const edgeIndexSparse: Map<number, number> | null = edgeIndexDense ? null : new Map();
   const setEdgeIndex = (u: number, v: number, idx: number): void => {
     if (edgeIndexDense) edgeIndexDense[u * n + v] = idx;

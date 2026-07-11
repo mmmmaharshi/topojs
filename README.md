@@ -139,12 +139,14 @@ existing streaming framework (Moitra/Malott/Wilsey 2023) in the class
 docstring, `src/streaming/incremental-h1.ts`.
 
 **Edge-building.** `buildRipsComplex` uses a uniform spatial grid instead
-of brute-force O(n²) pairwise distances once `n ≥ 1000` (below that, grid
+of brute-force O(n²) pairwise distances once `n ≥ 700` (below that, grid
 overhead loses to brute force — see `bench/data/edge_building_results.txt`
-for the crossover data). Same exact edges and filtration values either
-way, verified by differential testing (`test/spatial-grid.test.ts`). This
-does not move any benchmark numbers above, since every dataset
-benchmarked in this repo (n=60–400) is below the threshold.
+for the crossover data, which moved down from an initial ~1000 after a
+grid key-encoding fix, prompting the retune). Same exact edges and
+filtration values either way, verified by differential testing
+(`test/spatial-grid.test.ts`). This does not move any benchmark numbers
+above, since every dataset benchmarked in this repo (n=60–400) is below
+the threshold.
 
 **Against Ripser.** Both batch engines are cross-checked against
 [Ripser](https://arxiv.org/abs/1908.02518) on real data via a separate
