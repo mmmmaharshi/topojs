@@ -61,6 +61,7 @@ export function splitByDimension(pairs: PersistencePair[]): PerDimensionPairs {
   return { h0, h1finite, h1essential, h2finite, h2essential, higher };
 }
 
+/** Serialize persistence pairs to Gudhi's plain-text format: one `dim birth death` line per pair (`death` is the literal string `inf` for essential pairs), preceded by a `#`-commented header. Dimension-agnostic -- every pair is included regardless of dim. */
 export function toGudhi(pairs: PersistencePair[]): string {
   const lines: string[] = [];
   lines.push('# persistence pairs: dim birth death');
@@ -72,6 +73,7 @@ export function toGudhi(pairs: PersistencePair[]): string {
   return lines.join('\n');
 }
 
+/** Serialize persistence pairs to JSON via `JSON.stringify` (2-space indent when `pretty` is true, compact otherwise). Every field of every {@link PersistencePair} is preserved as-is, including `death < 0` for essential pairs. */
 export function toJSON(
   pairs: PersistencePair[],
   pretty: boolean = false,
@@ -80,6 +82,7 @@ export function toJSON(
   return JSON.stringify(pairs, null, space);
 }
 
+/** Serialize persistence pairs to CSV with a `dim,birth,death` header. Essential pairs (`death < 0`) are written with `death` normalized to `-1`, regardless of the original negative sentinel value. Dimension-agnostic -- every pair is included regardless of dim. */
 export function toCSV(pairs: PersistencePair[]): string {
   const lines: string[] = ['dim,birth,death'];
   for (const p of pairs) {
@@ -128,6 +131,7 @@ export function toDiagramCSV(
   return lines.join('\n');
 }
 
+/** Summary statistics for a persistence diagram, returned by {@link summarize}. */
 export interface DiagramStats {
   total: number;
   h0: number;
@@ -144,6 +148,13 @@ export interface DiagramStats {
   minBirth: number;
 }
 
+/**
+ * Compute {@link DiagramStats} for a set of persistence pairs: per-
+ * dimension counts, overall max death and min birth. `total` is
+ * guaranteed to equal `h0 + h1 + h2 + higher` for any input, including
+ * dim >= 3 pairs (see {@link PerDimensionPairs}'s `higher` field for why
+ * this invariant matters).
+ */
 export function summarize(pairs: PersistencePair[]): DiagramStats {
   const byDim = splitByDimension(pairs);
 

@@ -44,6 +44,7 @@ export function computePairwiseDistances(points: Points, dims: number, n: number
   return { data, n, rowStart };
 }
 
+/** O(1) lookup of the distance between points i and j from a matrix returned by {@link computePairwiseDistances}, without recomputing it. Returns 0 when i === j. */
 export function lookupDist(dist: DistanceMatrix, i: number, j: number): number {
   if (i === j) return 0.0;
   const u = i < j ? i : j;

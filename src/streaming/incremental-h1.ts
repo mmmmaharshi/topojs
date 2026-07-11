@@ -135,6 +135,7 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * incremental too. H2 is out of scope for Phase B.
  */
 
+/** Configuration for {@link IncrementalH1}. */
 export interface IncrementalH1Options {
   /** Number of most-recent points to maintain in the window. */
   windowSize: number;
@@ -144,6 +145,7 @@ export interface IncrementalH1Options {
   maxDist: number;
 }
 
+/** Result returned by {@link IncrementalH1}'s `push()` after each new point. */
 export interface IncrementalH1Update {
   windowSize: number;
   isFull: boolean;
@@ -182,6 +184,16 @@ function cmpTri(x: TriRec, y: TriRec): number {
   return x.idC - y.idC;
 }
 
+/**
+ * Streaming H0+H1 persistent homology over a sliding window of points,
+ * Phase B ("incremental") implementation -- unlike {@link StreamingHomology},
+ * this updates the existing reduced boundary matrix via local pivot
+ * bookkeeping on each `push()` instead of re-reducing the whole window from
+ * scratch. See this file's top docstring for the algorithm, its memory
+ * history (pooled typed-array storage, ~7.3x-52.5x retained-memory
+ * reduction over an earlier revision), and the still-open per-instance
+ * memory trade-off versus `StreamingHomology`.
+ */
 export class IncrementalH1 {
   private readonly windowSize: number;
   private readonly dims: number;

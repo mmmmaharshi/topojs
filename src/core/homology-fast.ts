@@ -76,6 +76,13 @@ export interface HomologyResultFast extends HomologyResult {
   diagnostics: { reReducedTriangles: number; totalTriangles: number };
 }
 
+/**
+ * Vietoris–Rips persistent homology (H₀+H₁+H₂), with H1 reduction
+ * accelerated by an apparent-pairs pre-pass -- see this file's top
+ * docstring for the algorithm, its soundness argument, and validation
+ * details. Falls back to full reduction for any triangle involved in a
+ * filtration-value tie, so it is exact, not approximate, in every case.
+ */
 export function computePersistentHomologyFast(
   points: Points,
   dims: number,

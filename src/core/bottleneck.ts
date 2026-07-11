@@ -209,6 +209,17 @@ function essentialBottleneck(essA: number[], essB: number[]): number {
   return maxDiff;
 }
 
+/**
+ * L∞ bottleneck distance between two persistence diagrams, restricted to
+ * one dimension at a time (`dim`). Matches finite pairs to each other or
+ * to the diagonal, and essential (infinite-persistence) pairs to each
+ * other by birth value -- symmetric by construction (`bottleneckDistance(A,
+ * B) === bottleneckDistance(B, A)`); see this file's top docstring for the
+ * bipartite-matching algorithm and a correctness bug it fixed. Returns
+ * `Infinity` if the two diagrams have a different number of essential
+ * pairs in `dim` (they can never be matched to each other or the
+ * diagonal).
+ */
 export function bottleneckDistance(
   pairsA: PersistencePair[],
   pairsB: PersistencePair[],

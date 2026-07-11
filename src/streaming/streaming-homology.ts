@@ -2,6 +2,7 @@ import { SlidingWindow } from './sliding-window.ts';
 import { computePersistentHomology } from '../core/homology.ts';
 import type { HomologyResult } from '../core/homology.ts';
 
+/** Configuration for {@link StreamingHomology}. */
 export interface StreamingHomologyOptions {
   /** Number of most-recent points to maintain in the window. */
   windowSize: number;
@@ -15,6 +16,7 @@ export interface StreamingHomologyOptions {
   minPointsToCompute?: number;
 }
 
+/** Result returned by {@link StreamingHomology}'s `push()` after each new point. */
 export interface StreamingUpdate {
   /** Number of points currently in the window. */
   windowSize: number;
