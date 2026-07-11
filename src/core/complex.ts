@@ -169,15 +169,38 @@ export function buildRipsComplex(
   tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
 
   const edges: EdgeEntry[] = tempEdges.map(e => ({ u: e.u, v: e.v, val: e.val }));
-  // Dense u*n+v keyspace -> flat Int32Array lookup instead of Map<number,number>.
-  // Always queried with u < v (matches insertion order below), so no
-  // symmetric fill is needed. Same values as the Map version, just O(1)
-  // direct indexing instead of hashing -- this is on the hot path, called
-  // 2-3x per triangle candidate.
-  const edgeIndex = new Int32Array(n * n).fill(-1);
+
+  // Dense u*n+v keyspace -> flat Int32Array lookup when n is small (below
+  // the SAME GRID_MIN_N threshold used to decide brute-force vs spatial-grid
+  // edge-building, deliberately reused rather than a new independent
+  // threshold -- that's exactly where a large, sparse point cloud becomes
+  // possible). Always queried with u < v (matches insertion order below), so
+  // no symmetric fill is needed.
+  //
+  // BUG FIX: this used to be `new Int32Array(n * n)` UNCONDITIONALLY,
+  // regardless of n or of how sparse the actual edge set is -- reintroducing
+  // an O(n^2) MEMORY floor exactly in the large-sparse regime the spatial
+  // grid exists to serve (1.6GB at n=20,000, before any triangles are even
+  // considered). Found during a codebase audit. Below GRID_MIN_N, n^2 is
+  // small (at most 1,000,000 entries, ~4MB) and the flat array's O(1) direct
+  // indexing is worth it on this hot path (called 2-3x per triangle
+  // candidate, more for tetrahedra); at or above it, a sparse
+  // Map<number,number> trades some per-lookup hashing cost for a footprint
+  // that tracks |E| instead of n^2 -- the same time/space trade-off
+  // rationale as the grid itself.
+  const edgeIndexDense: Int32Array | null = n < GRID_MIN_N ? new Int32Array(n * n).fill(-1) : null;
+  const edgeIndexSparse: Map<number, number> | null = edgeIndexDense ? null : new Map();
+  const setEdgeIndex = (u: number, v: number, idx: number): void => {
+    if (edgeIndexDense) edgeIndexDense[u * n + v] = idx;
+    else edgeIndexSparse!.set(u * n + v, idx);
+  };
+  const getEdgeIndex = (u: number, v: number): number => {
+    if (edgeIndexDense) return edgeIndexDense[u * n + v]!;
+    return edgeIndexSparse!.get(u * n + v)!;
+  };
   for (let i = 0; i < edges.length; i++) {
     const e = edges[i]!;
-    edgeIndex[e.u * n + e.v] = i;
+    setEdgeIndex(e.u, e.v, i);
   }
 
   for (let v = 0; v < n; v++) {
@@ -227,8 +250,8 @@ export function buildRipsComplex(
         // bit-for-bit identical to the old lookupDist(dist,u,k) value,
         // since that value ultimately CAME from this same edge's own
         // distance computation in the first place.
-        const ukIdx = edgeIndex[u * n + k]!;
-        const vkIdx = edgeIndex[v * n + k]!;
+        const ukIdx = getEdgeIndex(u, k);
+        const vkIdx = getEdgeIndex(v, k);
         const dik = edges[ukIdx]!.val;
         const djk = edges[vkIdx]!.val;
         const birth = Math.max(dij, dik, djk);
@@ -281,9 +304,9 @@ export function buildRipsComplex(
           // always holds here, so su<x, sv<x, sw<x are all valid u<v
           // edgeIndex queries, guaranteed present, and reusing their .val
           // is bit-for-bit identical to the old distance-matrix lookups.
-          const dux = edges[edgeIndex[su * n + x]!]!.val;
-          const dvx = edges[edgeIndex[sv * n + x]!]!.val;
-          const dwx = edges[edgeIndex[sw * n + x]!]!.val;
+          const dux = edges[getEdgeIndex(su, x)]!.val;
+          const dvx = edges[getEdgeIndex(sv, x)]!.val;
+          const dwx = edges[getEdgeIndex(sw, x)]!.val;
           const birth = Math.max(triVal, dux, dvx, dwx);
 
           tetrahedra.push({

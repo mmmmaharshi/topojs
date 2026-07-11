@@ -239,6 +239,62 @@ describe('buildRipsComplex: grid-accelerated path matches brute force exactly', 
     }
   });
 
+  it('triangle/tetrahedron filtration values are bit-identical to a direct distance recomputation, ABOVE GRID_MIN_N (sparse edgeIndex branch)', () => {
+    // The existing test with this name (below) only exercises n=20, which
+    // is comfortably under GRID_MIN_N=1000 -- so buildRipsComplex's
+    // edgeIndex there is always the DENSE Int32Array branch. This test
+    // specifically targets n >= GRID_MIN_N with maxDim=3 (triangles AND
+    // tetrahedra), which routes through the SPARSE Map<number,number>
+    // edgeIndex branch instead (added when the dense n*n array was found,
+    // during a codebase audit, to reintroduce an unconditional O(n^2)
+    // memory floor for exactly this large-n regime). Kept at a modest n
+    // (just above the threshold, not the 20,000 the audit's own worst-case
+    // memory arithmetic used) to keep the O(n^2) independent brute-force
+    // distance recomputation below fast.
+    const rng = mulberry32(20260714);
+    const n = 1050;
+    const dims = 3;
+    const pts = new Float64Array(n * dims);
+    // Dense enough (small box relative to n and maxDist) that triangles AND
+    // tetrahedra actually form -- unlike the edge-only grid tests elsewhere
+    // in this file, which only need SOME edges, not full simplicial
+    // structure up to dimension 3.
+    const boxSize = 8;
+    for (let i = 0; i < n * dims; i++) pts[i] = rng() * boxSize;
+    const maxDist = 1.2;
+    const complex = buildRipsComplex(pts, dims, maxDist, 3);
+    expect(complex.triangles.length, 'sanity: this config must exercise triangles').toBeGreaterThan(0);
+    expect(complex.tetrahedra.length, 'sanity: this config must exercise tetrahedra').toBeGreaterThan(0);
+
+    function dist(i: number, j: number): number {
+      let sq = 0;
+      for (let d = 0; d < dims; d++) {
+        const diff = pts[i * dims + d]! - pts[j * dims + d]!;
+        sq += diff * diff;
+      }
+      return Math.sqrt(sq);
+    }
+
+    for (const tri of complex.triangles) {
+      const [u, v, w] = tri.verts;
+      const expected = Math.max(dist(u, v), dist(u, w), dist(v, w));
+      expect(tri.val).toBe(expected);
+    }
+    for (const tet of complex.tetrahedra) {
+      const vertSet = new Set<number>();
+      for (const triIdx of tet.triangles) {
+        for (const vtx of complex.triangles[triIdx]!.verts) vertSet.add(vtx);
+      }
+      expect(vertSet.size).toBe(4);
+      const verts = Array.from(vertSet);
+      let expected = 0;
+      for (let a = 0; a < 4; a++) {
+        for (let b = a + 1; b < 4; b++) expected = Math.max(expected, dist(verts[a]!, verts[b]!));
+      }
+      expect(tet.val).toBe(expected);
+    }
+  });
+
   it('falls back correctly for maxDist=0, negative-equivalent, and Infinity', () => {
     const pts = generatePoints([[0, 0], [0, 0], [5, 5], [1, 1]]);
     // maxDist=0: only exact duplicates
