@@ -223,6 +223,18 @@ export class IncrementalH1 {
   private triE2: Int32Array = new Int32Array(0);
   private triE3: Int32Array = new Int32Array(0);
 
+  // Reused across pushes instead of `new DenseWorkingCol(...)` every call --
+  // found during a codebase audit: this was a third, transient-per-push
+  // instance of the same "allocate per item" pattern already fixed twice
+  // above for RETAINED state (reducedCols/triPair, then triOrder). A fresh
+  // DenseWorkingCol allocates two typed-array buffers (bits + scratch); for
+  // a class explicitly designed for high-frequency streaming use (the class
+  // docstring's own example is "one per sensor across a fleet"), that's
+  // continuous, avoidable GC churn. `ensureCapacity()` (src/core/reduction.ts)
+  // grows the backing storage only when the current push's edge count
+  // exceeds what's already allocated, otherwise reuses it as-is.
+  private readonly working: DenseWorkingCol = new DenseWorkingCol(0);
+
   /** Pack a transient TriRec[] into the pooled SoA representation. */
   private packTriOrder(tris: TriRec[]): void {
     const n = tris.length;
@@ -635,7 +647,8 @@ export class IncrementalH1 {
         : null;
     }
 
-    const working = new DenseWorkingCol(newEdges.length);
+    this.working.ensureCapacity(newEdges.length);
+    const working = this.working;
     const boundaryScratch = new Int32Array(3);
     for (let ci = triSafeCount; ci < newTris.length; ci++) {
       const tri = newTris[ci]!;

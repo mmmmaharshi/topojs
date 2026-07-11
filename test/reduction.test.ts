@@ -130,6 +130,63 @@ describe('DenseWorkingCol', () => {
     col.loadFromNumbers([9]); // now only 1 entry -- scratch must not still report 8
     expect(Array.from(col.toSparse())).toEqual([9]);
   });
+
+  describe('ensureCapacity (added so IncrementalH1 can reuse one instance across pushes)', () => {
+    // IncrementalH1.push() used to allocate `new DenseWorkingCol(newEdges.length)`
+    // fresh on every single push -- found during a codebase audit as a third
+    // instance of the "allocate per item" pattern already fixed twice for
+    // that class's RETAINED state. ensureCapacity() lets one instance be
+    // reused with a growing (never shrinking) backing store instead.
+
+    it('growing capacity preserves correctness for a subsequent load', () => {
+      const col = new DenseWorkingCol(10);
+      col.ensureCapacity(100); // grow well past the original 10
+      col.loadFromNumbers([50, 99]);
+      expect(col.pivot()).toBe(99);
+      expect(Array.from(col.toSparse())).toEqual([50, 99]);
+    });
+
+    it('shrinking the requested capacity is a no-op (never actually shrinks)', () => {
+      const col = new DenseWorkingCol(100);
+      col.ensureCapacity(5); // request less than current -- must not shrink
+      col.loadFromNumbers([80]); // still a valid index at the ORIGINAL 100 capacity
+      expect(col.pivot()).toBe(80);
+      expect(Array.from(col.toSparse())).toEqual([80]);
+    });
+
+    it('a grow followed by a load at the old, smaller size still works (high words are harmlessly zero)', () => {
+      const col = new DenseWorkingCol(10);
+      col.ensureCapacity(200);
+      col.loadFromNumbers([3]); // small index, well within the ORIGINAL 10 too
+      expect(col.pivot()).toBe(3); // must not spuriously report a high, unset bit
+      expect(Array.from(col.toSparse())).toEqual([3]);
+    });
+
+    it('repeated ensureCapacity calls at increasing sizes behave like one big allocation upfront', () => {
+      const grown = new DenseWorkingCol(1);
+      grown.ensureCapacity(10);
+      grown.ensureCapacity(50);
+      grown.ensureCapacity(33);
+      grown.loadFromNumbers([0, 32, 49]);
+
+      const direct = new DenseWorkingCol(50);
+      direct.loadFromNumbers([0, 32, 49]);
+
+      expect(Array.from(grown.toSparse())).toEqual(Array.from(direct.toSparse()));
+      expect(grown.pivot()).toBe(direct.pivot());
+    });
+
+    it('xorSparse and repeated reuse (clear + load + xor) behave correctly after growth', () => {
+      const col = new DenseWorkingCol(5);
+      col.ensureCapacity(64);
+      col.loadFromNumbers([10, 40]);
+      col.xorSparse(new Int32Array([40, 63]));
+      expect(Array.from(col.toSparse())).toEqual([10, 63]);
+      col.clear();
+      col.loadFromNumbers([1]);
+      expect(Array.from(col.toSparse())).toEqual([1]);
+    });
+  });
 });
 
 describe('xorSparse (standalone sorted-array symmetric difference)', () => {

@@ -87,6 +87,31 @@ export class DenseWorkingCol {
     this.bits.fill(0);
   }
 
+  /**
+   * Grow (never shrink) this instance's backing storage to accommodate at
+   * least `numEdges` rows, reallocating `bits`/`scratch` only if the current
+   * capacity is insufficient. A no-op otherwise. Lets one DenseWorkingCol be
+   * reused across many calls with slightly varying `numEdges` (e.g. a
+   * sliding window whose edge count fluctuates by a handful per push)
+   * instead of allocating a fresh instance every time -- added after an
+   * audit found IncrementalH1.push() was doing exactly that (a third,
+   * transient-per-push instance of the same "allocate per item" pattern
+   * already fixed twice for its RETAINED state; see that class's docstring).
+   * Safe because `loadFromArray`/`loadFromNumbers` always `bits.fill(0)`
+   * before setting bits, so any extra high words left over from a previous,
+   * larger `numEdges` are harmlessly zero and skipped by `pivot()`.
+   */
+  ensureCapacity(numEdges: number): void {
+    const words = Math.ceil(numEdges / 32);
+    if (words > this.words) {
+      this.words = words;
+      this.bits = new Uint32Array(words);
+    }
+    if (numEdges > this.scratch.length) {
+      this.scratch = new Int32Array(numEdges);
+    }
+  }
+
   loadFromArray(arr: Int32Array): void {
     this.bits.fill(0);
     for (let i = 0; i < arr.length; i++) {
