@@ -1,17 +1,40 @@
 import type { PersistencePair } from '../core/h0.ts';
 
-/** Persistence pairs grouped by dimension and finiteness. */
+/**
+ * Persistence pairs grouped by dimension and finiteness.
+ *
+ * `higher` holds every pair with dim >= 3 (H3 and above), grouped together
+ * rather than split into finite/essential like H1/H2 -- this codebase's own
+ * engines never produce dim >= 3 (buildRipsComplex caps at tetrahedra/
+ * 3-simplices, so the highest computable homology is H2), but
+ * PersistencePair.dim is a plain `number`, not a 0|1|2 literal type, and
+ * these export functions are explicitly designed for interop with external
+ * tools (toGudhi's format in particular, which supports arbitrary
+ * dimensions) -- a caller round-tripping externally-computed H3+ data
+ * through this function deserves those pairs preserved somewhere, not
+ * silently discarded with no trace. This field exists specifically so that
+ * no pair is EVER dropped by this function, regardless of dim -- see the
+ * "no pair left behind" invariant test in test/export.test.ts, and the
+ * concrete bug this fixed: summarize()'s own `total` count used to
+ * silently disagree with `h0+h1+h2` whenever dim >= 3 pairs were present,
+ * because splitByDimension threw them away before summarize ever saw them
+ * grouped.
+ */
 export interface PerDimensionPairs {
   h0: PersistencePair[];
   h1finite: PersistencePair[];
   h1essential: PersistencePair[];
   h2finite: PersistencePair[];
   h2essential: PersistencePair[];
+  higher: PersistencePair[];
 }
 
 /**
  * Split a flat array of persistence pairs into per-dimension groups.
  * H₁ and H₂ are further split into finite (killed) and essential (infinite).
+ * Every pair in the input appears in exactly one output group -- dim >= 3
+ * pairs go into `higher` rather than being dropped (see PerDimensionPairs's
+ * docstring for why this matters and the bug it fixes).
  */
 export function splitByDimension(pairs: PersistencePair[]): PerDimensionPairs {
   const h0: PersistencePair[] = [];
@@ -19,6 +42,7 @@ export function splitByDimension(pairs: PersistencePair[]): PerDimensionPairs {
   const h1essential: PersistencePair[] = [];
   const h2finite: PersistencePair[] = [];
   const h2essential: PersistencePair[] = [];
+  const higher: PersistencePair[] = [];
 
   for (const p of pairs) {
     if (p.dim === 0) {
@@ -29,10 +53,12 @@ export function splitByDimension(pairs: PersistencePair[]): PerDimensionPairs {
     } else if (p.dim === 2) {
       if (p.death < 0) h2essential.push(p);
       else h2finite.push(p);
+    } else {
+      higher.push(p);
     }
   }
 
-  return { h0, h1finite, h1essential, h2finite, h2essential };
+  return { h0, h1finite, h1essential, h2finite, h2essential, higher };
 }
 
 export function toGudhi(pairs: PersistencePair[]): string {
@@ -62,6 +88,15 @@ export function toCSV(pairs: PersistencePair[]): string {
   return lines.join('\n');
 }
 
+/**
+ * Fixed 8-column CSV covering H0/H1/H2 only (see the header below) -- any
+ * dim >= 3 pairs in the input are NOT represented in this output (the
+ * fixed-width tabular schema doesn't generalize to an unknown number of
+ * higher dimensions without a bigger redesign, unlike splitByDimension's
+ * `higher` bucket or toCSV/toJSON/toGudhi, which are dim-agnostic and
+ * preserve everything). Use toCSV or toJSON instead if the input may
+ * contain dim >= 3 pairs and losing them is not acceptable.
+ */
 export function toDiagramCSV(
   pairs: PersistencePair[],
 ): string {
@@ -102,6 +137,9 @@ export interface DiagramStats {
   h2: number;
   h2finite: number;
   h2essential: number;
+  /** Count of dim >= 3 pairs -- see PerDimensionPairs's `higher` field.
+   *  Invariant: total === h0 + h1 + h2 + higher, always (see test/export.test.ts). */
+  higher: number;
   maxDeath: number;
   minBirth: number;
 }
@@ -126,6 +164,7 @@ export function summarize(pairs: PersistencePair[]): DiagramStats {
     h2: byDim.h2finite.length + byDim.h2essential.length,
     h2finite: byDim.h2finite.length,
     h2essential: byDim.h2essential.length,
+    higher: byDim.higher.length,
     maxDeath,
     minBirth: minBirth === Infinity ? 0 : minBirth,
   };

@@ -38,8 +38,8 @@ console.log(cubical.pairs);
 | `toGudhi(pairs)` | Export to Gudhi text format |
 | `toJSON(pairs, pretty?)` | Export to JSON |
 | `toCSV(pairs)` | Export to CSV |
-| `summarize(pairs)` | Statistics (counts, max death, min birth) |
-| `splitByDimension(pairs)` | Separate H₀/H₁/H₂, finite/essential |
+| `summarize(pairs)` | Statistics (counts, max death, min birth). `total` is guaranteed to equal `h0+h1+h2+higher` for any input, including dim≥3 pairs from external data — previously silently broke this invariant, see `src/export/persistence-diagram.ts` |
+| `splitByDimension(pairs)` | Separate H₀/H₁/H₂ (finite/essential) plus a `higher` bucket for dim≥3 pairs — no pair is ever dropped, unlike before |
 
 ## Streaming / Incremental H1 Benchmarks (real data only)
 

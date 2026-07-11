@@ -8,6 +8,7 @@ import {
   splitByDimension,
 } from '../src/export/persistence-diagram.ts';
 import type { PersistencePair } from '../src/core/h0.ts';
+import { mulberry32 } from './helpers.ts';
 
 const SAMPLE_PAIRS: PersistencePair[] = [
   { dim: 0, birth: 0, death: 0.5 },
@@ -15,6 +16,20 @@ const SAMPLE_PAIRS: PersistencePair[] = [
   { dim: 1, birth: 0.3, death: 0.9 },
   { dim: 1, birth: 0.4, death: -1 },
   { dim: 2, birth: 0.6, death: -1 },
+];
+
+// Includes dim >= 3 pairs specifically to exercise the `higher` bucket --
+// this codebase's own engines never produce these (buildRipsComplex caps
+// at tetrahedra, so H2 is the highest computable dimension), but
+// PersistencePair.dim is a plain number, not a 0|1|2 literal type, and
+// these export functions are explicitly for interop with external tools
+// (toGudhi's format supports arbitrary dimensions) -- data from elsewhere
+// could easily contain H3+ pairs.
+const PAIRS_WITH_HIGHER_DIMS: PersistencePair[] = [
+  ...SAMPLE_PAIRS,
+  { dim: 3, birth: 0.1, death: 0.2 },
+  { dim: 3, birth: 0.15, death: -1 },
+  { dim: 5, birth: 0.05, death: 0.4 },
 ];
 
 describe('export / serialization round-trips', () => {
@@ -52,6 +67,7 @@ describe('export / serialization round-trips', () => {
     expect(split.h1essential).toHaveLength(1);
     expect(split.h2finite).toHaveLength(0);
     expect(split.h2essential).toHaveLength(1);
+    expect(split.higher).toHaveLength(0);
   });
 
   it('summarize matches hand-computed statistics', () => {
@@ -60,7 +76,95 @@ describe('export / serialization round-trips', () => {
     expect(s.h0).toBe(2);
     expect(s.h1).toBe(2);
     expect(s.h2).toBe(1);
+    expect(s.higher).toBe(0);
     expect(s.maxDeath).toBe(0.9); // ignores essential -1 deaths
     expect(s.minBirth).toBe(0);
+  });
+
+  describe('dim >= 3 pairs (found and fixed a real silent-data-loss bug)', () => {
+    // splitByDimension used to only handle dim 0/1/2 -- any pair with
+    // dim >= 3 fell through every branch silently, meaning it was dropped
+    // with no error, no warning, and no trace anywhere. Concrete impact
+    // this had before the fix: summarize()'s own `total` field (a plain
+    // count of the input array) would silently disagree with its
+    // `h0+h1+h2` breakdown whenever the input contained any dim >= 3
+    // pair -- an internally inconsistent result from a function whose
+    // whole job is to report consistent statistics. Currently latent for
+    // this repo's OWN engines (buildRipsComplex caps at tetrahedra, so H2
+    // is the highest dimension they can ever produce) but real and
+    // reachable for any external data fed through these interop-oriented
+    // export functions (toGudhi's own format supports arbitrary
+    // dimensions). Fixed via a `higher` bucket that catches everything
+    // dim >= 3 -- these tests lock in the fix, not just document the gap.
+
+    it('splitByDimension captures dim >= 3 pairs in `higher` instead of dropping them', () => {
+      const split = splitByDimension(PAIRS_WITH_HIGHER_DIMS);
+      expect(split.higher).toHaveLength(3);
+      expect(split.higher.map(p => p.dim).sort()).toEqual([3, 3, 5]);
+    });
+
+    it('no pair from the input is ever lost: sum of all buckets equals input length (regression test, specific case)', () => {
+      const split = splitByDimension(PAIRS_WITH_HIGHER_DIMS);
+      const total =
+        split.h0.length + split.h1finite.length + split.h1essential.length +
+        split.h2finite.length + split.h2essential.length + split.higher.length;
+      expect(total).toBe(PAIRS_WITH_HIGHER_DIMS.length);
+    });
+
+    it('no pair from the input is ever lost, across many random dimension distributions (property-based)', () => {
+      const rng = mulberry32(20260712);
+      for (let trial = 0; trial < 50; trial++) {
+        const n = Math.floor(rng() * 30);
+        const pairs: PersistencePair[] = [];
+        for (let i = 0; i < n; i++) {
+          const dim = Math.floor(rng() * 8); // 0..7, deliberately reaching well past dim=2
+          const birth = rng() * 10;
+          const isEssential = rng() < 0.3;
+          pairs.push({ dim, birth, death: isEssential ? -1 : birth + rng() * 10 });
+        }
+        const split = splitByDimension(pairs);
+        const total =
+          split.h0.length + split.h1finite.length + split.h1essential.length +
+          split.h2finite.length + split.h2essential.length + split.higher.length;
+        expect(total, `trial ${trial} (n=${n})`).toBe(pairs.length);
+      }
+    });
+
+    it('summarize: total === h0+h1+h2+higher invariant holds even with dim >= 3 pairs present (the exact bug that was found)', () => {
+      const s = summarize(PAIRS_WITH_HIGHER_DIMS);
+      expect(s.total).toBe(PAIRS_WITH_HIGHER_DIMS.length);
+      expect(s.higher).toBe(3);
+      expect(s.total).toBe(s.h0 + s.h1 + s.h2 + s.higher); // used to fail: total=8, h0+h1+h2=5
+    });
+
+    it('summarize: the total invariant holds across many random dimension distributions (property-based)', () => {
+      const rng = mulberry32(9988);
+      for (let trial = 0; trial < 50; trial++) {
+        const n = Math.floor(rng() * 30);
+        const pairs: PersistencePair[] = [];
+        for (let i = 0; i < n; i++) {
+          const dim = Math.floor(rng() * 8);
+          const birth = rng() * 10;
+          const isEssential = rng() < 0.3;
+          pairs.push({ dim, birth, death: isEssential ? -1 : birth + rng() * 10 });
+        }
+        const s = summarize(pairs);
+        expect(s.total, `trial ${trial}`).toBe(s.h0 + s.h1 + s.h2 + s.higher);
+      }
+    });
+
+    it('toDiagramCSV documented limitation: dim >= 3 pairs are not represented in its fixed 8-column schema', () => {
+      // Not a bug (the docstring now says so explicitly) -- this test
+      // exists so that limitation is verified/locked in, not just claimed
+      // in a comment that could silently go stale.
+      const csv = toDiagramCSV(PAIRS_WITH_HIGHER_DIMS);
+      // Row count is governed by the H0/H1/H2 groups only (maxLen=2 here,
+      // from h0's 2 entries), NOT inflated by the 3 higher-dim pairs.
+      const dataLines = csv.split('\n').slice(1);
+      expect(dataLines).toHaveLength(2);
+      // toCSV/toJSON, by contrast, are dim-agnostic and DO preserve everything.
+      expect(toCSV(PAIRS_WITH_HIGHER_DIMS).split('\n')).toHaveLength(PAIRS_WITH_HIGHER_DIMS.length + 1);
+      expect(JSON.parse(toJSON(PAIRS_WITH_HIGHER_DIMS))).toHaveLength(PAIRS_WITH_HIGHER_DIMS.length);
+    });
   });
 });
