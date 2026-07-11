@@ -30,6 +30,11 @@ describe('public API barrel (src/index.ts)', () => {
     expect(typeof topojs.computeCubicalHomology).toBe('function');
   });
 
+  it('exports every documented approximate/landmark-sampling function', () => {
+    expect(typeof topojs.computeSparseRipsHomology).toBe('function');
+    expect(typeof topojs.selectLandmarks).toBe('function');
+  });
+
   it('exports every documented distance/comparison function', () => {
     expect(typeof topojs.computePairwiseDistances).toBe('function');
     expect(typeof topojs.lookupDist).toBe('function');

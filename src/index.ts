@@ -73,6 +73,26 @@ export type { HomologyResultFast } from './core/homology-fast.ts';
 // against real data.
 export { computePersistentHomologyCohomology } from './core/homology-cohom.ts';
 
+// ── Rips persistence, APPROXIMATE via landmark subsampling ──
+// This repo's first approximate (not exact) engine -- exists to make
+// persistence computable past the ~n=1000 ceiling of the exact engines
+// above (see README's "Against Ripser" section for that ceiling). Backed
+// by a PROVEN bottleneck-distance bound (Chazal/de Silva/Oudot 2014
+// Lipschitz stability of the Rips filtration under Hausdorff perturbation,
+// applied to farthest-point-sampled landmarks -- see sparse-rips.ts's top
+// docstring for the theorem statement), not an empirical-only "good
+// enough" claim. Validated in test/sparse-rips.test.ts by checking the
+// bound actually holds (measured bottleneck distance <= 2*coveringRadius)
+// across many random configs and real datasets already bundled in this
+// repo (Iris, MNIST digit pixel clouds) -- the same "validate at scale
+// against ground truth" discipline as every exact engine here, adapted to
+// a bounded-error claim since exact match is not the applicable standard
+// for an approximate method.
+export { computeSparseRipsHomology } from './core/sparse-rips.ts';
+export type { SparseRipsResult } from './core/sparse-rips.ts';
+export { selectLandmarks } from './core/landmarks.ts';
+export type { LandmarkResult } from './core/landmarks.ts';
+
 // ── Distances ──
 export { computePairwiseDistances, lookupDist } from './core/distance.ts';
 export type { Points, DistanceMatrix } from './core/distance.ts';

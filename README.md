@@ -28,6 +28,7 @@ console.log(cubical.pairs);
 ## Features
 
 - **Vietoris–Rips persistence** — H₀ via union–find, H₁/H₂ via matrix reduction with bit-vector columns
+- **Approximate Rips persistence** — landmark subsampling with a *proven* bottleneck-distance bound, for point clouds past the exact engines' n≈1000 ceiling
 - **Cubical persistence** — H₀+H₁ on 2D grayscale images
 - **Bottleneck distance** — between two persistence diagrams
 - **Small footprint** — demo bundle ~10.3 KB raw / ~4.0 KB gzipped (`npm run build:demo`), runs in any ES2020 environment
@@ -43,6 +44,13 @@ console.log(cubical.pairs);
 | `computePersistentHomologyFast(points, dims, maxDist, maxDim)` | Same result, H1 accelerated via the "apparent pairs" shortcut. Validated against `computePersistentHomology` (8 tests + an 11,100-config stress sweep, 0 mismatches). |
 | `computePersistentHomologyCohomology(points, dims, maxDist, maxDim)` | Same result, H1 *and* H2 accelerated via persistent cohomology (the coboundary technique behind Ripser's speed; Bauer 2019, arXiv:1908.02518). A structural win — H1 reduces one column per cycle *edge*, not per triangle. Validated (12 tests, a 13,800-config H1 sweep, a 399-config H2 sweep, 0 mismatches). |
 | `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images. Parameter order is `height, width`. |
+
+### Approximate homology (landmark subsampling)
+
+| Function | Description |
+|----------|-------------|
+| `computeSparseRipsHomology(points, dims, n, numLandmarks, maxDist, maxDim, startIndex?)` | Approximate Rips persistence for point clouds too large for the exact engines above. Runs `computePersistentHomology` on a farthest-point-sampled landmark subset, with a **proven** bottleneck-distance bound (`result.bottleneckBound`, = 2× the landmark covering radius) via the Rips filtration's Lipschitz stability under Hausdorff perturbation (Chazal/de Silva/Oudot 2014). Validated by checking the bound actually holds across 180+ random configs plus real Iris data — `test/sparse-rips.test.ts`. |
+| `selectLandmarks(points, dims, n, numLandmarks, startIndex?)` | Farthest-point (max-min) landmark sampling, O(numLandmarks·n) time, O(n) space. Returns the landmark indices and the achieved covering radius. |
 
 ### Distances & comparison
 
