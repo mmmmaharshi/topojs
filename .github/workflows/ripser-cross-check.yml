@@ -1,0 +1,40 @@
+name: Ripser cross-check (scheduled, non-blocking)
+
+# Re-runs bench/compare_ripser.py periodically so the specific numbers
+# quoted in README.md's "Against Ripser" section (correctness match,
+# speed ratios) don't silently drift out of date with nothing catching it.
+# Deliberately NOT on push/pull_request: this installs a compiled Python
+# package (ripser) and is a benchmark/cross-check, not a correctness gate
+# for this repo's own test suite (that's ci.yml's job). A failure here
+# means "go look at whether the README numbers still hold," not "this PR
+# is broken."
+#
+# Added during a codebase audit that found this cross-check was previously
+# entirely manual with no automation keeping it honest over time -- see
+# bench/requirements.txt for the pinned Python dependency versions.
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC. Cheap enough to run more often, but this
+    # check doesn't need to be fresher than that -- nothing in this repo's
+    # own source changes on a schedule that would make daily runs useful.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+jobs:
+  cross-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r bench/requirements.txt
+      - name: Run Ripser cross-check
+        run: python3 bench/compare_ripser.py
