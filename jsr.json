@@ -1,6 +1,7 @@
 {
   "name": "@mmmmaharshi/topojs",
   "version": "1.0.0",
+  "description": "Pure-JavaScript persistent homology library (H0, H1, H2, cubical). No WASM, WebGL, WebGPU, or server required.",
   "exports": "./src/index.ts",
   "publish": {
     "exclude": ["bench", "demo", "test", ".github", "dist"]
