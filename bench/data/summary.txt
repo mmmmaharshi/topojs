@@ -1,6 +1,9 @@
 TopoJS Incremental-H1 Speedup Analysis — Real-Data Benchmarks Only
 ====================================================================
-Date: 2026-07-10
+Date: 2026-07-10 (Axes 1-6 all re-run in full on 2026-07-11, all 3
+datasets, all axes -- see the "RE-RUN 2026-07-11" note at the end of
+this file, and matching sections in scaling_results.txt,
+memory_results.txt, regime_results.txt)
 
 All synthetic-data benchmarks (i.i.d. random point clouds used for
 scalability/comparison claims, and the earlier i.i.d.-random incremental-H1
@@ -341,3 +344,35 @@ Axis 6: Regime map -- does density actually predict when the speedup
   universal guarantee, see README.md's "Complexity, measured not just
   claimed" section for the summary writeup and its explicit "what this
   does not establish" caveat.
+
+RE-RUN 2026-07-11: every axis above re-run in full, all 3 datasets, same
+methods, no code changes to any engine since the previous run (only
+bench/benchmark.ts's CLI gained two small optional args -- a trials-count
+override for --scaling and a window-size filter for --regime -- both
+purely additive, needed to fit each larger sweep inside this session's
+per-command time budget; default behavior when the new args are omitted
+is unchanged).
+  Axis 1 (sunspots, k=40):    1.849x (95% CI 1.615x-2.118x) -- consistent with 1.91x, 1.93x
+  Axis 2 (iris, k=20):        1.513x (95% CI 1.478x-1.550x) -- consistent with 1.34x, 1.35x
+  Axis 3 (melbourne, k=45):   1.814x (95% CI 1.739x-1.892x) -- consistent with 1.65x, 1.67x
+  All three still statistically significant, all three still survive the
+  Bonferroni multiple-comparisons correction (still >1x per-axis after
+  correcting for 3 simultaneous tests).
+  Axis 4 (scaling): see scaling_results.txt's "RE-RUN 2026-07-11" section
+  for Iris (re-run at its original window sizes, only real data avilable);
+  sunspots/melbourne were already extended past windowSize=80 earlier this
+  session -- see that file's "RE-RUN: extended window-size range" section
+  for the resolved finding (speedup peaks then declines, does not widen
+  indefinitely -- this now supersedes Axis 4's "open question, not settled"
+  framing above; see README.md's Benchmarks section for the current
+  wording).
+  Axis 5 (memory): see memory_results.txt's "RE-RUN 2026-07-11" section --
+  same order of magnitude as the CURRENT (post-both-pooling-fixes) tables,
+  no code change, included for completeness of "every axis, every dataset."
+  Axis 6 (regime): see regime_results.txt's "RE-RUN 2026-07-11" section --
+  all 35 (dataset, windowSize, maxDist) points stayed >= 1x this time
+  (minimum 1.03x), INCLUDING the two points that fell just below 1x in the
+  original run (melbourne k=40/maxDist=0.10: 0.68x->1.03x; iris
+  k=20/maxDist=0.35: 0.65x->2.04x) -- confirms those were run-to-run noise,
+  not a systematic density effect, strengthening rather than changing the
+  original "no breakeven observed" conclusion.

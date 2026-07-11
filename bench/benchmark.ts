@@ -667,7 +667,7 @@ interface RegimeRow {
   speedup: number;
 }
 
-function runRegimeSweep(keys: string[]): RegimeRow[] {
+function runRegimeSweep(keys: string[], windowSizeFilter?: number): RegimeRow[] {
   const allRows: RegimeRow[] = [];
   const trialsPerPoint = 3;
 
@@ -677,7 +677,11 @@ function runRegimeSweep(keys: string[]): RegimeRow[] {
     console.log(`\n=== REGIME SWEEP: ${cfg.name} ===`);
     const { points } = cfg.load();
 
-    for (const windowSize of cfg.regimeWindowSizes) {
+    const windowSizes = windowSizeFilter != null
+      ? cfg.regimeWindowSizes.filter((w) => w === windowSizeFilter)
+      : cfg.regimeWindowSizes;
+
+    for (const windowSize of windowSizes) {
       const warmup = windowSize + 5;
       const chunkLen = Math.floor(points.length / trialsPerPoint);
       if (chunkLen < warmup + 20) {
@@ -783,8 +787,9 @@ if (arg === '--memory') {
 
 if (arg === '--regime') {
   const dsArg = process.argv[3];
+  const windowSizeArg = process.argv[4];
   const keys = dsArg ? [dsArg] : Object.keys(DATASETS);
-  const rows = runRegimeSweep(keys);
+  const rows = runRegimeSweep(keys, windowSizeArg ? Number(windowSizeArg) : undefined);
   summarizeRegime(rows);
   process.exit(0);
 }

@@ -131,3 +131,23 @@ demo actually use (windowSize <= 80), IncrementalH1's speedup claim stands
 exactly as measured. Users running much larger sliding windows (>100-150
 points) should re-benchmark on their own data before assuming the same
 advantage holds -- it may have already peaked and started reversing.
+
+=== RE-RUN 2026-07-11: Iris, for completeness (all 3 datasets now covered by a fresh run) ===
+Iris was NOT extended past windowSize=20 above -- unlike sunspots/melbourne,
+it only has 150 real points total ("repeats" mode, see Axis 2's caveat in
+summary.txt), so there is no more real data to push the range further with.
+This is simply a fresh re-run at the SAME window sizes as the original run,
+included because a full re-run across every dataset was requested:
+  windowSize=5:  naive=1.01ms  incr=1.06ms  speedup=0.95x  reReduced=98.1%
+  windowSize=10: naive=3.32ms  incr=3.25ms  speedup=1.02x  reReduced=97.9%
+  windowSize=20: naive=12.97ms incr=11.27ms speedup=1.15x  reReduced=99.6%
+  slopes: naive p=1.84, incremental p=1.71
+Noisier than the original run (0.95x-1.15x here vs 1.08x-1.52x originally) --
+expected: Iris's "repeats" mode times the SAME 150-point stream every run, so
+run-to-run differences here are JIT/measurement noise, not new real-data
+diversity, exactly as already documented for every other Iris measurement in
+this repo. Does not change this file's CONCLUSION above, which is based on
+the sunspots/melbourne-temp extended sweeps, not Iris (which was never the
+basis for the "widening speedup" claim being investigated -- it already
+showed the inverted pattern at k<=20 in the very first scaling sweep, before
+any of this session's re-runs).

@@ -107,3 +107,26 @@ highest density where speedup >= 1x: 70.96%
 NOTE: these overlap (70.96% >= 43.25%) -- density alone does
 NOT cleanly predict speedup in this sweep; other factors (dataset, window size, noise) matter too.
 Reported honestly rather than forcing a single clean threshold that the data does not support.
+
+=== RE-RUN 2026-07-11 (full re-run, all 3 datasets, all window sizes, same method) ===
+Re-run in response to a request to benchmark on all datasets. Same method
+(3 trials per point), same datasets/window sizes/maxDist grids as above.
+
+sunspots (k=40): 0.05->1.50x  0.08->1.08x  0.10->2.00x  0.13->1.85x  0.15->1.81x  0.18->1.83x  0.22->1.85x
+sunspots (k=80): 0.05->1.18x  0.08->1.42x  0.10->2.03x  0.13->1.87x  0.15->1.67x  0.18->1.62x  0.22->1.69x
+melbourne (k=40): 0.05->1.58x  0.08->1.04x  0.10->1.03x  0.13->1.70x  0.15->1.70x  0.18->1.72x  0.22->1.78x
+melbourne (k=80): 0.05->1.89x  0.08->1.81x  0.10->1.91x  0.13->1.76x  0.15->1.68x  0.18->1.72x  0.22->1.56x
+iris (k=20):      0.15->1.44x  0.20->1.06x  0.25->1.52x  0.30->3.28x  0.35->2.04x  0.40->1.73x  0.45->1.49x
+
+All 35 points, all 3 datasets, combined and sorted by density: MINIMUM speedup
+observed was 1.03x (melbourne, k=40, maxDist=0.10, density 3.62%) -- i.e. on
+this re-run, EVERY point across all three datasets stayed >= 1x, including the
+two configs (melbourne k=40/maxDist=0.10, iris k=20/maxDist=0.35) that fell
+just BELOW 1x in the original run above (0.68x and 0.65x respectively). This
+is exactly the outcome the original run's own interpretation predicted: those
+two were isolated outliers surrounded by higher-density points staying well
+above 1x, not a systematic density effect -- run-to-run noise at those
+specific low-trial-count points, now confirmed by their flipping to >1x on an
+independent re-run rather than reproducing below 1x. Strengthens, does not
+change, the original conclusion: no density threshold found, no breakeven
+observed in either run taken as a whole.

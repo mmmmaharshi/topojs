@@ -120,6 +120,20 @@ pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomolog
 that, it only keeps the raw window contents and discards all derived state after each push.
 This is the space side of the time/space trade-off the class docstring does not currently discuss.
 
+=== RE-RUN 2026-07-11 (full re-run, all 3 datasets, same method, no code changes since UPDATE 2) ===
+sunspots:        windowSize=10/20/40/80 -> 0.011/0.040/-0.024/0.210 MB, ratio 4.73/5.79/-11.14/147.42
+melbourne-temp:  windowSize=10/20/40/80 -> 0.011/0.015/0.040/0.049 MB, ratio 4.47/1.24/n-a/23.28
+iris:            windowSize=5/10/20     -> 0.009/0.011/0.029 MB,       ratio 4.05/1.72/19.33
+Same order of magnitude as the CURRENT tables above, windowSize=80 still the
+only point comfortably above the noise floor on every dataset (0.21/0.05/n-a
+MB); smaller window sizes show the same noise-dominated behavior already
+documented (including an occasional negative delta at k=40, expected from
+heapUsed's inherent noise even with forced GC -- not a real "negative
+memory use", see this file's method note above each table). No code change
+was made to IncrementalH1's memory layout in this re-run; this is a fresh
+measurement of the same UPDATE-2 state, included because a fresh run of
+every benchmark axis, on every dataset, was explicitly requested.
+
 --- HISTORY (kept for the record, not deleted) ---
 PRE-OPTIMIZATION (original):
   sunspots:        windowSize=10/20/40/80 -> 0.017/0.202/0.830/4.864 MB, ratio 7.62/52.16/231.45/3483.95
