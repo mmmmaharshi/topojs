@@ -22,7 +22,11 @@ complexes (2D grayscale images). No WASM, WebGL, WebGPU, or server. See
   drifts from `src/` (this happened once; see git history for finding #3)
 - Benchmarks (real data only, not part of the published package):
   `npm run bench` or `npm run bench -- <dataset>` (see `bench/benchmark.ts`
-  for the dataset registry and flags: `--scaling`, `--regime`, `--memory`)
+  for the dataset registry and flags: `--scaling`, `--regime`, `--memory`).
+  `npm run bench:all` runs every axis (default, `--scaling`, `--memory`,
+  `--regime`) across every registered dataset in one command — takes a few
+  minutes; requires a POSIX shell (macOS/Linux/WSL/git-bash), not plain
+  Windows `cmd.exe`, since it uses a `for` loop.
 - Ripser cross-check (separate Python script, own dependencies — see
   `bench/requirements.txt`): `python3 bench/compare_ripser.py`
 
