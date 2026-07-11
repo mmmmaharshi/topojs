@@ -104,11 +104,9 @@ export function computePersistentHomology(
   if (maxDim >= 3 && ker_d2 > 0) {
     // Which triangles generate 2-cycles (their H1 column reduced to zero)
     const nullspaceTrigs = new Uint8Array(triangles.length);
-    let nullCount = 0;
     for (let ci = 0; ci < triangles.length; ci++) {
       if (h1reduced[ci] !== null && h1reduced[ci]!.length === 0) {
         nullspaceTrigs[ci] = 1;
-        nullCount++;
       }
     }
 

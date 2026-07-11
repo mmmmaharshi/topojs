@@ -22,6 +22,7 @@
   "scripts": {
     "build": "tsc",
     "prepack": "npm run build",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -34,7 +35,9 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.7.0",
     "typescript": "^5.8.0",
+    "typescript-eslint": "^8.63.0",
     "vitest": "^4.1.10"
   },
   "main": "dist/src/index.js",

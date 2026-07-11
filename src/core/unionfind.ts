@@ -9,7 +9,7 @@ export class UnionFind {
   }
 
   find(x: number): number {
-    let p = this.parent[x]!;
+    const p = this.parent[x]!;
     if (p < 0) return x;
     let root = x;
     while (this.parent[root]! >= 0) root = this.parent[root]!;

@@ -105,10 +105,6 @@ export interface RipsComplex {
   tetrahedra: TetraEntry[];
 }
 
-function edgeKey(u: number, v: number, n: number): number {
-  return u * n + v;
-}
-
 function triKey(u: number, v: number, w: number, n: number): number {
   return (u * n + v) * n + w;
 }

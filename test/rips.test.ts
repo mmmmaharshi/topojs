@@ -97,7 +97,6 @@ describe('rips: known geometric ground truths', () => {
     // translated far away, to confirm the algorithm keeps independent
     // components and their cycles separate rather than accidentally merging
     // topology across components.
-    const chord = 2 * Math.sin(Math.PI / 12);
     const nextChord = 2 * Math.sin((2 * Math.PI) / 12);
     const maxDist = nextChord + 0.05;
     const a = circlePoints(12, 1.0, 0, 0);

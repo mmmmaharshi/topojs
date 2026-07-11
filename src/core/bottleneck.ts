@@ -97,11 +97,6 @@ function supNorm(a: [number, number], b: [number, number]): number {
   return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
 }
 
-function toDiagonal(p: [number, number]): [number, number] {
-  const mid = (p[0] + p[1]) / 2;
-  return [mid, mid];
-}
-
 function cost(a: [number, number], b: [number, number]): number {
   return supNorm(a, b);
 }
