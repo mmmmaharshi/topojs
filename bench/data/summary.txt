@@ -252,23 +252,40 @@ Axis 5: Memory sweep -- the speed win is a TIME/SPACE trade-off, not a
   strict improvement. IncrementalH1 keeps the previous push's full edge/
   triangle lists AND reduced-column state alive between pushes (the whole
   mechanism the speedup depends on); StreamingHomology discards everything
-  but the raw window contents after every push. Measured directly
+  but the raw window contents after every push. Originally measured
   (`npm run bench -- --memory <dataset>`, median of 7 fresh-instance heap
   deltas per point, --expose-gc forcing collection before/after each to
-  reduce noise; bench/data/memory_results.txt):
+  reduce noise; bench/data/memory_results.txt, pre-optimization numbers
+  section):
     sunspots:    4.2x (k=10) -> 24.8x (k=20) -> 204x (k=40) -> 3484x (k=80)
     melbourne:   2.7x (k=10) -> 15.0x (k=20) -> 142x (k=40) -> 1361x (k=80)
     iris:        2.6x (k=5)  -> 4.7x (k=10)  -> 24.1x (k=20)
   Consistent across all three real datasets: the memory ratio grows sharply
   with window size, reaching ~1300x-3500x at the largest window sizes
   tested. This was not measured or discussed anywhere in this repo before
-  now. It does not invalidate the speedup claims in Axes 1-4 (time and
-  space are different resources), but it means IncrementalH1 is a genuine
-  trade-off, not a strict win -- fine for one or a few concurrent windows,
-  a real limitation for many-concurrent-window use cases (e.g. one window
-  per sensor across a large fleet), where StreamingHomology's near-zero
-  retained state may be preferable despite its slower per-push time. See
-  docs/COMPLEXITY.md Section 5 for the full writeup.
+  that point. It does not invalidate the speedup claims in Axes 1-4 (time
+  and space are different resources), but it means IncrementalH1 is a
+  genuine trade-off, not a strict win -- fine for one or a few concurrent
+  windows, a real limitation for many-concurrent-window use cases (e.g. one
+  window per sensor across a large fleet), where StreamingHomology's
+  near-zero retained state may be preferable despite its slower per-push
+  time.
+
+  FOLLOW-UP: reducedCols/triPair (T separate small heap objects each,
+  retained between every push) were repacked into pooled flat typed arrays
+  (src/streaming/incremental-h1.ts, packReducedCols/packTriPair) -- a pure
+  storage-representation change, zero change to the reduction algorithm,
+  verified byte-identical via the existing differential test suite. This
+  cut retained memory 2.3x-2.7x at the largest window size on all three
+  datasets (sunspots 4.864MB->1.786MB, melbourne 1.943MB->0.746MB, iris
+  0.205MB->0.088MB at k=20) -- ratios now ~1300x (sunspots) / ~427x
+  (melbourne) at k=80, down from ~3484x/~1361x. Current numbers are in
+  bench/data/memory_results.txt's main tables; pre-optimization numbers
+  kept there too, not deleted, for the record. See docs/COMPLEXITY.md
+  Section 5b for the full writeup. This closes most, not all, of the gap --
+  edgeOrder/triOrder (arrays of small objects, one per edge/triangle) were
+  deliberately left alone as a larger, riskier refactor not attempted here;
+  the time/space trade-off is smaller now, not eliminated.
 
 Axis 6: Regime map -- does density actually predict when the speedup
   breaks down? Axis 4's honest reading was that the speedup is only

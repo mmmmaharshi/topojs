@@ -103,9 +103,12 @@ by differential testing against the reference implementation at every push. Run
   1.1x–2.6x across the whole density range on two of three datasets, with
   no clustering of failures at high density. It also measures the *space*
   side of the trade-off (`npm run bench -- --memory <dataset>`):
-  `IncrementalH1` uses up to ~3500x more heap per instance than the naive
+  `IncrementalH1` uses up to ~1300x more heap per instance than the naive
   engine at windowSize=80 on real data — a real limitation, not just a
-  speed win.
+  speed win (down from ~3500x after a follow-up fix pooled its
+  per-triangle retained state into flat typed arrays instead of one heap
+  object per triangle — a verified 2.3x-2.7x memory reduction with zero
+  change to the reduction algorithm; see `docs/COMPLEXITY.md` Section 5b).
 - `docs/RELATED_WORK.md` positions the streaming engine (`IncrementalH1`)
   against published prior work — vineyards (Cohen-Steiner/Edelsbrunner/
   Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest

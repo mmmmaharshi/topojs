@@ -235,6 +235,52 @@ that axis are inverted from their costs on the CPU axis. This is not
 discussed anywhere else in this repository before this document and should
 be treated as a real limitation of `IncrementalH1`, not a footnote.
 
+### 5b. Follow-up: pooling `reducedCols`/`triPair` cuts this by ~2.3x-2.7x
+
+The table above named `reducedCols`/`triPair`/`edgeOrder`/`triOrder` together
+as the retained O(E+T) state without isolating which one actually dominates
+the measured bytes. It turned out to matter: `reducedCols` (previously one
+separate `Int32Array` + its backing `ArrayBuffer` PER TRIANGLE) and `triPair`
+(previously one separate `{birth,death,dim}` object per triangle, mostly
+null) are individually much heavier per-entry than a plain-number-field
+object, because each is its own heap-allocated object with real fixed
+overhead regardless of how little content it holds — and, critically, *every*
+triangle gets a `reducedCols` entry by construction (see the reduction loop
+in `src/streaming/incremental-h1.ts`), so this was genuinely `O(T)` separate
+heap objects, not just `O(E+T)` numbers.
+
+Fix (`src/streaming/incremental-h1.ts`, `packReducedCols`/`packTriPair`):
+pack these into a handful of flat pooled typed arrays (`colPool` +
+`colOffset`/`colLength` for the sparse column contents; `triPairHas` +
+`triPairBirth`/`triPairDeath` for the pairs) instead of one object per
+triangle. This is a pure storage-representation change — the reduction
+algorithm itself was not touched, only what gets packed into `this.*` at
+the very end of `push()` — so it is correct by construction, not just by
+testing (confirmed anyway: 123/123 tests pass, including the existing
+differential test against `StreamingHomology` at every push).
+
+Measured, before → after, at windowSize=80 (the worst case):
+
+| Dataset | before | after | reduction | ratio before → after |
+|---|---|---|---|---|
+| sunspots | 4.864 MB | 1.786 MB | 2.72x | 3484x → 1279x |
+| Melbourne temps | 1.943 MB | 0.746 MB | 2.60x | 1190x → 427x |
+| Iris (windowSize=20) | 0.205 MB | 0.088 MB | 2.33x | 44.7x → 46.3x (naive also near noise floor here) |
+
+Consistent 2.3x-2.7x reduction across all three datasets at their largest
+tested window size. Full before/after data in `bench/data/
+memory_results.txt` (original numbers kept, not deleted, for the record).
+
+**What this does not fix.** `edgeOrder`/`triOrder` (arrays of small JS
+objects, one per edge/triangle) were deliberately left untouched — pooling
+those too would require threading a much larger refactor through nearly
+every line of `push()` (the merge/filter/comparison logic all reads and
+writes `EdgeRec`/`TriRec` objects directly), a real correctness risk versus
+this change's narrow footprint at the storage boundary only. The
+time/space trade-off named in Section 5 is real and not eliminated by this
+fix — `IncrementalH1` still retains far more state than `StreamingHomology`
+at every window size tested, just less than it used to.
+
 ## 6. Honest summary
 
 - The `Θ(k) + O(deg(new)²)` "new point" cost saving is unconditional and
@@ -261,11 +307,15 @@ be treated as a real limitation of `IncrementalH1`, not a footnote.
   baseline's own bit-set optimization (Section 1) and real-data density
   (Section 3) are both accounted for precisely.
 - The time saving is bought with real, measured memory cost — up to
-  ~3500x more heap per instance at windowSize=80 on real data (Section 5).
-  Any claim that `IncrementalH1` is a strict improvement over the naive
-  baseline is false without qualifying which resource (time or space) and
-  at what scale; it is a trade-off, not a strict improvement, and should be
-  presented as such.
+  ~1300x more heap per instance at windowSize=80 on real data (Section 5;
+  down from an originally-measured ~3500x after a follow-up storage-layout
+  fix, Section 5b — pooling `reducedCols`/`triPair` cut retained memory by
+  2.3x-2.7x across all three datasets, without touching the reduction
+  algorithm). Any claim that `IncrementalH1` is a strict improvement over
+  the naive baseline is false without qualifying which resource (time or
+  space) and at what scale; it is a trade-off, not a strict improvement,
+  and should be presented as such — the fix in Section 5b makes the
+  trade-off less severe, it does not remove it.
 - Net practical guidance: on the real data and window-size ranges tested
   in this repository, `IncrementalH1`'s speed advantage held up robustly
   regardless of complex density, and its cost is memory, not a density

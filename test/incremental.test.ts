@@ -149,6 +149,19 @@ describe('IncrementalH1 (Phase B / prefix-stable incremental reduction)', () => 
     for (let i = 0; i < windowSize; i++) pushAndCheck([ring[i * 2]!, ring[i * 2 + 1]!]);
   });
 
+  it('matches full recompute over a long-running stream (stresses the pooled reducedCols/triPair storage across many prefix-copy-forward cycles)', () => {
+    // The pooled-storage change (src/streaming/incremental-h1.ts, colPool/
+    // colOffset/colLength/triPairHas/Birth/Death) reconstructs each push's
+    // prefix from the PREVIOUS push's pool via subarray() views, then packs
+    // a fresh pool at commit time -- a bug in that bookkeeping (e.g. an
+    // off-by-one in cumulative offsets) could plausibly only surface after
+    // many push cycles, not the first few. This runs many more steps than
+    // the other differential tests above specifically to stress that.
+    for (const seed of [501, 502, 503]) {
+      runDifferentialTrial(seed, 14, 0.5, 2, 200);
+    }
+  });
+
   it('reports re-reduction stats that never exceed the total triangle count', () => {
     const rng = mulberry32(7);
     const inc = new IncrementalH1({ windowSize: 12, dims: 2, maxDist: 0.6 });

@@ -115,11 +115,15 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * pushes (that is the whole mechanism); StreamingHomology discards
  * everything but the raw window contents after each push. Measured
  * directly (`npm run bench -- --memory <dataset>`, docs/COMPLEXITY.md
- * Section 4): up to ~3500x more heap per instance than StreamingHomology
- * at windowSize=80 on real data. Fine for one or a few concurrent windows;
- * a real limitation for use cases with many concurrent windows (e.g. one
- * per sensor across a fleet), where StreamingHomology's near-zero retained
- * state may be the better choice despite its slower per-push time.
+ * Section 5): up to ~1300x more heap per instance than StreamingHomology at
+ * windowSize=80 on real data (down from an originally-measured ~3500x --
+ * see Section 5b for the reducedCols/triPair pooling fix that closed most
+ * of that gap, a ~2.3x-2.7x reduction verified across all three datasets).
+ * Still a real, unresolved trade-off, not eliminated by that fix: fine for
+ * one or a few concurrent windows; a real limitation for use cases with
+ * many concurrent windows (e.g. one per sensor across a fleet), where
+ * StreamingHomology's near-zero retained state may be the better choice
+ * despite its slower per-push time.
  *
  * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
  * recomputed fresh via union-find on every push — that step is already
@@ -193,8 +197,76 @@ export class IncrementalH1 {
   private edgeOrder: EdgeRec[] = [];
   private triOrder: TriRec[] = [];
   private pivotOfEdgeIdx: Int32Array = new Int32Array(0); // len = edgeOrder.length
-  private reducedCols: (Int32Array | null)[] = []; // len = triOrder.length
-  private triPair: (PersistencePair | null)[] = []; // len = triOrder.length
+
+  // reducedCols and triPair used to be `(Int32Array | null)[]` / `(PersistencePair
+  // | null)[]` -- one separate small heap object (TypedArray+ArrayBuffer, or a
+  // {birth,death,dim} object) PER TRIANGLE, retained between every push. That is
+  // the single largest contributor to the ~3500x memory blowup vs StreamingHomology
+  // documented in docs/COMPLEXITY.md Section 5 (confirmed by measuring before/after
+  // this change -- see bench/data/memory_results.txt): T separate TypedArray objects
+  // is much heavier per-entry than T entries in a few flat pooled arrays, even
+  // though the total *content* (sum of sparse column lengths) is identical either
+  // way. Pooled representation below: one flat Int32Array holding every reduced
+  // column's sparse content concatenated, plus two Int32Array index arrays
+  // (offset/length per triangle) -- O(1) heap objects instead of O(T). triPair is
+  // similarly packed into a Uint8Array flag + two Float64Arrays (dim is always 1
+  // here, no need to store it). This is a pure storage-representation change: the
+  // reduction algorithm itself (the loop in push() below) is UNCHANGED -- it still
+  // computes into a transient array-of-objects exactly as before, which is only
+  // packed into this pooled form at the very end of push(), right before commit.
+  // Byte-identical output is guaranteed by construction, not just by testing,
+  // because the actual math never touches these fields directly.
+  private colPool: Int32Array = new Int32Array(0); // concatenated sparse column contents
+  private colOffset: Int32Array = new Int32Array(0); // len = triOrder.length
+  private colLength: Int32Array = new Int32Array(0); // len = triOrder.length
+  private triPairHas: Uint8Array = new Uint8Array(0); // len = triOrder.length
+  private triPairBirth: Float64Array = new Float64Array(0);
+  private triPairDeath: Float64Array = new Float64Array(0);
+
+  /** Pack a transient array-of-(Int32Array|null) into the pooled representation. */
+  private packReducedCols(cols: (Int32Array | null)[]): void {
+    const n = cols.length;
+    const offset = new Int32Array(n);
+    const length = new Int32Array(n);
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const len = cols[i]?.length ?? 0;
+      length[i] = len;
+      total += len;
+    }
+    const pool = new Int32Array(total);
+    let cursor = 0;
+    for (let i = 0; i < n; i++) {
+      const c = cols[i];
+      offset[i] = cursor;
+      if (c && c.length > 0) {
+        pool.set(c, cursor);
+        cursor += c.length;
+      }
+    }
+    this.colPool = pool;
+    this.colOffset = offset;
+    this.colLength = length;
+  }
+
+  /** Pack a transient array-of-(PersistencePair|null) into the pooled representation. */
+  private packTriPair(pairs: (PersistencePair | null)[]): void {
+    const n = pairs.length;
+    const has = new Uint8Array(n);
+    const birth = new Float64Array(n);
+    const death = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const p = pairs[i];
+      if (p) {
+        has[i] = 1;
+        birth[i] = p.birth;
+        death[i] = p.death;
+      }
+    }
+    this.triPairHas = has;
+    this.triPairBirth = birth;
+    this.triPairDeath = death;
+  }
 
   constructor(opts: IncrementalH1Options) {
     // Matches SlidingWindow's validation (src/streaming/sliding-window.ts) --
@@ -477,8 +549,20 @@ export class IncrementalH1 {
       newPivotOfEdgeIdx[i] = prevPivot >= 0 && prevPivot < triSafeCount ? prevPivot : -1;
     }
     for (let ci = 0; ci < triSafeCount; ci++) {
-      newReducedCols[ci] = this.reducedCols[ci]!;
-      newTriPair[ci] = this.triPair[ci]!;
+      // subarray() is a VIEW into this.colPool (shares the underlying
+      // buffer, O(1), no data copy) -- reconstructing the transient
+      // per-push working array costs one small wrapper-object allocation
+      // per prefix entry here, same as it always did when reading from an
+      // array of individually-retained Int32Arrays, but the RETAINED
+      // storage (this.colPool et al.) itself stays pooled. See the field
+      // comment above for why this asymmetry (transient un-pooled,
+      // retained pooled) is the deliberate, low-risk design here.
+      const off = this.colOffset[ci]!;
+      const len = this.colLength[ci]!;
+      newReducedCols[ci] = this.colPool.subarray(off, off + len);
+      newTriPair[ci] = this.triPairHas[ci]
+        ? { birth: this.triPairBirth[ci]!, death: this.triPairDeath[ci]!, dim: 1 }
+        : null;
     }
 
     const working = new DenseWorkingCol(newEdges.length);
@@ -562,12 +646,17 @@ export class IncrementalH1 {
       }
     }
 
-    // commit new state for next push
+    // commit new state for next push. reducedCols/triPair are packed into
+    // pooled storage here (see field comment above) -- newReducedCols and
+    // newTriPair (the transient array-of-objects used only for this push's
+    // computation, already fully consumed by h1Pairs above) become garbage
+    // immediately after this, instead of being what's retained until the
+    // next push.
     this.edgeOrder = newEdges;
     this.triOrder = newTris;
     this.pivotOfEdgeIdx = newPivotOfEdgeIdx;
-    this.reducedCols = newReducedCols;
-    this.triPair = newTriPair;
+    this.packReducedCols(newReducedCols);
+    this.packTriPair(newTriPair);
 
     return {
       windowSize: k,
