@@ -160,7 +160,17 @@ export function computeCubicalHomology(
         if (prev < 0) {
           h1Pivots[pivot] = ci;
           h1reduced[ci] = w.toSparse();
-          h1Pairs.push({ birth: edges[pivot]!.val, death: sq.val, dim: 1 });
+          // Zero-persistence guard: without this, ties (birth === death,
+          // e.g. any flat/constant region of the image) emit a spurious
+          // finite H1 pair -- a phantom "loop" that appears and dies at the
+          // same filtration value. The Rips engines (homology.ts,
+          // homology-fast.ts, homology-cohom.ts) all guard the equivalent
+          // push the same way; this file used to be the one place that
+          // didn't, found via a direct code-shape comparison against
+          // homology.ts's H1 phase.
+          if (sq.val > edges[pivot]!.val) {
+            h1Pairs.push({ birth: edges[pivot]!.val, death: sq.val, dim: 1 });
+          }
           break;
         }
         const prevCol = h1reduced[prev]!;

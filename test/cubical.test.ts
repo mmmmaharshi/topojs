@@ -37,7 +37,14 @@ describe('cubical persistence', () => {
     // count so that regression can't silently return.
     expect(countByDim(res.pairs, 0)).toBe(9);
     expect(res.pairs.filter(p => p.dim === 0 && p.death < 0)).toHaveLength(1);
-    expect(res.pairs.filter(p => p.dim === 1 && p.death < 0)).toHaveLength(0);
+    // Zero finite H1 pairs too, not just zero essential ones: an all-zero
+    // image is entirely tied (every edge and square has val=0), which used
+    // to make the H1 phase emit a spurious birth=0,death=0 pair per square
+    // reduction step (see the "zero-persistence guard" fix in
+    // src/core/cubical.ts) -- a bug the OLD version of this exact assertion
+    // (`death < 0` only) could not have caught, since those phantom pairs
+    // are finite (death=0 >= 0), not essential.
+    expect(countByDim(res.pairs, 1)).toBe(0);
     const ec = cubicalEulerCheck(res.pairs, 3, 3);
     expect(ec.chiSimplicial).toBe(ec.chiBetti);
   });
@@ -139,6 +146,56 @@ describe('cubical persistence', () => {
     // squares appear (birth=0, the ring's own value; death=10, the center's).
     const finiteH1 = res.pairs.filter(p => p.dim === 1 && p.death >= 0);
     expect(finiteH1.some(p => p.birth === 0 && p.death === 10)).toBe(true);
+  });
+
+  it('flat region produces no spurious zero-persistence H1 pairs (regression: found and fixed a real bug)', () => {
+    // A 4x4 image split into two flat halves (all 0, all 5) -- both halves
+    // are internally tied (val=0 within the left half's squares, val=5
+    // within the right half's), which is exactly the condition that
+    // triggered the missing zero-persistence guard: every square whose
+    // pivot edge shares its own filtration value used to emit a phantom
+    // birth===death H1 pair. Checked directly (not just via the
+    // Euler-Poincare invariant, which a same-value birth/death pair
+    // satisfies trivially since it doesn't change b1) -- this is the kind
+    // of tie the property-based sweep below exercises via low-cardinality
+    // random values, but this case pins the exact degenerate shape down as
+    // a named regression test.
+    const pix = new Float64Array([
+      0, 0, 5, 5,
+      0, 0, 5, 5,
+      0, 0, 5, 5,
+      0, 0, 5, 5,
+    ]);
+    const res = computeCubicalHomology(pix, 4, 4, 1);
+    const zeroPersistenceH1 = res.pairs.filter(
+      p => p.dim === 1 && p.death >= 0 && p.death === p.birth,
+    );
+    expect(zeroPersistenceH1).toHaveLength(0);
+    const ec = cubicalEulerCheck(res.pairs, 4, 4);
+    expect(ec.chiSimplicial).toBe(ec.chiBetti);
+  });
+
+  it('no finite H1 pair ever has birth === death, across many seeded random images (property-based)', () => {
+    // Generalizes the regression test above: for ANY image (not just a
+    // hand-picked flat-region case), a correctly-implemented H1 phase must
+    // never emit a zero-persistence pair, since a class that is born and
+    // immediately killed by the same filtration value represents no
+    // topological feature. Uses the same low-cardinality random-value
+    // generator as the Euler-Poincare property test below (deliberately
+    // tie-heavy) since ties are exactly what exercises this bug.
+    const rng = mulberry32(20260713);
+    const shapes: [number, number][] = [[2, 2], [3, 3], [3, 5], [5, 3], [4, 4], [6, 6]];
+    for (const [h, w] of shapes) {
+      for (let trial = 0; trial < 8; trial++) {
+        const pix = new Float64Array(h * w);
+        for (let i = 0; i < pix.length; i++) pix[i] = Math.floor(rng() * 4); // very tie-heavy
+        const res = computeCubicalHomology(pix, h, w, 1);
+        const zeroPersistenceH1 = res.pairs.filter(
+          p => p.dim === 1 && p.death >= 0 && p.death === p.birth,
+        );
+        expect(zeroPersistenceH1, `shape ${h}x${w} trial ${trial}`).toHaveLength(0);
+      }
+    }
   });
 
   it('Euler-Poincare holds across many seeded random images (property-based)', () => {
