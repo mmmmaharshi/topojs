@@ -1,15 +1,13 @@
 # TopoJS — Pure-JavaScript Persistent Homology
 
-**TopoJS** is a zero-dependency, pure-JavaScript library for computing persistent homology of Vietoris–Rips complexes (H₀, H₁, H₂) and cubical complexes (2D grayscale images). It runs in any modern browser or Node.js — no WASM, WebGL, WebGPU, or server required.
-
-## Features
-
-- **Vietoris–Rips persistence** — H₀ via union–find, H₁ and H₂ via matrix reduction with bit-vector columns
-- **Cubical persistence** — 2D grayscale images, H₀ + H₁
-- **Bottleneck distance** — between two persistence diagrams
-- **Pure JavaScript** — single-file demo bundle (~10.3 KB raw, ~4.0 KB gzipped — see `demo/topojs-bundle.mjs`, regenerated from `src/` via `npm run build:demo`), runs in any ES2020 environment
-- **Optimized** — DenseWorkingCol bit-vector reduction (2.5–6× faster than sparse), `Math.clz32` pivot, row-offset distance lookup
-- **Real-world datasets** — MNIST digits, Iris flowers, terrain DEMs, natural image patches, torus/sphere 3D scans
+TopoJS computes persistent homology — the loops, voids, and connected
+components in data that survive across scale — for point clouds
+(Vietoris–Rips, H₀–H₂) and 2D grayscale images (cubical complexes, H₀–H₁).
+It is zero-dependency, pure TypeScript: no WASM, WebGL, WebGPU, or server,
+so it runs anywhere JavaScript runs, down to a demo bundle small enough to
+ship to a browser. Every performance and correctness claim below is
+measured against real data, not asserted — see "Comparison Against Prior
+Work."
 
 ## Quick Start
 
@@ -27,6 +25,14 @@ const cubical = computeCubicalHomology(img, 3, 3, 1);
 console.log(cubical.pairs);
 ```
 
+## Features
+
+- **Vietoris–Rips persistence** — H₀ via union–find, H₁/H₂ via matrix reduction with bit-vector columns
+- **Cubical persistence** — H₀+H₁ on 2D grayscale images
+- **Bottleneck distance** — between two persistence diagrams
+- **Small footprint** — demo bundle ~10.3 KB raw / ~4.0 KB gzipped (`npm run build:demo`), runs in any ES2020 environment
+- **Real-world example datasets** — MNIST digits, Iris flowers, terrain DEMs, natural image patches, torus/sphere 3D scans
+
 ## API
 
 ### Batch homology
@@ -34,17 +40,17 @@ console.log(cubical.pairs);
 | Function | Description |
 |----------|-------------|
 | `computePersistentHomology(points, dims, maxDist, maxDim)` | Vietoris–Rips H₀+H₁+H₂ |
-| `computePersistentHomologyFast(points, dims, maxDist, maxDim)` | Same Rips H₀+H₁(+H₂) result, H1 accelerated via the "apparent pairs" shortcut. Correctness-validated against `computePersistentHomology` (8 tests + an 11,100-config stress sweep, 0 mismatches) — see `src/core/homology-fast.ts`. Not yet benchmarked against real data (an earlier synthetic-data benchmark was removed as part of this repo's real-data-only policy). |
-| `computePersistentHomologyCohomology(points, dims, maxDist, maxDim)` | Same Rips result again, H1 *and* H2 both accelerated via persistent cohomology (the dual/coboundary-direction technique that makes Ripser fast, derived from Bauer 2019 arXiv:1908.02518). A structural win, not just a constant factor — H1 reduces one column per cycle *edge* instead of one per *triangle*. Correctness-validated (12 tests, a 13,800-config H1 stress sweep, a separate 399-config H2-specific sweep, all 0 mismatches) — see `src/core/homology-cohom.ts`'s docstring for two real bugs caught and fixed during development. |
-| `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images (param order was documented backwards as width,height -- src/core/cubical.ts's actual signature is height,width; only invisible for square images) |
+| `computePersistentHomologyFast(points, dims, maxDist, maxDim)` | Same result, H1 accelerated via the "apparent pairs" shortcut. Validated against `computePersistentHomology` (8 tests + an 11,100-config stress sweep, 0 mismatches). |
+| `computePersistentHomologyCohomology(points, dims, maxDist, maxDim)` | Same result, H1 *and* H2 accelerated via persistent cohomology (the coboundary technique behind Ripser's speed; Bauer 2019, arXiv:1908.02518). A structural win — H1 reduces one column per cycle *edge*, not per triangle. Validated (12 tests, a 13,800-config H1 sweep, a 399-config H2 sweep, 0 mismatches). |
+| `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images. Parameter order is `height, width`. |
 
 ### Distances & comparison
 
 | Function | Description |
 |----------|-------------|
-| `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix (n was missing from this table but is a required parameter) |
-| `lookupDist(matrix, i, j)` | O(1) lookup of one pairwise distance from the matrix `computePairwiseDistances` returns, without recomputing it |
-| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time. Matches finite pairs to each other or the diagonal, and essential (infinite-persistence) pairs to each other by birth value (differing essential counts → `Infinity`). Two real bugs were found and fixed here: essential pairs used to be silently ignored entirely, and the finite-pair matching was asymmetric (`bottleneckDistance(A,B)` could differ from `(B,A)`) — both fixed and cross-validated against an independent brute-force reference, see `src/core/bottleneck.ts`'s docstring and `test/bottleneck.test.ts`. |
+| `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix |
+| `lookupDist(matrix, i, j)` | O(1) lookup of one pairwise distance, without recomputing it |
+| `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time. Matches finite pairs to each other or the diagonal; matches essential (infinite-persistence) pairs by birth value (differing essential counts → `Infinity`). Symmetric, cross-validated against a brute-force reference — see `src/core/bottleneck.ts`. |
 
 ### Export / serialization
 
@@ -53,35 +59,31 @@ console.log(cubical.pairs);
 | `toGudhi(pairs)` | Export to Gudhi text format |
 | `toJSON(pairs, pretty?)` | Export to JSON |
 | `toCSV(pairs)` | Export to CSV |
-| `toDiagramCSV(pairs)` | Export to a fixed 8-column per-dimension CSV layout (H₀/H₁/H₂ side by side). Does NOT represent dim≥3 pairs — that's an explicitly documented limitation of this function's fixed schema, not a bug; use `toCSV`/`toJSON` instead if dim≥3 pairs matter. |
-| `summarize(pairs)` | Statistics (counts, max death, min birth). `total` is guaranteed to equal `h0+h1+h2+higher` for any input, including dim≥3 pairs from external data — previously silently broke this invariant, see `src/export/persistence-diagram.ts` |
-| `splitByDimension(pairs)` | Separate H₀/H₁/H₂ (finite/essential) plus a `higher` bucket for dim≥3 pairs — no pair is ever dropped, unlike before |
+| `toDiagramCSV(pairs)` | Fixed 8-column per-dimension CSV (H₀/H₁/H₂ side by side). Does not represent dim≥3 pairs — use `toCSV`/`toJSON` for those. |
+| `summarize(pairs)` | Statistics (counts, max death, min birth). `total` always equals `h0+h1+h2+higher`. |
+| `splitByDimension(pairs)` | Separates H₀/H₁/H₂ (finite/essential) plus a `higher` bucket for dim≥3 — no pair is ever dropped. |
 
 ### Streaming / incremental homology
 
 | Function / Class | Description |
 |----------|-------------|
-| `SlidingWindow` | Fixed-capacity ring buffer of the most recent points, feeding both streaming engines below |
-| `StreamingHomology` | "Phase A" naive baseline — recomputes full persistent homology on the entire window from scratch on every `push()`. Correct and simple, the reference every incremental engine below is differential-tested against. |
-| `IncrementalH1` | "Phase B" prefix-stable incremental engine — updates H₀+H₁ without a full recompute on every push (H2 is out of scope for this class). Correctness-validated (8 tests, exact match against full recompute every push, many seeds/regimes). Geometric-mean speedup over `StreamingHomology` on three independent real datasets: 1.34×–1.91× (see the benchmark table below) — but this speed comes with a real memory trade-off, see "Space, not just time" below. |
-| `summarizeForStreaming(update)` | Convenience summary (Betti numbers, counts) of one `push()` result from either streaming engine, without hand-rolling the aggregation yourself |
+| `SlidingWindow` | Fixed-capacity ring buffer of the most recent points, feeding both engines below |
+| `StreamingHomology` | Naive baseline — full recompute on every `push()`. Reference every incremental engine is differential-tested against. |
+| `IncrementalH1` | Prefix-stable incremental engine — updates H₀+H₁ without a full recompute (H2 out of scope). Validated (8 tests, exact match against full recompute, many seeds/regimes). 1.34×–1.91× geometric-mean speedup over `StreamingHomology` on real data (see Benchmarks) — at a real memory cost (see Comparison Against Prior Work). |
+| `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result, for either streaming engine |
 
 ### Example datasets
 
 | Function | Description |
 |----------|-------------|
-| `loadMNISTDigits()` | A small bundled sample of MNIST handwritten-digit images, for trying Rips/cubical persistence on real image data without an external download |
-| `loadIrisDataset()` | The UCI Iris flower measurements (150 samples), a standard small real-world point cloud |
-| `generateTerrain(size, octaves)` | Procedural fractal-Brownian-motion terrain heightmap generator, for synthetic-but-structured cubical-complex examples |
+| `loadMNISTDigits()` | A small bundled sample of MNIST handwritten-digit images |
+| `loadIrisDataset()` | The UCI Iris flower measurements (150 samples) |
+| `generateTerrain(size, octaves)` | Procedural fractal-Brownian-motion terrain heightmap generator |
 
-## Streaming / Incremental H1 Benchmarks (real data only)
+## Benchmarks (real data only)
 
-All performance claims in this repo are now benchmarked against real,
-externally-sourced data rather than synthetic/i.i.d. random point clouds
-(earlier synthetic benchmarks and their output data have been removed).
-Three independent real-data benchmarks compare the incremental streaming
-engine (`IncrementalH1`) against the naive recompute-from-scratch baseline
-(`StreamingHomology`):
+Three real-data benchmarks compare the incremental streaming engine
+(`IncrementalH1`) against the naive baseline (`StreamingHomology`):
 
 | Dataset | Real source | Geometric mean speedup |
 |---------|-------------|------------------------|
@@ -89,98 +91,73 @@ engine (`IncrementalH1`) against the naive recompute-from-scratch baseline
 | UCI Iris measurements (150 samples) | archive.ics.uci.edu | 1.34× (95% CI 1.05×–1.72×) |
 | Melbourne daily min. temperatures (1981–1990) | Australian BOM | 1.65× (95% CI 1.42×–1.95×) |
 
-All three are statistically significant (paired t-test on log-speedup, p<0.05) —
-though for the two chunk-based datasets (sunspots, Melbourne), that
-significance is sensitive to residual autocorrelation between chunks of the
-same real series; `bench/benchmark.ts` now reports an effective-N-adjusted
-CI alongside the raw one, and it is not always as comfortably above 1x as
-the raw numbers suggest. Note also that these are *relative* speedups
-against this repo's own naive baseline, not an absolute performance claim —
-see "Comparison Against Prior Work" below for how the underlying batch
-engine compares to Ripser in absolute terms. Full methodology, raw
-per-trial numbers, and honest caveats in `bench/data/summary.txt`.
-All three run from one parameterized harness — reproduce all with
-`npm run bench`, or a single dataset with `npm run bench -- sunspots`
-(also `iris`, `melbourne-temp`).
-New benchmark axes (datasets, engines) should be added to that same file's
-dataset registry rather than as new standalone scripts — real data only.
+All three are statistically significant (paired t-test on log-speedup,
+p<0.05), though the two chunk-based series (sunspots, Melbourne) show
+some sensitivity to residual autocorrelation between chunks — an
+effective-N-adjusted CI is reported alongside the raw one in
+`bench/data/summary.txt`. These are *relative* speedups against this
+repo's own baseline, not an absolute performance claim; see "Against
+Ripser" below for that. Reproduce with `npm run bench` (or `npm run
+bench -- <dataset>`, one of `sunspots`/`iris`/`melbourne-temp`).
 
 A separate scaling sweep (`npm run bench -- --scaling <dataset>`) checks
-whether the speedup reflects a genuinely different growth rate (not just a
-constant-factor win) by timing both engines across a range of real window
-sizes. Result, reported honestly rather than cherry-picked: the growth-rate
-gap is clearly confirmed on the sunspot data, close/noisy on the Melbourne
-temperature data, and inverted on the (smallest, noisiest) Iris data — see
-`bench/data/summary.txt` Axis 4 and `bench/data/scaling_results.txt` for the
-full picture. This is flagged as an open question, not a settled result.
+whether the speedup reflects a different growth rate, not just a
+constant factor: confirmed on sunspot data, close/noisy on Melbourne
+temperature data, inverted on the smallest and noisiest (Iris) data —
+an open question, not a settled result (`bench/data/scaling_results.txt`).
 
 ## Test Coverage
 
-Ground-truth topology tests (known Betti numbers for circles, octahedra, disjoint
-unions, complete graphs), edge cases, and streaming/incremental correctness verified
-by differential testing against the reference implementation at every push. Run
-`npm run test:coverage` for a live report.
+Ground-truth topology tests (known Betti numbers for circles, octahedra,
+disjoint unions, complete graphs), edge cases, and streaming/incremental
+correctness verified by differential testing against a reference
+implementation at every push. Run `npm run test:coverage` for a live
+report.
 
 ## Comparison Against Prior Work
 
-**Complexity, measured not just claimed.** `IncrementalH1`'s per-push cost
-is `Θ(E+T) + O(k) + O(deg(new)²)`, not a flat `O(k)` — but the naive
-baseline's own triangle construction is also data-dependent (bit-set
-intersection, not a flat `O(k³)`), so the two engines' real growth rates
-end up closer than an unqualified complexity argument would suggest. A
-density regime sweep (`npm run bench -- --regime`) directly controlled
-complex density (0.2%→88% of max) across all three real datasets to test
-whether density predicts the speedup's breakdown — it does not, in the
-ranges tested: speedup held at 1.1x–2.6x across the whole density range on
-two of three datasets, with no clustering of failures at high density.
+**Complexity.** `IncrementalH1`'s per-push cost is `Θ(E+T) + O(k) +
+O(deg(new)²)`, not a flat `O(k)` — but the naive baseline's own triangle
+construction is also data-dependent, so the two engines' real growth
+rates end up closer than an unqualified complexity argument suggests. A
+density sweep (`npm run bench -- --regime`) found no density threshold
+where the speedup breaks down: it held at 1.1×–2.6× across 0.2%–88% of
+maximum complex density on two of three datasets.
 
-**Space, not just time.** `IncrementalH1` uses up to ~150x more heap per
-instance than the naive engine at windowSize=80 on real data (`npm run
-bench -- --memory <dataset>`) — a real limitation, not just a speed win
-(down from ~3500x originally, via two fixes that pooled its per-triangle
-retained state into flat typed arrays instead of one heap object per
-triangle: first `reducedCols`/`triPair`, then `triOrder` specifically once
-direct measurement showed it was ~83% of what the first fix left behind —
-together a verified 7.3x-52.5x memory reduction with zero change to the
-reduction algorithm).
+**Space.** `IncrementalH1` uses up to ~150× more heap per instance than
+the naive engine at windowSize=80 (`npm run bench -- --memory
+<dataset>`) — a real trade-off, not just a speed win. This is down from
+~3500× before two fixes pooled its per-triangle retained state into flat
+typed arrays instead of one heap object per triangle, a verified
+7.3×–52.5× memory reduction.
 
 **Related work.** `IncrementalH1` is a narrower, provably-correct
-optimization (prefix-stable incremental reduction, not a full vineyard
-algorithm) compared against published prior work — vineyards
-(Cohen-Steiner/Edelsbrunner/Morozov 2006), zigzag persistence (Carlsson/de
-Silva 2010), and the closest existing streaming-persistent-homology
-framework (Moitra/Malott/Wilsey 2023). See the class docstring in
-`src/streaming/incremental-h1.ts` for what is and is not novel here.
+optimization (prefix-stable incremental reduction) — not a full vineyard
+algorithm. Compared against vineyards (Cohen-Steiner/Edelsbrunner/Morozov
+2006), zigzag persistence (Carlsson/de Silva 2010), and the closest
+existing streaming framework (Moitra/Malott/Wilsey 2023) in the class
+docstring, `src/streaming/incremental-h1.ts`.
 
-**Edge-building.** `buildRipsComplex`'s edge-building step
-(`src/core/complex.ts`) uses a uniform spatial grid instead of
-brute-force O(n²) pairwise distances when `n >= 1000` (below that,
-measured grid overhead loses to brute force — see
-`bench/data/edge_building_results.txt` for the isolated benchmark and
-crossover data behind that threshold). Zero approximation: same exact
-edges and filtration values either way, verified by differential testing
-in `test/spatial-grid.test.ts`. Reported honestly — this does not move
-any of this repo's current benchmark numbers, since every dataset
-benchmarked elsewhere in this repo (n=60–400, streaming windows 5–80) is
-below the threshold; the win is real but applies to larger point clouds
-than this repo currently benchmarks on.
+**Edge-building.** `buildRipsComplex` uses a uniform spatial grid instead
+of brute-force O(n²) pairwise distances once `n ≥ 1000` (below that, grid
+overhead loses to brute force — see `bench/data/edge_building_results.txt`
+for the crossover data). Same exact edges and filtration values either
+way, verified by differential testing (`test/spatial-grid.test.ts`). This
+does not move any benchmark numbers above, since every dataset
+benchmarked in this repo (n=60–400) is below the threshold.
 
-**Against Ripser.** Both batch engines (`computePersistentHomology` and
-`computePersistentHomologyCohomology`) are cross-checked against
-[Ripser](https://arxiv.org/abs/1908.02518) on real data. This is a
-separate Python script, not part of the JS/TS library or its zero
-dependencies — run `pip install --break-system-packages -r
-bench/requirements.txt` once, then `python3 bench/compare_ripser.py`.
-Results: correctness matches on data with no coincident points, 18x–86x
-slower than Ripser depending on engine and case (expected, not hidden —
-cohom is consistently ~1.1x-3.3x faster than plain, roughly halving the
-geometric-mean gap to Ripser, 36x → 18x), and one real, root-caused
-convention difference was found via the cross-check (zero-persistence
-H0/H1 bars from exact-duplicate points: kept here, silently dropped by
-Ripser). Also: H2 (tetrahedra) computation doesn't finish at n=400 in the
-plain engine, but the cohom engine's H2 phase does — measured directly
-(142x and 41x slower than Ripser on two datasets, correct Betti numbers
-on both).
+**Against Ripser.** Both batch engines are cross-checked against
+[Ripser](https://arxiv.org/abs/1908.02518) on real data via a separate
+Python script (`pip install --break-system-packages -r
+bench/requirements.txt`, then `python3 bench/compare_ripser.py`).
+Correctness matches on data with no coincident points. 18×–86× slower
+than Ripser depending on engine and case (cohom is consistently
+1.1×–3.3× faster than plain, halving the geometric-mean gap, 36× → 18×).
+One root-caused convention difference: zero-persistence H0/H1 bars from
+exact-duplicate points are kept here, silently dropped by Ripser. H2
+(tetrahedra) doesn't finish at n=400 in the plain engine, but the cohom
+engine's H2 phase does — 142× and 41× slower than Ripser on two
+datasets, correct Betti numbers on both.
 
 ## License
 
