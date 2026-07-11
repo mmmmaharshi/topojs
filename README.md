@@ -28,6 +28,7 @@ console.log(cubical.pairs);
 ## Features
 
 - **Vietoris–Rips persistence** — H₀ via union–find, H₁/H₂ via matrix reduction with bit-vector columns
+- **Arbitrary-dimension Rips persistence** — H₀ through H_k for any k, validated against a closed-form ground truth (the 4D cross-polytope boundary, a triangulation of S³) for H₃
 - **Approximate Rips persistence** — landmark subsampling with a *proven* bottleneck-distance bound, for point clouds past the exact engines' n≈1000 ceiling
 - **Cubical persistence** — H₀+H₁ on 2D grayscale images
 - **Bottleneck distance** — between two persistence diagrams
@@ -44,6 +45,13 @@ console.log(cubical.pairs);
 | `computePersistentHomologyFast(points, dims, maxDist, maxDim)` | Same result, H1 accelerated via the "apparent pairs" shortcut. Validated against `computePersistentHomology` (8 tests + an 11,100-config stress sweep, 0 mismatches). |
 | `computePersistentHomologyCohomology(points, dims, maxDist, maxDim)` | Same result, H1 *and* H2 accelerated via persistent cohomology (the coboundary technique behind Ripser's speed; Bauer 2019, arXiv:1908.02518). A structural win — H1 reduces one column per cycle *edge*, not per triangle. Validated (12 tests, a 13,800-config H1 sweep, a 399-config H2 sweep, 0 mismatches). |
 | `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images. Parameter order is `height, width`. |
+
+### Arbitrary-dimension homology
+
+| Function | Description |
+|----------|-------------|
+| `computePersistentHomologyGeneral(points, dims, maxDist, maxHomologyDim)` | Vietoris–Rips H₀..H_k for any k, generalizing the H₀+H₁+H₂-only engine above. Validated by differential testing against `computePersistentHomology` (must match exactly for maxHomologyDim≤2) plus a closed-form H₃ ground truth (boundary of the 4D cross-polytope, a known triangulation of S³) — `test/homology-general.test.ts`. Correctness-first, not performance-tuned; intended for small-to-moderate n and dimension. |
+| `buildGeneralRipsComplex(points, dims, maxDist, maxSimplexDim)` | The complex-construction half of the above, exposed separately for callers who just want the simplex levels (e.g. simplex counts, boundary structure) without running the reduction. |
 
 ### Approximate homology (landmark subsampling)
 

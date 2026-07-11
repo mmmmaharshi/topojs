@@ -73,6 +73,35 @@ export type { HomologyResultFast } from './core/homology-fast.ts';
 // against real data.
 export { computePersistentHomologyCohomology } from './core/homology-cohom.ts';
 
+// ── Rips persistence, ARBITRARY dimension (H0..Hk, k unbounded) ──
+// Generalizes computePersistentHomology's hardcoded H0+H1+H2 to a loop over
+// dimension -- the exact same column-reduction algorithm, applied uniformly
+// for j = 1..maxHomologyDim instead of unrolled per dimension. Populates the
+// `higher` bucket that PerDimensionPairs/summarize/splitByDimension have
+// reserved for dim>=3 pairs since they were written, but that no engine
+// before this one ever actually produced.
+// Correctness-validated (see test/homology-general.test.ts, 12 tests):
+// differential-tested against computePersistentHomology itself (must match
+// EXACTLY when maxHomologyDim<=2) across 300 random 2D/3D configs, PLUS a
+// closed-form ground-truth case for H3 -- the boundary of the 4D
+// cross-polytope (16-cell: 8 vertices, antipodal pairs excluded by
+// maxDist), a known triangulation of S^3 (Betti (1,0,0,1), f-vector
+// (8,24,32,16), chi=0) -- the direct 4D generalization of this repo's
+// existing octahedron/S^2/H2 test in test/rips.test.ts.
+// SCOPE, stated honestly: builds on a correctness-first (not
+// performance-tuned) complex construction (src/core/complex-general.ts) --
+// does not reuse buildRipsComplex's spatial-grid edge-building optimization,
+// and simplex counts grow combinatorially with dimension for dense/large
+// point clouds (inherent to flag complexes, not a shortcut taken here).
+// Intended for small-to-moderate n and maxHomologyDim -- to make dimension
+// >= 3 homology computable AT ALL (no other engine here can), not to
+// compete with the exact H0-H2 engines' performance where they already work
+// well. See src/core/homology-general.ts's docstring for the full algorithm.
+export { computePersistentHomologyGeneral } from './core/homology-general.ts';
+export type { HomologyResultGeneral } from './core/homology-general.ts';
+export { buildGeneralRipsComplex } from './core/complex-general.ts';
+export type { GeneralRipsComplex, GeneralSimplexEntry } from './core/complex-general.ts';
+
 // ── Rips persistence, APPROXIMATE via landmark subsampling ──
 // This repo's first approximate (not exact) engine -- exists to make
 // persistence computable past the ~n=1000 ceiling of the exact engines

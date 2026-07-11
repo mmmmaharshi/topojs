@@ -30,6 +30,11 @@ describe('public API barrel (src/index.ts)', () => {
     expect(typeof topojs.computeCubicalHomology).toBe('function');
   });
 
+  it('exports every documented arbitrary-dimension homology function', () => {
+    expect(typeof topojs.computePersistentHomologyGeneral).toBe('function');
+    expect(typeof topojs.buildGeneralRipsComplex).toBe('function');
+  });
+
   it('exports every documented approximate/landmark-sampling function', () => {
     expect(typeof topojs.computeSparseRipsHomology).toBe('function');
     expect(typeof topojs.selectLandmarks).toBe('function');
