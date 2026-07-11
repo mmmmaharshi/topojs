@@ -90,58 +90,61 @@ by differential testing against the reference implementation at every push. Run
 
 ## Comparison Against Prior Work
 
-- `docs/COMPLEXITY.md` derives `IncrementalH1`'s per-push cost precisely
-  from the actual code — `Θ(E+T) + O(k) + O(deg(new)²)`, not a flat `O(k)`
-  — and shows why that predicts (and explains) the mixed real-data scaling
-  results: the naive baseline's own triangle construction is also
-  data-dependent (bit-set intersection, not a flat `O(k³)`), so the two
-  engines' real growth rates end up closer than an unqualified complexity
-  argument would suggest. A follow-up regime map (`npm run bench --
-  --regime`) directly controlled complex density (0.2%→88% of max) across
-  all three real datasets to test whether density predicts the speedup's
-  breakdown — it does not, in the ranges tested: speedup held at
-  1.1x–2.6x across the whole density range on two of three datasets, with
-  no clustering of failures at high density. It also measures the *space*
-  side of the trade-off (`npm run bench -- --memory <dataset>`):
-  `IncrementalH1` uses up to ~150x more heap per instance than the naive
-  engine at windowSize=80 on real data — a real limitation, not just a
-  speed win (down from ~3500x originally, via two follow-up fixes that
-  pooled its per-triangle retained state into flat typed arrays instead of
-  one heap object per triangle: first `reducedCols`/`triPair`, then
-  `triOrder` specifically once direct measurement showed it was ~83% of
-  what the first fix left behind — together a verified 7.3x-52.5x memory
-  reduction with zero change to the reduction algorithm; see
-  `docs/COMPLEXITY.md` Sections 5b-5c).
-- `docs/RELATED_WORK.md` positions the streaming engine (`IncrementalH1`)
-  against published prior work — vineyards (Cohen-Steiner/Edelsbrunner/
-  Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest
-  existing streaming-persistent-homology framework (Moitra/Malott/Wilsey
-  2023) — and states plainly what is and is not novel here.
-- `buildRipsComplex`'s edge-building step (`src/core/complex.ts`) uses a
-  uniform spatial grid instead of brute-force O(n²) pairwise distances when
-  `n >= 1000` (below that, measured grid overhead loses to brute force —
-  see `bench/data/edge_building_results.txt` for the isolated benchmark and
-  crossover data behind that threshold). Zero approximation: same exact
-  edges and filtration values either way, verified by differential testing
-  in `test/spatial-grid.test.ts`. Reported honestly — this does not move
-  any of this repo's current benchmark numbers, since every dataset
-  benchmarked elsewhere in this repo (n=60–400, streaming windows 5–80) is
-  below the threshold; the win is real but applies to larger point clouds
-  than this repo currently benchmarks on.
-- `docs/COMPARISON.md` cross-checks both batch engines
-  (`computePersistentHomology` and `computePersistentHomologyCohomology`)
-  against [Ripser](https://arxiv.org/abs/1908.02518) on real data:
-  correctness matches on data with no coincident points, 18x–86x slower than
-  Ripser depending on engine and case (expected, not hidden — cohom is
-  consistently ~1.1x-3.3x faster than plain, roughly halving the geometric-
-  mean gap to Ripser, 36x → 18x), and documents one real, root-caused
-  convention difference (zero-persistence H0/H1 bars from exact-duplicate
-  points: kept here, silently dropped by Ripser) found via the cross-check.
-  Also: H2 (tetrahedra) computation doesn't finish at n=400 in the plain
-  engine, but the cohom engine's H2 phase does — measured directly (142x
-  and 41x slower than Ripser on two datasets, correct Betti numbers on
-  both), closing a question this document previously left open rather than
-  assumed either way. Reproduce with `python3 bench/compare_ripser.py`.
+**Complexity, measured not just claimed.** `IncrementalH1`'s per-push cost
+is `Θ(E+T) + O(k) + O(deg(new)²)`, not a flat `O(k)` — but the naive
+baseline's own triangle construction is also data-dependent (bit-set
+intersection, not a flat `O(k³)`), so the two engines' real growth rates
+end up closer than an unqualified complexity argument would suggest. A
+density regime sweep (`npm run bench -- --regime`) directly controlled
+complex density (0.2%→88% of max) across all three real datasets to test
+whether density predicts the speedup's breakdown — it does not, in the
+ranges tested: speedup held at 1.1x–2.6x across the whole density range on
+two of three datasets, with no clustering of failures at high density.
+
+**Space, not just time.** `IncrementalH1` uses up to ~150x more heap per
+instance than the naive engine at windowSize=80 on real data (`npm run
+bench -- --memory <dataset>`) — a real limitation, not just a speed win
+(down from ~3500x originally, via two fixes that pooled its per-triangle
+retained state into flat typed arrays instead of one heap object per
+triangle: first `reducedCols`/`triPair`, then `triOrder` specifically once
+direct measurement showed it was ~83% of what the first fix left behind —
+together a verified 7.3x-52.5x memory reduction with zero change to the
+reduction algorithm).
+
+**Related work.** `IncrementalH1` is a narrower, provably-correct
+optimization (prefix-stable incremental reduction, not a full vineyard
+algorithm) compared against published prior work — vineyards
+(Cohen-Steiner/Edelsbrunner/Morozov 2006), zigzag persistence (Carlsson/de
+Silva 2010), and the closest existing streaming-persistent-homology
+framework (Moitra/Malott/Wilsey 2023). See the class docstring in
+`src/streaming/incremental-h1.ts` for what is and is not novel here.
+
+**Edge-building.** `buildRipsComplex`'s edge-building step
+(`src/core/complex.ts`) uses a uniform spatial grid instead of
+brute-force O(n²) pairwise distances when `n >= 1000` (below that,
+measured grid overhead loses to brute force — see
+`bench/data/edge_building_results.txt` for the isolated benchmark and
+crossover data behind that threshold). Zero approximation: same exact
+edges and filtration values either way, verified by differential testing
+in `test/spatial-grid.test.ts`. Reported honestly — this does not move
+any of this repo's current benchmark numbers, since every dataset
+benchmarked elsewhere in this repo (n=60–400, streaming windows 5–80) is
+below the threshold; the win is real but applies to larger point clouds
+than this repo currently benchmarks on.
+
+**Against Ripser.** Both batch engines (`computePersistentHomology` and
+`computePersistentHomologyCohomology`) are cross-checked against
+[Ripser](https://arxiv.org/abs/1908.02518) on real data
+(`python3 bench/compare_ripser.py`): correctness matches on data with no
+coincident points, 18x–86x slower than Ripser depending on engine and
+case (expected, not hidden — cohom is consistently ~1.1x-3.3x faster than
+plain, roughly halving the geometric-mean gap to Ripser, 36x → 18x), and
+one real, root-caused convention difference was found via the cross-check
+(zero-persistence H0/H1 bars from exact-duplicate points: kept here,
+silently dropped by Ripser). Also: H2 (tetrahedra) computation doesn't
+finish at n=400 in the plain engine, but the cohom engine's H2 phase
+does — measured directly (142x and 41x slower than Ripser on two
+datasets, correct Betti numbers on both).
 
 ## License
 

@@ -46,9 +46,10 @@ export interface StreamingUpdate {
  * Precisely: edge construction is an unconditional Theta(k^2) (buildRipsComplex,
  * src/core/complex.ts) but triangle construction uses bit-set adjacency
  * intersection, cost O(E*k/w) -- data-dependent, NOT a flat Theta(k^3) as a
- * quick worst-case shorthand might suggest. See docs/COMPLEXITY.md for the
- * full derivation and why it matters for interpreting IncrementalH1's
- * measured speedup.
+ * quick worst-case shorthand might suggest. See README.md's "Comparison
+ * Against Prior Work" section for why this matters when interpreting
+ * IncrementalH1's measured speedup (a fuller derivation used to live in a
+ * separate docs/COMPLEXITY.md, since removed in favor of a single README).
  */
 export class StreamingHomology {
   private readonly window: SlidingWindow;

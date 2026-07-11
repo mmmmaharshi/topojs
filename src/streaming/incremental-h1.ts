@@ -86,41 +86,42 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * noisy on Melbourne temp data, inverted on the smallest/noisiest (Iris)
  * data. Treat the asymptotic claim as an open question, not settled.
  *
- * PRECISE COMPLEXITY, not just the shorthand above: see docs/COMPLEXITY.md
- * for a step-by-step derivation from this file's actual code (not just this
- * comment). Short version: this class's per-push geometry-update cost is
- * really Theta(E+T) + O(k) + O(deg(new)^2), where E/T are the CURRENT
- * window's realized edge/triangle counts -- not flatly O(k), and the
- * Theta(E+T) term can degrade to the naive baseline's own worst case when
- * E/T approach their k^2/k^3 maxima. Also: the naive baseline itself
+ * PRECISE COMPLEXITY, not just the shorthand above: see README.md's
+ * "Comparison Against Prior Work" section (a fuller step-by-step derivation
+ * used to live in a separate docs/COMPLEXITY.md, since removed in favor of
+ * a single README). Short version: this class's per-push geometry-update
+ * cost is really Theta(E+T) + O(k) + O(deg(new)^2), where E/T are the
+ * CURRENT window's realized edge/triangle counts -- not flatly O(k), and
+ * the Theta(E+T) term can degrade to the naive baseline's own worst case
+ * when E/T approach their k^2/k^3 maxima. Also: the naive baseline itself
  * (buildRipsComplex, src/core/complex.ts) does NOT do a flat O(k^3)
  * triangle enumeration -- it uses bit-set adjacency intersection, cost
- * O(E*k/w), which is data-dependent too. docs/COMPLEXITY.md shows this is
- * the real reason the two engines' measured growth rates end up closer
- * than an unqualified "O(k) vs O(k^3)" framing would predict.
+ * O(E*k/w), which is data-dependent too -- the real reason the two
+ * engines' measured growth rates end up closer than an unqualified
+ * "O(k) vs O(k^3)" framing would predict.
  *
  * DOES DENSITY PREDICT THE BREAKDOWN? Tested directly (`npm run bench --
- * --regime`, docs/COMPLEXITY.md Section 4): swept realized triangle density
- * from <1% to 88% of the theoretical maximum via maxDist, on all three real
- * datasets. NO density threshold was found -- speedup held at 1.1x-2.6x
- * across the full range on two of three datasets, no clustering of
- * failures at high density. The theoretical worst-case conditionality
- * above still stands as a bound, but real data tested here did not
- * approach it in the ranges checked. Not a universal guarantee -- see that
- * section's explicit caveats (dataset count, window-size range tested).
+ * --regime`): swept realized triangle density from <1% to 88% of the
+ * theoretical maximum via maxDist, on all three real datasets. NO density
+ * threshold was found -- speedup held at 1.1x-2.6x across the full range
+ * on two of three datasets, no clustering of failures at high density. The
+ * theoretical worst-case conditionality above still stands as a bound, but
+ * real data tested here did not approach it in the ranges checked. Not a
+ * universal guarantee (dataset count and window-size range tested were
+ * both limited).
  *
  * SPACE, not just time: this class is NOT a strict improvement over
  * StreamingHomology -- it is a time/space trade-off. It keeps the previous
  * push's full edge/triangle lists AND reduced-column state alive between
  * pushes (that is the whole mechanism); StreamingHomology discards
  * everything but the raw window contents after each push. Measured
- * directly (`npm run bench -- --memory <dataset>`, docs/COMPLEXITY.md
- * Section 5): up to ~150x more heap per instance than StreamingHomology at
- * windowSize=80 on real data (down from an originally-measured ~3500x, via
- * two follow-up storage-layout fixes -- Section 5b pooled reducedCols/
- * triPair, Section 5c then pooled triOrder specifically after direct
- * measurement showed it was ~83% of what 5b left behind -- together a
- * 7.3x-52.5x reduction verified across all three datasets tested). Still a
+ * directly (`npm run bench -- --memory <dataset>`): up to ~150x more heap
+ * per instance than StreamingHomology at windowSize=80 on real data (down
+ * from an originally-measured ~3500x, via two follow-up storage-layout
+ * fixes -- first pooled reducedCols/triPair, then pooled triOrder
+ * specifically after direct measurement showed it was ~83% of what the
+ * first fix left behind -- together a 7.3x-52.5x reduction verified across
+ * all three datasets tested). Still a
  * real, unresolved trade-off, not eliminated by these fixes: fine for one
  * or a few concurrent windows; a real limitation for use cases with many
  * concurrent windows (e.g. one per sensor across a fleet), where
@@ -255,8 +256,9 @@ export class IncrementalH1 {
   // | null)[]` -- one separate small heap object (TypedArray+ArrayBuffer, or a
   // {birth,death,dim} object) PER TRIANGLE, retained between every push. That was
   // the single largest contributor to the ~3500x memory blowup vs StreamingHomology
-  // documented in docs/COMPLEXITY.md Section 5 (confirmed by measuring before/after
-  // this change -- see bench/data/memory_results.txt): T separate TypedArray objects
+  // (see README.md's "Space, not just time" section; confirmed by measuring
+  // before/after this change -- see bench/data/memory_results.txt): T separate
+  // TypedArray objects
   // is much heavier per-entry than T entries in a few flat pooled arrays, even
   // though the total *content* (sum of sparse column lengths) is identical either
   // way. Pooled representation below: one flat Int32Array holding every reduced

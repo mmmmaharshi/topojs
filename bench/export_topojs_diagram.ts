@@ -1,5 +1,6 @@
-// Export helper for bench/compare_ripser.py (docs/COMPARISON.md's Ripser
-// cross-check). Reads a real-data point cloud (CSV, no header, one point
+// Export helper for bench/compare_ripser.py (see README.md's "Against
+// Ripser" section for the cross-check this feeds). Reads a real-data point
+// cloud (CSV, no header, one point
 // per line, space-separated coords) and dumps topojs's own homology-engine
 // output + timing to JSON, so the Python script can compare it against
 // Ripser on the IDENTICAL point set. Not a benchmark script (see

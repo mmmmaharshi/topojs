@@ -6,3 +6,8 @@ coverage/
 Thumbs.db
 __pycache__/
 bench/_tmp_*
+# docs/*.md were removed from the repo (README.md is now the only tracked
+# markdown file) -- the empty leftover files under docs/ couldn't be
+# physically deleted (sandbox restriction on unlink), so they're emptied
+# and ignored here instead of showing up as untracked clutter.
+docs/

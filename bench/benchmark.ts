@@ -648,8 +648,9 @@ function runMemorySweep(key: string, windowSizes: number[]): void {
 }
 
 // ── regime sweep ─────────────────────────────────────────────────────────
-// docs/COMPLEXITY.md Section 2-3 established that the v3 speedup is
-// CONDITIONAL on complex sparsity (E=o(k^2) or T=o(k^3)), not unconditional
+// README.md's "Complexity, measured not just claimed" section established
+// that the v3 speedup is CONDITIONAL on complex sparsity (E=o(k^2) or
+// T=o(k^3)), not unconditional
 // -- and that a naive "sparser dataset -> cleaner win" guess was checked
 // against real density measurements and found FALSE. This sweep replaces
 // that guess with a direct, measured map: for a range of REAL maxDist
