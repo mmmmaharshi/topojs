@@ -28,6 +28,9 @@
     "demo:real-data": "node --experimental-transform-types bench/real-data-validation.ts",
     "bench": "node --experimental-transform-types --expose-gc bench/benchmark.ts"
   },
+  "engines": {
+    "node": ">=22.7"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^4.1.10",
