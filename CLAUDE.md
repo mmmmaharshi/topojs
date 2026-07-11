@@ -32,7 +32,10 @@ complexes (2D grayscale images). No WASM, WebGL, WebGPU, or server. See
 
 CI (`.github/workflows/ci.yml`) runs `npm test`, `npx tsc --noEmit`, and
 `npm run lint` on Node 20/22/24. Note: `bench`/`demo:real-data` require
-Node ≥22.7 (`--experimental-transform-types`) and are NOT run in CI.
+Node ≥22.7 (`--experimental-strip-types` -- plain type stripping, not the
+now-removed `--experimental-transform-types`; this codebase uses no
+enums/namespaces, so plain stripping has always been sufficient) and are
+NOT run in CI.
 
 ## Public API boundary
 

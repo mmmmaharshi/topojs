@@ -27,8 +27,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "demo:real-data": "node --experimental-transform-types bench/real-data-validation.ts",
-    "bench": "node --experimental-transform-types --expose-gc bench/benchmark.ts",
+    "demo:real-data": "node --experimental-strip-types bench/real-data-validation.ts",
+    "bench": "node --experimental-strip-types --expose-gc bench/benchmark.ts",
     "bench:all": "npm run bench && for d in sunspots iris melbourne-temp; do npm run bench -- --scaling $d && npm run bench -- --memory $d; done && npm run bench -- --regime"
   },
   "engines": {

@@ -32,7 +32,7 @@
  * at this p-value — lag comes from the ACF rule above, window/maxDist are
  * carried over unchanged from the synthetic proof-of-concept demo.
  *
- * Run with: node --experimental-transform-types bench/real-data-validation.ts
+ * Run with: node --experimental-strip-types bench/real-data-validation.ts
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

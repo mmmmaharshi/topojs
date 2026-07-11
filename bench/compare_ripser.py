@@ -127,7 +127,7 @@ def run_topojs_engine(name: str, engine: str, points: np.ndarray, max_dist: floa
     topojs_max_dim = max_dim + 1 if max_dim >= 2 else max_dim
     subprocess.run(
         [
-            "node", "--experimental-transform-types",
+            "node", "--experimental-strip-types",
             str(HERE / "export_topojs_diagram.ts"),
             str(csv_path), "2", str(max_dist), str(topojs_max_dim), str(out_path), engine,
         ],
