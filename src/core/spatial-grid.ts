@@ -42,7 +42,28 @@ import type { Points } from './distance.ts';
 export class SpatialGrid {
   private readonly cellSize: number;
   private readonly dims: number;
-  private readonly buckets: Map<string, number[]> = new Map();
+  private readonly buckets: Map<bigint, number[]> = new Map();
+
+  // Cell coordinates are biased by this constant, then packed 32 bits per
+  // dimension into a single BigInt key (key = biased[0] | biased[1]<<32 |
+  // biased[2]<<64 | ...). This is a bijective, collision-free encoding as
+  // long as every biased coordinate lands in [0, 2^32) -- BIAS = 2^31
+  // guarantees that for any raw cell coordinate in [-2^31, 2^31), which is
+  // astronomically more than any real dataset's spatial extent divided by
+  // any realistic cellSize could ever produce (it would require a bounding
+  // box more than two billion cells wide in a single dimension).
+  //
+  // REPLACES a previous string-keyed Map<string, number[]> (coords.join(','))
+  // -- found during a codebase audit to be the same anti-pattern this
+  // codebase's own history (IncrementalH1's v2, see its class docstring)
+  // already measured to cost up to ~50x versus a numeric-keyed
+  // alternative, and directly implicated (per complex.ts's own docstring)
+  // in why the grid's break-even point against brute force is as high as
+  // n>=1000. BigInt keys avoid the string-allocation-and-hashing overhead
+  // entirely while staying exact (no hash collisions to reason about,
+  // unlike a lossy numeric hash) and dimension-agnostic (works for any
+  // `dims`, not just 2D/3D).
+  private static readonly BIAS = 2 ** 31;
 
   constructor(points: Points, dims: number, n: number, cellSize: number) {
     if (!(cellSize > 0) || !Number.isFinite(cellSize)) {
@@ -65,15 +86,14 @@ export class SpatialGrid {
     return Math.floor(v / this.cellSize);
   }
 
-  private cellKeyForPoint(points: Points, i: number): string {
+  private cellKeyForPoint(points: Points, i: number): bigint {
     const base = i * this.dims;
-    const coords = new Array<number>(this.dims);
-    for (let d = 0; d < this.dims; d++) coords[d] = this.cellCoord(points[base + d]!);
-    return coords.join(',');
-  }
-
-  private cellKeyFromCoords(coords: number[]): string {
-    return coords.join(',');
+    let key = 0n;
+    for (let d = 0; d < this.dims; d++) {
+      const biased = this.cellCoord(points[base + d]!) + SpatialGrid.BIAS;
+      key = (key << 32n) | BigInt(biased);
+    }
+    return key;
   }
 
   /**
@@ -98,14 +118,15 @@ export class SpatialGrid {
     const offsets = [-1, 0, 1];
     const totalNeighborCells = Math.pow(3, this.dims);
     for (let combo = 0; combo < totalNeighborCells; combo++) {
-      const coords = new Array<number>(this.dims);
+      let key = 0n;
       let rem = combo;
       for (let d = 0; d < this.dims; d++) {
         const offsetIdx = rem % 3;
         rem = Math.floor(rem / 3);
-        coords[d] = centerCoords[d]! + offsets[offsetIdx]!;
+        const biased = centerCoords[d]! + offsets[offsetIdx]! + SpatialGrid.BIAS;
+        key = (key << 32n) | BigInt(biased);
       }
-      const bucket = this.buckets.get(this.cellKeyFromCoords(coords));
+      const bucket = this.buckets.get(key);
       if (!bucket) continue;
       for (const j of bucket) {
         if (j > i) result.push(j);
