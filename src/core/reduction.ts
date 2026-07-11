@@ -1,5 +1,19 @@
-import type { PersistencePair, EdgeEntry } from './h0.ts';
-import type { TriangleEntry } from './complex.ts';
+// This file used to also export computeH1/computeH1Dense (a sparse-array and
+// a dense-bitvector standalone H1 reducer) and a HIGH_BIT_TABLE lookup
+// table. All three were found to be dead code during a codebase audit
+// (2026-07): zero call sites anywhere in src/, test/, or bench/, not
+// re-exported from src/index.ts, and unreachable externally since
+// package.json's `exports` map restricts the package to a single "."
+// entry point. Worse, computeH1/computeH1Dense had real correctness gaps
+// relative to the live H1 phase used everywhere else in this codebase
+// (homology.ts et al.) -- no zero-persistence guard (would emit spurious
+// birth===death pairs, the same class of bug fixed in cubical.ts around
+// the same time) and no essential-pair emission for surviving cycle edges.
+// Since they were unreachable, fixing them to parity would have meant
+// maintaining a second, untested H1 implementation with no consumer;
+// deleting was the lower-risk choice. xorSparse and DenseWorkingCol below
+// ARE live (used by cubical.ts, homology.ts, homology-fast.ts,
+// homology-cohom.ts, incremental-h1.ts) and were untouched.
 
 /**
  * XOR two sorted Int32Arrays (symmetric difference of sorted index lists).
@@ -30,50 +44,6 @@ export function xorSparse(a: Int32Array, b: Int32Array): Int32Array {
   const result = new Int32Array(tmp.length);
   for (let k = 0; k < tmp.length; k++) result[k] = tmp[k]!;
   return result;
-}
-
-export function computeH1(
-  edges: EdgeEntry[],
-  triangles: TriangleEntry[],
-): PersistencePair[] {
-  const pivotCol = new Int32Array(edges.length).fill(-1);
-  const reduced: (Int32Array | null)[] = new Array(triangles.length).fill(null);
-  const pairs: PersistencePair[] = [];
-
-  for (let ci = 0; ci < triangles.length; ci++) {
-    const tri = triangles[ci]!;
-    let col: Int32Array = new Int32Array(tri.edges);
-    col.sort();
-
-    while (col.length > 0) {
-      const pivot = col[col.length - 1]!;
-      const prev = pivotCol[pivot]!;
-      if (prev < 0) {
-        pivotCol[pivot] = ci;
-        reduced[ci] = col;
-        pairs.push({
-          birth: edges[pivot]!.val,
-          death: tri.val,
-          dim: 1,
-        });
-        break;
-      }
-      const prevCol = reduced[prev]!;
-      if (prevCol === null) break;
-      col = xorSparse(col, prevCol);
-    }
-  }
-
-  return pairs;
-}
-
-const HIGH_BIT_TABLE = new Uint8Array(256);
-for (let i = 0; i < 256; i++) {
-  let h = 0;
-  if (i & 0xF0) { h |= 4; }
-  if (i & 0xCC) { h |= 2; }
-  if (i & 0xAA) { h |= 1; }
-  HIGH_BIT_TABLE[i] = h;
 }
 
 /**
@@ -169,40 +139,3 @@ export class DenseWorkingCol {
   }
 }
 
-export function computeH1Dense(
-  edges: EdgeEntry[],
-  triangles: TriangleEntry[],
-): PersistencePair[] {
-  const numEdges = edges.length;
-  const pivotCol = new Int32Array(numEdges).fill(-1);
-  const reduced: (Int32Array | null)[] = new Array(triangles.length).fill(null);
-  const pairs: PersistencePair[] = [];
-  const working = new DenseWorkingCol(numEdges);
-
-  for (let ci = 0; ci < triangles.length; ci++) {
-    const tri = triangles[ci]!;
-    working.loadFromNumbers(tri.edges);
-
-    while (true) {
-      const pivot = working.pivot();
-      if (pivot < 0) break;
-
-      const prev = pivotCol[pivot]!;
-      if (prev < 0) {
-        pivotCol[pivot] = ci;
-        reduced[ci] = working.toSparse();
-        pairs.push({
-          birth: edges[pivot]!.val,
-          death: tri.val,
-          dim: 1,
-        });
-        break;
-      }
-      const prevCol = reduced[prev]!;
-      if (prevCol === null) break;
-      working.xorSparse(prevCol);
-    }
-  }
-
-  return pairs;
-}
