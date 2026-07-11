@@ -1,6 +1,6 @@
 import type { Points } from './distance.ts';
 import type { PersistencePair } from './h0.ts';
-import { UnionFind } from './unionfind.ts';
+import { computeH0Phase } from './h0.ts';
 import { buildRipsComplex } from './complex.ts';
 import { DenseWorkingCol } from './reduction.ts';
 
@@ -49,28 +49,13 @@ export function computePersistentHomology(
   const { edges, triangles, tetrahedra } = complex;
 
   // ── Phase 1: H0 ──
-  const uf = new UnionFind(complex.n);
-  const h0Pairs: PersistencePair[] = [];
-  const cycleEdges = new Uint8Array(edges.length);
-
-  for (let ei = 0; ei < edges.length; ei++) {
-    const { u, v } = edges[ei]!;
-    if (uf.find(u) !== uf.find(v)) {
-      h0Pairs.push({ birth: 0, death: edges[ei]!.val, dim: 0 });
-      uf.union(u, v);
-    } else {
-      cycleEdges[ei] = 1;
-    }
-  }
-  // Essential H0 components (survivors that never merge)
-  const seen = new Uint8Array(complex.n);
-  for (let i = 0; i < complex.n; i++) {
-    const r = uf.find(i);
-    if (!seen[r]) {
-      seen[r] = 1;
-      h0Pairs.push({ birth: 0, death: -1, dim: 0 });
-    }
-  }
+  // Shared with every other engine in this codebase (homology-fast.ts,
+  // homology-cohom.ts, cubical.ts, incremental-h1.ts) via computeH0Phase
+  // (src/core/h0.ts) -- extracted during a codebase audit that found this
+  // exact union-find-plus-essential-emission logic copy-pasted near-
+  // verbatim across all five, with no compiler or test enforcing they
+  // stayed in sync.
+  const { h0Pairs, cycleEdges } = computeH0Phase(complex.n, edges);
 
   // ── Phase 2: H1 reduction ──
   const h1Pivots = new Int32Array(edges.length).fill(-1);

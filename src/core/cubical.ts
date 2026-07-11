@@ -1,5 +1,5 @@
 import type { PersistencePair } from './h0.ts';
-import { UnionFind } from './unionfind.ts';
+import { computeH0Phase } from './h0.ts';
 import { DenseWorkingCol } from './reduction.ts';
 
 /** Result of cubical persistence homology on a 2D grayscale image. */
@@ -115,32 +115,12 @@ export function computeCubicalHomology(
   squares.sort((a, b) => a.val - b.val);
 
   // ── H0: union-find ──
-  const uf = new UnionFind(V);
-  const h0Pairs: PersistencePair[] = [];
-  const cycleEdges = new Uint8Array(numEdges);
-
-  for (let ei = 0; ei < numEdges; ei++) {
-    const e = edges[ei]!;
-    if (uf.find(e.u) !== uf.find(e.v)) {
-      h0Pairs.push({ birth: 0, death: e.val, dim: 0 });
-      uf.union(e.u, e.v);
-    } else {
-      cycleEdges[ei] = 1;
-    }
-  }
-  // BUG FIX: essential H0 components (survivors that never merge) were never
-  // emitted -- every nonempty image reported 0 essential H0 classes, when a
-  // rectangular grid always has at least one surviving component (itself,
-  // at minimum, for h=w=1). Mirrors the equivalent loop in
-  // src/core/homology.ts's computePersistentHomology.
-  const seenRoot = new Uint8Array(V);
-  for (let i = 0; i < V; i++) {
-    const r = uf.find(i);
-    if (!seenRoot[r]) {
-      seenRoot[r] = 1;
-      h0Pairs.push({ birth: 0, death: -1, dim: 0 });
-    }
-  }
+  // Shared via computeH0Phase (src/core/h0.ts) -- previously an inline copy
+  // here (see the BUG FIX note this comment replaces: essential H0
+  // components used to never be emitted, since fixed and now impossible to
+  // regress since this delegates to the same function every other engine
+  // in this codebase uses).
+  const { h0Pairs, cycleEdges } = computeH0Phase(V, edges);
 
   // ── H1: square reduction ──
   const h1Pairs: PersistencePair[] = [];

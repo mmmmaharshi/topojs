@@ -1,6 +1,6 @@
 import type { PersistencePair } from '../core/h0.ts';
+import { computeH0Phase } from '../core/h0.ts';
 import { DenseWorkingCol } from '../core/reduction.ts';
-import { UnionFind } from '../core/unionfind.ts';
 
 /**
  * Streaming persistent homology — Phase B: prefix-stable incremental H1.
@@ -679,40 +679,27 @@ export class IncrementalH1 {
     }
 
     // --- H0, recomputed fresh each push (cheap; not the optimization target) ---
-    // Uses the shared, tested UnionFind class (src/core/unionfind.ts, union-
-    // by-size) instead of a hand-rolled parent/find/union block -- this file
-    // used to reimplement the primitive inline (path-halving only, no
-    // union-by-size), a third divergent copy of the same algorithm found
-    // during a codebase audit. Correctness-validated by this file's own
-    // exact-match-against-full-recompute differential tests
-    // (test/incremental.test.ts), which would catch any behavioral drift.
+    // Shared via computeH0Phase (src/core/h0.ts) -- same function every
+    // other engine in this codebase uses, found during a codebase audit to
+    // have been copy-pasted (with a hand-rolled, non-union-by-size
+    // union-find) inline here instead. This site's edges are keyed by
+    // stable point id (idA/idB), not already-local indices, so they're
+    // remapped to local window indices [0,k) first -- a small, O(k)
+    // per-push allocation, consistent with this phase already being
+    // documented as "cheap; not the optimization target."
+    // Correctness-validated by this file's own exact-match-against-full-
+    // recompute differential tests (test/incremental.test.ts).
     const ids = this.pointOrder;
-    const uf = new UnionFind(k);
     // local-index lookup by stable id (small, O(k), not the bottleneck)
     const localIndexById = new Map<number, number>();
     for (let i = 0; i < k; i++) localIndexById.set(ids[i]!, i);
 
-    const h0Pairs: PersistencePair[] = [];
-    const cycleEdge = new Uint8Array(newEdges.length);
-    for (let ei = 0; ei < newEdges.length; ei++) {
-      const e = newEdges[ei]!;
-      const iu = localIndexById.get(e.idA)!;
-      const iv = localIndexById.get(e.idB)!;
-      if (uf.find(iu) !== uf.find(iv)) {
-        h0Pairs.push({ birth: 0, death: e.val, dim: 0 });
-        uf.union(iu, iv);
-      } else {
-        cycleEdge[ei] = 1;
-      }
-    }
-    const seen = new Uint8Array(k);
-    for (let i = 0; i < k; i++) {
-      const r = uf.find(i);
-      if (!seen[r]) {
-        seen[r] = 1;
-        h0Pairs.push({ birth: 0, death: -1, dim: 0 });
-      }
-    }
+    const localEdges = newEdges.map(e => ({
+      u: localIndexById.get(e.idA)!,
+      v: localIndexById.get(e.idB)!,
+      val: e.val,
+    }));
+    const { h0Pairs, cycleEdges: cycleEdge } = computeH0Phase(k, localEdges);
 
     const h1Pairs: PersistencePair[] = [];
     for (let ci = 0; ci < newTris.length; ci++) {
