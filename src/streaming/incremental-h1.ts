@@ -1,5 +1,6 @@
 import type { PersistencePair } from '../core/h0.ts';
 import { DenseWorkingCol } from '../core/reduction.ts';
+import { UnionFind } from '../core/unionfind.ts';
 
 /**
  * Streaming persistent homology — Phase B: prefix-stable incremental H1.
@@ -678,21 +679,15 @@ export class IncrementalH1 {
     }
 
     // --- H0, recomputed fresh each push (cheap; not the optimization target) ---
+    // Uses the shared, tested UnionFind class (src/core/unionfind.ts, union-
+    // by-size) instead of a hand-rolled parent/find/union block -- this file
+    // used to reimplement the primitive inline (path-halving only, no
+    // union-by-size), a third divergent copy of the same algorithm found
+    // during a codebase audit. Correctness-validated by this file's own
+    // exact-match-against-full-recompute differential tests
+    // (test/incremental.test.ts), which would catch any behavioral drift.
     const ids = this.pointOrder;
-    const parent = new Int32Array(k);
-    for (let i = 0; i < k; i++) parent[i] = i;
-    const find = (x: number): number => {
-      while (parent[x] !== x) {
-        parent[x] = parent[parent[x]!]!;
-        x = parent[x]!;
-      }
-      return x;
-    };
-    const union = (x: number, y: number): void => {
-      const rx = find(x);
-      const ry = find(y);
-      if (rx !== ry) parent[rx] = ry;
-    };
+    const uf = new UnionFind(k);
     // local-index lookup by stable id (small, O(k), not the bottleneck)
     const localIndexById = new Map<number, number>();
     for (let i = 0; i < k; i++) localIndexById.set(ids[i]!, i);
@@ -703,16 +698,16 @@ export class IncrementalH1 {
       const e = newEdges[ei]!;
       const iu = localIndexById.get(e.idA)!;
       const iv = localIndexById.get(e.idB)!;
-      if (find(iu) !== find(iv)) {
+      if (uf.find(iu) !== uf.find(iv)) {
         h0Pairs.push({ birth: 0, death: e.val, dim: 0 });
-        union(iu, iv);
+        uf.union(iu, iv);
       } else {
         cycleEdge[ei] = 1;
       }
     }
     const seen = new Uint8Array(k);
     for (let i = 0; i < k; i++) {
-      const r = find(i);
+      const r = uf.find(i);
       if (!seen[r]) {
         seen[r] = 1;
         h0Pairs.push({ birth: 0, death: -1, dim: 0 });
