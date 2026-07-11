@@ -1,0 +1,17 @@
+# Python dependencies for bench/compare_ripser.py -- the Ripser cross-check
+# referenced from README.md's "Against Ripser" section. Not required for
+# anything else in this repo (the library itself is pure JS/TS, zero
+# dependencies); this file exists only so the specific numeric claims in
+# that README section (speed ratios, correctness match) are reproducible
+# against known-good package versions rather than "whatever pip happens to
+# resolve today."
+#
+# Install with: pip install --break-system-packages -r bench/requirements.txt
+#
+# Versions below are what this repo's own numbers were last verified
+# against, not a hard floor -- newer patch/minor versions are expected to
+# work fine; if a re-run disagrees with the recorded numbers, that is
+# itself useful signal (record the new numbers and the version that
+# produced them, per README's "measured not just claimed" ethos).
+ripser>=0.6.15
+numpy>=2.2.6

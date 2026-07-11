@@ -167,17 +167,20 @@ than this repo currently benchmarks on.
 
 **Against Ripser.** Both batch engines (`computePersistentHomology` and
 `computePersistentHomologyCohomology`) are cross-checked against
-[Ripser](https://arxiv.org/abs/1908.02518) on real data
-(`python3 bench/compare_ripser.py`): correctness matches on data with no
-coincident points, 18x–86x slower than Ripser depending on engine and
-case (expected, not hidden — cohom is consistently ~1.1x-3.3x faster than
-plain, roughly halving the geometric-mean gap to Ripser, 36x → 18x), and
-one real, root-caused convention difference was found via the cross-check
-(zero-persistence H0/H1 bars from exact-duplicate points: kept here,
-silently dropped by Ripser). Also: H2 (tetrahedra) computation doesn't
-finish at n=400 in the plain engine, but the cohom engine's H2 phase
-does — measured directly (142x and 41x slower than Ripser on two
-datasets, correct Betti numbers on both).
+[Ripser](https://arxiv.org/abs/1908.02518) on real data. This is a
+separate Python script, not part of the JS/TS library or its zero
+dependencies — run `pip install --break-system-packages -r
+bench/requirements.txt` once, then `python3 bench/compare_ripser.py`.
+Results: correctness matches on data with no coincident points, 18x–86x
+slower than Ripser depending on engine and case (expected, not hidden —
+cohom is consistently ~1.1x-3.3x faster than plain, roughly halving the
+geometric-mean gap to Ripser, 36x → 18x), and one real, root-caused
+convention difference was found via the cross-check (zero-persistence
+H0/H1 bars from exact-duplicate points: kept here, silently dropped by
+Ripser). Also: H2 (tetrahedra) computation doesn't finish at n=400 in the
+plain engine, but the cohom engine's H2 phase does — measured directly
+(142x and 41x slower than Ripser on two datasets, correct Betti numbers
+on both).
 
 ## License
 

@@ -21,7 +21,8 @@ comparison partner, which the Ripser paper itself establishes as the fastest
 of the batch tools it compared against.
 
 Run with: python3 bench/compare_ripser.py
-Requires: pip install --break-system-packages ripser numpy
+Requires: pip install --break-system-packages -r bench/requirements.txt
+          (or: pip install --break-system-packages ripser numpy)
 """
 import json
 import subprocess
@@ -30,8 +31,22 @@ import tempfile
 import time
 from pathlib import Path
 
-import numpy as np
-from ripser import ripser
+try:
+    import numpy as np
+    from ripser import ripser
+except ImportError as exc:
+    # BUG FIX (found during a codebase audit): this used to be a bare
+    # top-level import with no guard, so anyone following README.md's
+    # "Against Ripser" section instructions (`python3 bench/compare_ripser.py`)
+    # without having read this file's own docstring first hit a raw
+    # ModuleNotFoundError traceback, with the actual install command
+    # available only if they went and opened the source.
+    sys.exit(
+        f"error: missing Python dependency ({exc}).\n"
+        f"Install with: pip install --break-system-packages -r "
+        f"{Path(__file__).parent / 'requirements.txt'}\n"
+        f"(or directly: pip install --break-system-packages ripser numpy)"
+    )
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
