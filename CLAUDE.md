@@ -16,6 +16,10 @@ complexes (2D grayscale images). No WASM, WebGL, WebGPU, or server. See
 - Test: `npm test` (`vitest run`) — `npm run test:watch` for watch mode,
   `npm run test:coverage` for a coverage report
 - Lint: `npm run lint` (`eslint .`)
+- Demo bundle: `npm run build:demo` (esbuild, bundles `demo/bundle-entry.ts` to
+  `demo/topojs-bundle.mjs`) — re-run this after any change to a function
+  re-exported from `demo/bundle-entry.ts`, otherwise the demo page silently
+  drifts from `src/` (this happened once; see git history for finding #3)
 - Benchmarks (real data only, not part of the published package):
   `npm run bench` or `npm run bench -- <dataset>` (see `bench/benchmark.ts`
   for the dataset registry and flags: `--scaling`, `--regime`, `--memory`)

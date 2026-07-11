@@ -7,7 +7,7 @@
 - **Vietoris–Rips persistence** — H₀ via union–find, H₁ and H₂ via matrix reduction with bit-vector columns
 - **Cubical persistence** — 2D grayscale images, H₀ + H₁
 - **Bottleneck distance** — between two persistence diagrams
-- **Pure JavaScript** — single-file bundle (~7 KB raw, ~2.8 KB gzipped — see `demo/topojs-bundle.mjs`), runs in any ES2020 environment
+- **Pure JavaScript** — single-file demo bundle (~10.3 KB raw, ~4.0 KB gzipped — see `demo/topojs-bundle.mjs`, regenerated from `src/` via `npm run build:demo`), runs in any ES2020 environment
 - **Optimized** — DenseWorkingCol bit-vector reduction (2.5–6× faster than sparse), `Math.clz32` pivot, row-offset distance lookup
 - **Real-world datasets** — MNIST digits, Iris flowers, terrain DEMs, natural image patches, torus/sphere 3D scans
 

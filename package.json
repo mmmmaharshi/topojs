@@ -22,6 +22,7 @@
   "scripts": {
     "build": "tsc",
     "prepack": "npm run build",
+    "build:demo": "esbuild demo/bundle-entry.ts --bundle --format=esm --minify --outfile=demo/topojs-bundle.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "esbuild": "^0.28.1",
     "eslint": "^10.7.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.63.0",
