@@ -763,10 +763,11 @@ if (arg === '--list') {
 if (arg === '--scaling') {
   const dsKey = process.argv[3] ?? 'melbourne-temp';
   const sizesArg = process.argv[4];
+  const trialsArg = process.argv[5];
   const cfg = DATASETS[dsKey];
   if (!cfg) throw new Error(`unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(', ')}`);
   const windowSizes = sizesArg ? sizesArg.split(',').map(Number) : cfg.scalingWindowSizes;
-  runScalingSweep(dsKey, windowSizes, cfg.scalingTrials ?? 10);
+  runScalingSweep(dsKey, windowSizes, trialsArg ? Number(trialsArg) : (cfg.scalingTrials ?? 10));
   process.exit(0);
 }
 

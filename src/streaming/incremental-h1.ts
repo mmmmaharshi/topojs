@@ -82,10 +82,24 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * bench/data/summary.txt) does not by itself prove a different growth RATE
  * vs the naive baseline -- it could just be a constant-factor win. The
  * scaling sweep (`npm run bench -- --scaling <dataset>`, Axis 4 in the same
- * file) tests that directly across a range of real window sizes and gets a
- * MIXED result: growth-rate gap clearly confirmed on sunspot data, close/
- * noisy on Melbourne temp data, inverted on the smallest/noisiest (Iris)
- * data. Treat the asymptotic claim as an open question, not settled.
+ * file) tests that directly across a range of real window sizes. RESOLVED
+ * (see the "RE-RUN: extended window-size range" section of
+ * bench/data/scaling_results.txt): extending the sweep past windowSize=80
+ * (to 120 on sunspots, 160 on Melbourne temp -- the largest either real
+ * series can support) shows raw speedup is NOT monotonic -- it peaks around
+ * windowSize=20-40 (~2x) and DECLINES as the window grows further (~1.3x by
+ * 120-160), and on sunspots the incremental engine's own growth exponent
+ * (p=2.04) overtakes the naive engine's (p=1.89) beyond that range. The
+ * within-80 "widening speedup" result this docstring used to cite was real
+ * but incomplete -- it held only inside the range it was measured over.
+ * Plausible mechanism: delay-embedded real series cluster in bounded space,
+ * so deg(new) (see PRECISE COMPLEXITY below) grows with windowSize too, and
+ * O(deg(new)^2) eventually dominates the O(k) term this class exists to
+ * avoid. Practical upshot: treat this class as a validated win in the
+ * mid-size window regime this repo's own benchmarks and demo use
+ * (windowSize <= 80), not a strictly-dominant replacement for
+ * StreamingHomology at all scales -- re-benchmark before assuming the
+ * advantage holds at much larger windows.
  *
  * PRECISE COMPLEXITY, not just the shorthand above: see README.md's
  * "Comparison Against Prior Work" section (a fuller step-by-step derivation

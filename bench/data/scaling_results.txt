@@ -61,3 +61,73 @@ NOTE: real windowed point clouds are not complete graphs, so these exponents wil
 match the worst-case O(k^2)/O(k^3) bound -- this measures actual growth on real data, not the bound.
 A widening speedup with window size (not a flat ratio) is the signal that the algorithmic change,
 not a constant-factor optimization, is what is being measured.
+
+=== RE-RUN: extended window-size range, sunspots + melbourne-temp ===
+(research pitch B / scientific-problem-selection session: resolves the "open
+question, not a settled result" note that used to sit above this line. The
+sweeps above only ever tested windowSize up to 80 -- extended here to 120
+(sunspots) and 160 (melbourne-temp), the largest sizes the real underlying
+series can support with a defensible number of disjoint chunks. windowSize
+120/160 rows use fewer trials (2-3, noted per row) than the windowSize<=80
+rows (10) purely for sandbox wall-clock budget reasons -- each is still a
+genuine average over independent real-data chunks, same measurement method
+as every other row in this file, not a different kind of number.)
+
+--- sunspots, combined (10-80 at 10 trials/size, 120 at 2 trials) ---
+windowSize    naive_ms     incr_ms   speedup  reReduced%
+        10        8.59        7.61     1.13x       98.6%
+        20       19.63       13.13     1.50x       99.0%
+        40       99.41       49.91     1.99x       99.2%
+        80      347.01      191.62     1.81x       99.2%
+       120      831.41      641.52     1.30x       99.9%
+
+log-log slope over 10-80 only (what the original conclusion was based on):
+  naive p=1.84   incremental p=1.59   (incremental grows slower -> "widening speedup" holds)
+log-log slope over the full 10-120 range:
+  naive p=1.89   incremental p=2.04   (incremental now grows FASTER than naive)
+
+--- melbourne-temp, combined (10-80 at 10 trials/size, 120 at 3 trials, 160 at 2 trials) ---
+windowSize    naive_ms     incr_ms   speedup  reReduced%
+        10        4.45        3.48     1.28x       95.8%
+        20       10.44        5.30     1.97x       98.3%
+        40       54.25       29.63     1.83x       99.3%
+        80      247.84      144.53     1.71x       99.5%
+       120     1120.11      731.46     1.53x       99.6%
+       160     1958.22     1440.90     1.36x       99.8%
+
+log-log slope over 10-80 only:
+  naive p=1.98   incremental p=1.86   (incremental grows slower -> "widening speedup" holds)
+log-log slope over the full 10-160 range:
+  naive p=2.28   incremental p=2.29   (essentially tied)
+
+CONCLUSION (answers the open question):
+Raw speedup is NOT monotonic in window size on either dataset -- it peaks
+around windowSize=20-40 (1.97x-1.99x) and then DECLINES as window size grows
+further (down to 1.30x-1.36x by windowSize=120-160). The "speedup widens
+with window size" statement in the original scaling sweep was true only
+within the windowSize<=80 range it was measured over; extending the range
+reverses the conclusion on both real datasets tested, and on sunspots the
+incremental engine's own growth exponent overtakes the naive engine's
+(p=2.04 vs 1.89).
+
+This is NOT a bug and does not contradict IncrementalH1's correctness (still
+168/168 exact-match tests passing) -- it's an answer to the exact question
+bench/data/scaling_results.txt used to leave open: IncrementalH1's speedup is
+better explained as a mid-range, density-dependent effect than as an
+asymptotically-superior complexity class. A plausible mechanism, consistent
+with the complexity already documented in README ("Θ(E+T) + O(k) +
+O(deg(new)^2)"): delay-embedded real time series cluster in bounded space, so
+as windowSize grows, deg(new) -- the number of existing window points within
+maxDist of the newest point -- grows too, and the O(deg(new)^2) term
+eventually dominates the O(k) term IncrementalH1 was designed to avoid. This
+also matches the already-documented ~150x memory cost getting WORSE, not
+better, at larger window sizes (see "Comparison Against Prior Work" in
+README) -- both the time and space trade-offs point the same direction:
+IncrementalH1 is a real, validated win in a mid-size window regime, not a
+strictly-dominant replacement for StreamingHomology at all scales.
+
+PRACTICAL IMPLICATION: at the window sizes this repo's own benchmarks and
+demo actually use (windowSize <= 80), IncrementalH1's speedup claim stands
+exactly as measured. Users running much larger sliding windows (>100-150
+points) should re-benchmark on their own data before assuming the same
+advantage holds -- it may have already peaked and started reversing.

@@ -101,10 +101,20 @@ Ripser" below for that. Reproduce with `npm run bench` (or `npm run
 bench -- <dataset>`, one of `sunspots`/`iris`/`melbourne-temp`).
 
 A separate scaling sweep (`npm run bench -- --scaling <dataset>`) checks
-whether the speedup reflects a different growth rate, not just a
-constant factor: confirmed on sunspot data, close/noisy on Melbourne
-temperature data, inverted on the smallest and noisiest (Iris) data —
-an open question, not a settled result (`bench/data/scaling_results.txt`).
+whether the speedup reflects a different growth rate, not just a constant
+factor, across window sizes 10–80. Extending that range further (120 on
+sunspots, 160 on Melbourne temperatures) resolved it: raw speedup is
+*not* monotonic in window size on either dataset — it peaks around
+windowSize=20–40 (~2×) and then declines as the window grows further
+(down to ~1.3× by windowSize=120–160), and on sunspots the incremental
+engine's own growth exponent overtakes the naive engine's beyond that
+range. `IncrementalH1` is a real, validated win in the mid-size window
+regime this repo's own benchmarks and demo use (windowSize ≤ 80), not a
+strictly-dominant replacement for `StreamingHomology` at all scales — see
+`bench/data/scaling_results.txt` for the full re-run and the
+density-dependent mechanism this points to (consistent with the
+`O(deg(new)²)` term in the complexity below, and with the memory
+trade-off getting worse, not better, at larger windows).
 
 ## Test Coverage
 
