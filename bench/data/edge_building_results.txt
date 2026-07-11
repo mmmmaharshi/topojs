@@ -92,3 +92,67 @@ isolated micro-benchmarks, not part of the `npm run bench` harness since
 they test an internal implementation detail of buildRipsComplex rather
 than a user-facing engine comparison) -- the method above is complete
 enough to reproduce directly against src/core/spatial-grid.ts.
+
+===================================================================
+RE-RUN after finding #14 (Map<string,...> -> Map<bigint,...> grid keys)
+===================================================================
+
+The above numbers were measured against the original string-keyed grid
+(Map<string, number[]>, keys via coords.join(',')). A later codebase
+audit replaced that with BigInt-packed keys (see src/core/spatial-grid.ts's
+class docstring) specifically because string-key overhead was flagged as
+a likely cause of the crossover sitting as high as n~900-1000. This
+re-run checks whether it actually moved -- deferred at the time of that
+fix as "a separate task from fixing the two correctness-adjacent-risk/
+memory issues" it addressed.
+
+METHOD: identical to above (same point generator shape, maxDist=1.0, two
+density regimes), but 25 timed trials per n (up from 3) with a 5-call JIT
+warmup and a median instead of a mean, after the original 3-trial method
+proved noisy enough at small n to occasionally invert the expected
+ordering. Also added finer n steps (400-1000 in steps of 50-100) around
+the new crossover, since the original steps (400, 700, 1000) were too
+coarse to localize it.
+
+RESULTS: sparse regime (c=3)
+---------------------------------------------------------------------------
+n=400:  edges=56    brute=0.355ms  grid=0.608ms  speedup=0.58x  (grid LOSES)
+n=450:  edges=78    brute=0.428ms  grid=0.564ms  speedup=0.76x  (grid LOSES)
+n=500:  edges=65    brute=0.526ms  grid=0.571ms  speedup=0.92x  (grid LOSES)
+n=550:  edges=96    brute=0.623ms  grid=0.666ms  speedup=0.94x  (grid LOSES)
+n=600:  edges=90    brute=0.740ms  grid=0.738ms  speedup=1.00x  (breakeven)
+n=650:  edges=106   brute=0.874ms  grid=0.776ms  speedup=1.13x  (grid wins)
+n=700:  edges=110   brute=0.965ms  grid=0.809ms  speedup=1.19x  (grid wins)
+n=800:  edges=129   brute=0.961ms  grid=0.864ms  speedup=1.11x  (grid wins)
+n=1000: edges=177   brute=1.747ms  grid=1.018ms  speedup=1.72x  (grid wins)
+
+RESULTS: moderate-density regime (c=1.2)
+---------------------------------------------------------------------------
+n=400:  edges=469   brute=0.286ms  grid=0.420ms  speedup=0.68x  (grid LOSES)
+n=450:  edges=497   brute=0.334ms  grid=0.657ms  speedup=0.51x  (grid LOSES)
+n=500:  edges=533   brute=0.414ms  grid=0.473ms  speedup=0.88x  (grid LOSES)
+n=550:  edges=539   brute=0.541ms  grid=0.601ms  speedup=0.90x  (grid LOSES)
+n=600:  edges=651   brute=0.634ms  grid=0.679ms  speedup=0.93x  (grid LOSES)
+n=650:  edges=674   brute=0.730ms  grid=0.727ms  speedup=1.00x  (breakeven)
+n=700:  edges=746   brute=0.788ms  grid=0.817ms  speedup=0.96x  (grid LOSES)
+n=800:  edges=836   brute=1.023ms  grid=0.980ms  speedup=1.04x  (breakeven)
+n=1000: edges=1090  brute=1.683ms  grid=1.146ms  speedup=1.47x  (grid wins)
+
+CONCLUSION: the crossover moved from ~900-1000 down to ~600-650 in both
+regimes -- a real, consistent effect (not noise: the moderate-density
+regime is a bit choppier right around the new crossover, n=700 dips back
+under 1x there, but the trend on both sides is unambiguous). Consistent
+with the original fix's own stated rationale: removing per-point
+string-allocation-and-hashing overhead was expected to lower exactly
+this threshold.
+
+DECISION: GRID_MIN_N is left at 1000, unchanged, for now. It is
+demonstrably conservative (no regression -- correctness is unaffected
+either way, see test/spatial-grid.test.ts) but leaves real speedup on
+the table for n in roughly [650, 1000). Not lowered here because
+GRID_MIN_N also gates a second, unrelated decision -- complex.ts's
+dense-vs-sparse edgeIndex memory strategy (finding #16) -- which has
+never been benchmarked at a lower threshold. Retuning GRID_MIN_N without
+checking that interaction would silently move a memory/perf trade-off
+this file was never scoped to evaluate. Recalibrating both together is
+a separate task.
