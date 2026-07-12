@@ -61,8 +61,8 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  *     (O(k), not O(k^2)),
  *   - enumerates new triangles only among PAIRS of the new point's
  *     neighbors that are themselves adjacent (O(deg(new)^2), not O(k^3)),
- *     using persistent per-point adjacency sets (`neighborsOf`) maintained
- *     incrementally across pushes,
+ *     using an edge-pair lookup via the merge-phase pairIndex (derived from
+ *     the survivor + new edges, not from a separate persistent adjacency structure),
  *   - merges the (already-sorted) survivors with the (small, freshly
  *     sorted) new candidates in one linear pass, instead of an O(m log m)
  *     full re-sort.
@@ -130,18 +130,24 @@ import { DenseWorkingCol } from '../core/reduction.ts';
  * push's full edge/triangle lists AND reduced-column state alive between
  * pushes (that is the whole mechanism); StreamingHomology discards
  * everything but the raw window contents after each push. Measured
- * directly (`npm run bench -- --memory <dataset>`): up to ~150x more heap
- * per instance than StreamingHomology at windowSize=80 on real data (down
- * from an originally-measured ~3500x, via two follow-up storage-layout
- * fixes -- first pooled reducedCols/triPair, then pooled triOrder
- * specifically after direct measurement showed it was ~83% of what the
- * first fix left behind -- together a 7.3x-52.5x reduction verified across
- * all three datasets tested). Still a
- * real, unresolved trade-off, not eliminated by these fixes: fine for one
- * or a few concurrent windows; a real limitation for use cases with many
- * concurrent windows (e.g. one per sensor across a fleet), where
- * StreamingHomology's near-zero retained state may be the better choice
- * despite its slower per-push time.
+ *  directly (`npm run bench -- --memory <dataset>`): up to ~150x more heap
+ *  per instance than StreamingHomology at windowSize=80 on real data (down
+ *  from an originally-measured ~3500x, via two follow-up storage-layout
+ *  fixes -- first pooled reducedCols/triPair, then pooled triOrder
+ *  specifically after direct measurement showed it was ~83% of what the
+ *  first fix left behind -- together a 7.3x-52.5x reduction verified across
+ *  all three datasets tested). A third follow-up
+ *  (#3) pooled pointCoords into a flat Float64Array and eliminated the
+ *  persistent neighborsOf adjacency structure (Map<number, Set<number>>)
+ *  entirely -- the adjacency check during triangle building now uses the
+ *  same edge-pair lookup (pairIndex) already built during the merge phase,
+ *  and the eviction-triggered neighbor-set cleanup is no longer needed.
+ *  This removes k Set objects + k Map entries per instance. Still a
+ *  real, unresolved trade-off, not eliminated by these fixes: fine for one
+ *  or a few concurrent windows; a real limitation for use cases with many
+ *  concurrent windows (e.g. one per sensor across a fleet), where
+ *  StreamingHomology's near-zero retained state may be the better choice
+ *  despite its slower per-push time.
  *
  * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
  * recomputed fresh via union-find on every push — that step is already
@@ -214,14 +220,9 @@ export class IncrementalH1 {
   private readonly maxDist: number;
 
   private pointOrder: number[] = []; // FIFO of stable ids, oldest first
-  private pointCoords: number[][] = []; // aligned 1:1 with pointOrder
+  private flatPtCoords: Float64Array; // k*dims flat array
+  private ptCount = 0;                // = pointOrder.length
   private nextId = 0;
-
-  // persistent adjacency: stable id -> set of currently-adjacent stable ids
-  // (within maxDist), for every point currently in the window. Maintained
-  // incrementally (only touched for the evicted id and the new id each
-  // push), so it never costs more than O(k) total per push to keep in sync.
-  private neighborsOf: Map<number, Set<number>> = new Map();
 
   // cached filtration state from the previous push
   private edgeOrder: EdgeRec[] = [];
@@ -365,7 +366,7 @@ export class IncrementalH1 {
   constructor(opts: IncrementalH1Options) {
     // Matches SlidingWindow's validation (src/streaming/sliding-window.ts) --
     // this class doesn't delegate to SlidingWindow (it manages its own
-    // pointOrder/pointCoords FIFO for the persistent adjacency mechanism),
+    // pointOrder and flatPtCoords FIFO for the sliding-window mechanism),
     // so it never inherited that class's guard rails and previously
     // accepted windowSize<=0, non-integer windowSize, or dims<=0 silently,
     // leading to confusing behavior on push() (or none at all) rather than
@@ -383,14 +384,15 @@ export class IncrementalH1 {
     this.windowSize = opts.windowSize;
     this.dims = opts.dims;
     this.maxDist = opts.maxDist;
+    this.flatPtCoords = new Float64Array(opts.windowSize * opts.dims);
   }
 
   get size(): number {
-    return this.pointOrder.length;
+    return this.ptCount;
   }
 
   get isFull(): boolean {
-    return this.pointOrder.length === this.windowSize;
+    return this.ptCount === this.windowSize;
   }
 
   push(point: number[] | Float64Array): IncrementalH1Update | null {
@@ -404,29 +406,19 @@ export class IncrementalH1 {
     const evictedId = wasFull ? this.pointOrder[0]! : null;
 
     this.pointOrder.push(newId);
-    this.pointCoords.push(coords);
-    if (this.pointOrder.length > this.windowSize) {
+    if (wasFull) {
       this.pointOrder.shift();
-      this.pointCoords.shift();
+      this.flatPtCoords.copyWithin(0, this.dims, this.windowSize * this.dims);
+    } else {
+      this.ptCount++;
     }
-    const k = this.pointOrder.length;
-
-    // Evict from the persistent adjacency structure right away — cheap
-    // (touches only the evicted point's own neighbor list).
-    if (evictedId !== null) {
-      const evictedNeighbors = this.neighborsOf.get(evictedId);
-      if (evictedNeighbors) {
-        for (const nb of evictedNeighbors) this.neighborsOf.get(nb)?.delete(evictedId);
-      }
-      this.neighborsOf.delete(evictedId);
+    const ptBase = (this.ptCount - 1) * this.dims;
+    for (let d = 0; d < this.dims; d++) {
+      this.flatPtCoords[ptBase + d] = coords[d]!;
     }
+    const k = this.ptCount;
 
-    if (k < 2) {
-      this.neighborsOf.set(newId, new Set());
-      return null;
-    }
-
-    const dims = this.dims;
+    if (k < 2) return null;
 
     // --- INCREMENTAL geometry update (see v3 docstring note above) --------
 
@@ -463,20 +455,18 @@ export class IncrementalH1 {
     // New point's neighbors: O(k) distance computations against every other
     // point still in the window (only the new point pays this, not all k).
     const newNeighbors = new Set<number>();
-    this.neighborsOf.set(newId, newNeighbors);
     const newEdgeCandidates: EdgeRec[] = [];
-    for (let i = 0; i < this.pointOrder.length - 1; i++) {
+    for (let i = 0; i < this.ptCount - 1; i++) {
       const otherId = this.pointOrder[i]!;
-      const otherCoord = this.pointCoords[i]!;
+      const base = i * this.dims;
       let s = 0;
-      for (let d = 0; d < dims; d++) {
-        const diff = coords[d]! - otherCoord[d]!;
+      for (let d = 0; d < this.dims; d++) {
+        const diff = coords[d]! - this.flatPtCoords[base + d]!;
         s += diff * diff;
       }
       const v = Math.sqrt(s);
       if (v <= this.maxDist) {
         newNeighbors.add(otherId);
-        this.neighborsOf.get(otherId)!.add(newId);
         newEdgeCandidates.push({ idA: Math.min(newId, otherId), idB: Math.max(newId, otherId), val: v });
       }
     }
@@ -582,7 +572,7 @@ export class IncrementalH1 {
       const p = newNeighborsArr[a]!;
       for (let b = a + 1; b < newNeighborsArr.length; b++) {
         const q = newNeighborsArr[b]!;
-        if (!this.neighborsOf.get(p)!.has(q)) continue;
+        if (getEdgeIdx(p, q) < 0) continue;
         let idA = newId;
         let idB = p;
         let idC = q;
