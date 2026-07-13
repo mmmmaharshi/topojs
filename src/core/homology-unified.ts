@@ -11,6 +11,7 @@ import type { Points } from "./distance.ts";
 import { computePersistentHomologyCohomologyImplicit } from "./homology-cohom-implicit.ts";
 import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
 import { computePersistentHomologyFast } from "./homology-fast.ts";
+import { computePersistentHomologyReduced } from "./homology-reduced.ts";
 import type { HomologyResult } from "./homology.ts";
 import { computePersistentHomology as computeStandard } from "./homology.ts";
 
@@ -24,7 +25,8 @@ export type HomologyEngine =
   | "standard"
   | "cohomology"
   | "implicit"
-  | "fast";
+  | "fast"
+  | "reduced";
 
 export interface HomologyOptions {
   /** Maximum filtration distance (default Infinity). */
@@ -35,6 +37,14 @@ export interface HomologyOptions {
    * Preferred engine. `"auto"` (or unspecified) picks:
    * - `"implicit"` if `epsilon` is provided (Sheehy-sparse complex)
    * - `"cohomology"` otherwise
+   *
+   * `"reduced"` uses the reduced Vietoris-Rips complex (Koyama, Memoli,
+   * Robins, Turner, arXiv:2307.16333) -- builds a much smaller 2-simplex
+   * set via per-edge lune connected-components, often a large speedup on
+   * dense complexes (see bench/data/reduced_vr_results.txt). It only
+   * computes H0+H1, so it throws if `maxDim` is 2 (the default) or higher;
+   * pass `maxDim: 1` explicitly to use it. Never auto-selected, since
+   * `computePersistentHomology`'s default scope is H0+H1+H2.
    */
   engine?: HomologyEngine;
   /** Sheehy sparse Rips parameter (only supported by the implicit engine). */
@@ -99,6 +109,14 @@ export function computePersistentHomology(
     }
     case "fast": {
       return computePersistentHomologyFast(points, dims, maxDist, maxDim);
+    }
+    case "reduced": {
+      if (maxDim > 1) {
+        throw new Error(
+          `engine: "reduced" only computes H0+H1 (Koyama/Memoli/Robins/Turner's reduced Vietoris-Rips complex has no H2 algorithm) -- requested maxDim=${maxDim}. Pass maxDim: 1, or use a different engine ("cohomology", "standard", "fast", "implicit") for H2.`
+        );
+      }
+      return computePersistentHomologyReduced(points, dims, maxDist);
     }
     default: {
       const _exhaustive: never = resolved;

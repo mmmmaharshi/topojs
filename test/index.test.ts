@@ -84,6 +84,26 @@ describe("public API barrel (src/index.ts)", () => {
     expect(result.complex.numVertices).toBe(3);
   });
 
+  it("end-to-end: computePersistentHomology's engine:'reduced' option works when called through the barrel import (H0+H1 only, matching the standard engine)", () => {
+    const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866, 0.5, 0.3]);
+    const standard = topojs.computePersistentHomology(points, 2, {
+      maxDim: 1,
+    });
+    const reduced = topojs.computePersistentHomology(points, 2, {
+      engine: "reduced",
+      maxDim: 1,
+    });
+    expect(reduced.complex.numVertices).toBe(standard.complex.numVertices);
+    expect(reduced.pairs).toHaveLength(standard.pairs.length);
+  });
+
+  it("computePersistentHomology's engine:'reduced' option throws a clear error if maxDim>1 is requested (it has no H2 algorithm)", () => {
+    const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
+    expect(() =>
+      topojs.computePersistentHomology(points, 2, { engine: "reduced" })
+    ).toThrow(/only computes H0\+H1/u);
+  });
+
   it("end-to-end: StreamingHomology + IncrementalH1 both work when instantiated through the barrel import", () => {
     const naive = new topojs.StreamingHomology({
       dims: 2,
