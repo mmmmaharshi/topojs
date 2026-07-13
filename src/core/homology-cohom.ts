@@ -70,6 +70,37 @@ import { DenseWorkingCol, ColumnStore } from "./reduction.ts";
  * section as a documented negative result, it is recoverable from version
  * history.
  *
+ * TRIED AND REJECTED (2): swap reduction (Bauer, Bin Masood, Giunti, Houry,
+ * Kerber, Rathod, "Keeping it sparse: Computing Persistent Homology
+ * revisited", arXiv:2211.09075, 2024, Algorithm 2) was implemented on top
+ * of this -- before XORing a stored column into the working column, if the
+ * working column currently has fewer nonzero entries than the stored one,
+ * retain the sparser column under the pivot's storage slot instead. This
+ * never changes the barcode (XOR is commutative, so the working column's
+ * post-XOR value is identical whether or not the swap fires -- the paper's
+ * Corollary 1: any operation preserving submatrix ranks yields the same
+ * persistence pairs), and was correctness-validated at scale (605 tests
+ * incl. a dedicated 360-config dense/tie-heavy sweep targeting long pivot
+ * cascades, 0 mismatches). But it measured a NET SLOWDOWN on every real
+ * dataset tried (UCI Wine/Sonar/Seeds/Iris, bench/swap-reduction-
+ * comparison.ts): 6-17% slower with the column-size check implemented as a
+ * bitvector popcount scan, and STILL slower (and at best a wash even in the
+ * most cascade-favorable case tried -- a fully complete Wine complex,
+ * maxDist=Infinity, 924k triangles) after fixing that check to genuine O(1)
+ * via an incrementally-maintained size counter. The mechanistic reason: the
+ * paper's efficiency case for swap reduction assumes free (O(1)) column-size
+ * queries, true for PHAT's sparse-array column representations, but the
+ * technique's benefit -- occasionally retaining a sparser column so a
+ * LATER cascade's XOR touches fewer entries -- never materialized enough on
+ * these problem sizes to pay back even the O(1) check's per-cascade-step
+ * overhead, let alone the cost of the overwrite itself. Reverted rather
+ * than kept as a measured regression; recoverable from version history if
+ * useful for a paper's methodology section as a documented negative result
+ * (a rare case where two out of the three "keep it sparse" variants in the
+ * source paper -- swap and, untried here, retrospective -- were evaluated
+ * and one clearly wasn't worth it for this specific dense-bitvector
+ * architecture, which the paper itself doesn't test against).
+ *
  * STATUS: differential-tested against computePersistentHomology (the
  * untouched ground truth) -- see test/homology-cohom.test.ts for the exact
  * scope and result.

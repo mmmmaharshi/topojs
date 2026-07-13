@@ -1,0 +1,67 @@
+SWAP REDUCTION (Bauer, Bin Masood, Giunti, Houry, Kerber, Rathod, "Keeping it
+sparse: Computing Persistent Homology revisited", arXiv:2211.09075, 2024,
+Algorithm 2) -- evaluated and REJECTED for computePersistentHomologyCohomology.
+
+Measured via bench/swap-reduction-comparison.ts, comparing git HEAD (pre-swap)
+against a working tree with swap reduction added to both the H1 and H2
+cohomology reduction loops. Real data only (UCI Wine, Sonar, Seeds, Iris),
+timing via median of 12 trials (3 warmup), memory via the existing repo
+convention (process.memoryUsage().heapUsed delta, median of 9 fresh builds,
+--expose-gc forced before/after each).
+
+ROUND 1 -- naive column-size check (DenseWorkingCol.popCount() implemented as
+a full bitvector word-scan, O(this.words) = O(total triangle count / 32),
+NOT O(1)):
+
+  UCI Wine (178x13D) maxDist=0.45:  baseline 1.360ms -> after 1.621ms (19% slower)
+  UCI Wine (178x13D) maxDist=0.5:   baseline 1.233ms -> after 1.407ms (14% slower)
+  UCI Sonar (208x60D) maxDist=1.6:  baseline 18.406ms -> after 21.618ms (17% slower)
+  UCI Seeds (210x7D) maxDist=0.35:  baseline 11.323ms -> after 12.817ms (13% slower)
+  UCI Iris (150x4D) maxDist=1.5:    baseline 45.947ms -> after 48.764ms (6% slower)
+
+Heap deltas in all cases: sub-0.03MB, i.e. within this measurement's own
+documented noise floor (see bench/benchmark.ts's memory-sweep docstring) --
+no detectable memory difference either direction.
+
+DIAGNOSIS: the paper's efficiency argument for swap reduction explicitly
+assumes O(1) column-size queries ("checking the size of a column ... requires
+constant time for most matrix representation types", section 3.1) -- true for
+PHAT's sparse-array column representations (size = array.length), but this
+codebase's DenseWorkingCol is a dense bitvector specifically chosen so PIVOT
+lookup is O(1)-ish (via Math.clz32), and that same choice makes column SIZE
+expensive to query (a full word scan). Swap reduction calls this size check
+on every single cascade iteration, so its real cost was being paid
+unconditionally regardless of how sparse the column actually was.
+
+ROUND 2 -- fixed to genuine O(1): DenseWorkingCol given an incrementally-
+maintained `size` counter (updated in loadFromArray/loadFromNumbers by
+assignment, in xorSparse by checking each toggled bit's prior state before
+flipping it -- net O(|col|), no extra asymptotic cost over the XOR already
+being paid). Re-benchmarked:
+
+  UCI Wine (178x13D) maxDist=0.45:  baseline 1.360ms -> after 1.48-1.73ms (~9-27% slower, noisy)
+  UCI Wine (178x13D) maxDist=0.5:   baseline 1.233ms -> after 1.66-1.80ms (~35-46% slower, noisy)
+  UCI Sonar (208x60D) maxDist=1.6:  baseline 18.406ms -> after 19.2-20.6ms (~4-12% slower)
+  UCI Seeds (210x7D) maxDist=0.35:  baseline 11.323ms -> after 12.3-13.1ms (~9-16% slower)
+  UCI Iris (150x4D) maxDist=1.5:    baseline 45.947ms -> after 47.7-50.4ms (~4-10% slower)
+
+Still consistently slower across 3 repeated runs, even after removing the
+O(words) tax. Extreme-case check (the single configuration expected to be
+MOST favorable to swap reduction -- a FULLY COMPLETE complex, maxDist=Infinity,
+forcing maximal pivot-cascade depth): UCI Wine, 15,753 edges, 924,176
+triangles. baseline 1362.5ms vs. after 1367.9ms -- a wash (0.4% difference,
+well within run-to-run noise), not the "considerable speedup" the paper
+reports for its own (sparse-array, PHAT-based) implementation and test suite.
+
+CONCLUSION: swap reduction does not help this codebase's cohomology engine,
+in any tested regime, including the theoretically most favorable one. The
+benefit the paper measures depends on a column representation with cheap
+size queries paired with an occasional payoff from sparser retained columns
+in later cascades; this codebase's dense-bitvector DenseWorkingCol (chosen
+for fast pivot search, a deliberate and separately load-bearing design
+choice -- see that class's docstring) doesn't provide a regime where that
+trade pays off at the real-data problem sizes exercised here (hundreds to
+low thousands of points, up to ~1M triangles). REVERTED from
+computePersistentHomologyCohomology; see homology-cohom.ts's "TRIED AND
+REJECTED (2)" docstring section and git history for the full implementation
+if useful for a paper's methodology section as a documented negative result.

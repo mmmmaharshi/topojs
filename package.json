@@ -44,7 +44,13 @@
     "test:coverage": "vitest run --coverage",
     "demo:real-data": "node --experimental-strip-types bench/real-data-validation.ts",
     "bench": "node --experimental-strip-types --expose-gc bench/benchmark.ts",
-    "bench:all": "npm run bench && for d in sunspots iris melbourne-temp; do npm run bench -- --scaling $d && npm run bench -- --memory $d; done && npm run bench -- --regime"
+    "bench:all": "npm run bench && for d in sunspots iris melbourne-temp; do npm run bench -- --scaling $d && npm run bench -- --memory $d; done && npm run bench -- --regime",
+    "bench:boundary": "node --experimental-strip-types bench/boundary-sensitivity.ts",
+    "bench:tightness": "node --experimental-strip-types bench/bound-tightness.ts",
+    "bench:h2-scaling": "node --experimental-strip-types bench/h2-scaling.ts",
+    "bench:complexity-fit": "node --experimental-strip-types bench/complexity-fit.ts",
+    "bench:swap-reduction": "node --experimental-strip-types --expose-gc bench/swap-reduction-comparison.ts",
+    "bench:reduced-vr": "node --experimental-strip-types --expose-gc bench/reduced-vr-comparison.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
