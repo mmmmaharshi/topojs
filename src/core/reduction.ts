@@ -47,6 +47,74 @@ export function xorSparse(a: Int32Array, b: Int32Array): Int32Array {
 }
 
 /**
+ * Column store — fixed-block-backed map from slot index to sparse column.
+ *
+ * Replaces `(Int32Array | null)[]` (a JS Array of nullable Int32Arrays) with
+ * a linked-list of fixed-size Int32Array blocks. Each column is written into
+ * the current block and retrieved as a stable `subarray` view (blocks are
+ * never relocated, so views into them remain valid indefinitely). This
+ * eliminates per-column `slice()` allocations from `toSparse()` and replaces
+ * dictionary-mode JS Array element accesses with typed-array accesses.
+ */
+export class ColumnStore {
+  private static readonly BLOCK_LOG2 = 12; // 4096 elements per block
+  private static readonly BLOCK_MASK = (1 << ColumnStore.BLOCK_LOG2) - 1;
+  private static readonly BLOCK_SIZE = 1 << ColumnStore.BLOCK_LOG2;
+
+  private blocks: Int32Array[] = [new Int32Array(ColumnStore.BLOCK_SIZE)];
+  private blockIdx = 0;
+  private blockOff = 0;
+  private starts: Int32Array;
+  private lengths: Int32Array;
+
+  constructor(capacity: number) {
+    this.starts = new Int32Array(capacity).fill(-1);
+    this.lengths = new Int32Array(capacity);
+  }
+
+  /** Store `values` at slot `idx`. */
+  set(idx: number, values: Int32Array): void {
+    const len = values.length;
+    this.ensureSpace(len);
+    const block = this.blocks[this.blockIdx]!;
+    const off = this.blockOff;
+    for (let i = 0; i < len; i++) block[off + i] = values[i]!;
+    this.starts[idx] = (this.blockIdx << ColumnStore.BLOCK_LOG2) | off;
+    this.lengths[idx] = len;
+    this.blockOff += len;
+  }
+
+  /** Store `count` leading entries of `scratch` at slot `idx`. */
+  setFromScratch(idx: number, scratch: Int32Array, count: number): void {
+    this.ensureSpace(count);
+    const block = this.blocks[this.blockIdx]!;
+    const off = this.blockOff;
+    for (let i = 0; i < count; i++) block[off + i] = scratch[i]!;
+    this.starts[idx] = (this.blockIdx << ColumnStore.BLOCK_LOG2) | off;
+    this.lengths[idx] = count;
+    this.blockOff += count;
+  }
+
+  /** Retrieve column at slot `idx`, or null if never stored. */
+  get(idx: number): Int32Array | null {
+    const packed = this.starts[idx]!;
+    if (packed < 0) return null;
+    const bi = packed >>> ColumnStore.BLOCK_LOG2;
+    const off = packed & ColumnStore.BLOCK_MASK;
+    return this.blocks[bi]!.subarray(off, off + this.lengths[idx]!);
+  }
+
+  private ensureSpace(needed: number): void {
+    if (this.blockOff + needed <= ColumnStore.BLOCK_SIZE) return;
+    this.blockIdx++;
+    this.blockOff = 0;
+    if (this.blockIdx >= this.blocks.length) {
+      this.blocks.push(new Int32Array(ColumnStore.BLOCK_SIZE));
+    }
+  }
+}
+
+/**
  * DenseWorkingCol — bit-vector column representation for boundary matrix reduction.
  *
  * Each column of the boundary matrix is stored as a dense bit-vector packed
@@ -73,8 +141,7 @@ export class DenseWorkingCol {
   // Scratch buffer for toSparse(): any set bit is a row index < numRows,
   // so numRows is a safe upper bound on the number of set bits, letting us
   // write directly into a preallocated typed array instead of a boxed JS
-  // array + push(). Reused across calls (each call only reads the first
-  // `count` slots it just wrote, via the returned slice()).
+  // array + push(). Reused across calls.
   private scratch: Int32Array;
 
   constructor(numEdges: number) {
@@ -145,7 +212,8 @@ export class DenseWorkingCol {
     return -1;
   }
 
-  toSparse(): Int32Array {
+  /** Populate scratch with extracted bits and return count. */
+  private extractBits(): number {
     const scratch = this.scratch;
     let count = 0;
     for (let w = 0; w < this.words; w++) {
@@ -157,10 +225,19 @@ export class DenseWorkingCol {
         word ^= lsb;
       }
     }
-    // Same values, same order (word-ascending, low-bit-first within word)
-    // as the original tmp-array version -- slice() copies out an owned,
-    // correctly-sized Int32Array with no JS-array boxing in the hot loop.
-    return scratch.slice(0, count);
+    return count;
+  }
+
+  /** Store the current column into a ColumnStore at the given slot. */
+  storeInto(store: ColumnStore, slot: number): void {
+    const count = this.extractBits();
+    store.setFromScratch(slot, this.scratch, count);
+  }
+
+  /** Extract as a standalone Int32Array (allocates each call). */
+  toSparse(): Int32Array {
+    const count = this.extractBits();
+    return this.scratch.slice(0, count);
   }
 }
 
