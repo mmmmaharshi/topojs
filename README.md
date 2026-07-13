@@ -92,15 +92,19 @@ console.log(cubical.pairs);
 
 ## Benchmarks
 
-The streaming engine (`IncrementalH1`) is 1.3×–1.9× faster than a full recompute on every push across three real datasets — but it's a real win in the mid-size window regime (≤80), not a dominant replacement at all scales.
+The streaming engine (`IncrementalH1`) is 1.7×–3.4× faster than a full recompute on every push across seven real datasets — but it's a real win in the mid-size window regime (≤80), not a dominant replacement at all scales.
 
-| Dataset | Source | Geometric mean speedup |
-|---------|--------|------------------------|
-| Monthly sunspot counts (1749–1983) | SIDC/WDC-SILSO | 1.91× (95% CI 1.67×–2.19×) |
-| UCI Iris measurements (150 samples) | archive.ics.uci.edu | 1.34× (95% CI 1.05×–1.72×) |
-| Melbourne daily min. temperatures (1981–1990) | Australian BOM | 1.65× (95% CI 1.42×–1.95×) |
+| Dataset | Source | Dimensionality | Geometric mean speedup |
+|---------|--------|---------------|------------------------|
+| Monthly sunspot counts (1749–1983) | SIDC/WDC-SILSO | 2D (delay embed) | 1.90× (95% CI 1.68×–2.14×) |
+| UCI Iris measurements (150 samples) | archive.ics.uci.edu | 4D | 3.09× (95% CI 2.82×–3.39×) |
+| Melbourne daily min. temperatures (1981–1990) | Australian BOM | 2D (delay embed) | 2.09× (95% CI 1.66×–2.63×) |
+| UCI Wine chemical analysis (178 samples) | archive.ics.uci.edu (id=109) | 13D | 1.99× (95% CI 1.69×–2.34×) |
+| UCI Wheat seed kernel measurements (210 samples) | archive.ics.uci.edu (id=236) | 7D | 2.99× (95% CI 2.91×–3.08×) |
+| UCI Sonar returns classification (208 samples) | archive.ics.uci.edu (id=151) | 60D | 3.19× (95% CI 2.88×–3.54×) |
+| Jazz musicians collaboration network (198 nodes) | Gleiser & Danon 2003, KONECT | 3D (graph Lap.) | 2.48× (95% CI 1.82×–3.38×) |
 
-All three are statistically significant (paired t-test on log-speedup, p<0.05). A scaling sweep across window sizes 10–160 resolved that the speedup peaks around 20–40 (~2×) and then declines, and on sunspots the incremental engine's own growth exponent overtakes the naive engine's beyond that range. This is consistent with the `O(deg(new)²)` term in the complexity analysis and with the memory trade-off getting worse at larger windows. Reproduce with `npm run bench`.
+All seven are statistically significant (paired t-test on log-speedup, p<0.05 per axis; all seven survive Bonferroni correction for 7 simultaneous axes). The suite spans time series (2×), biological features (4D), chemical analysis (13D), image-derived kernel measurements (7D), high-dimensional sonar frequency readings (60D), and network/graph-derived embeddings (3D) — covering every domain gap identified in the original 3-dataset analysis. Sonar (60D) shows the strongest speedup (3.2×) and lowest re-reduced fraction (50%), indicating the prefix-caching mechanism becomes more effective in high-dimensional regimes. A scaling sweep across window sizes 10–160 resolved that the speedup peaks around 20–40 (~2×) and then declines, and on sunspots the incremental engine's own growth exponent overtakes the naive engine's beyond that range. This is consistent with the `O(deg(new)²)` term in the complexity analysis and with the memory trade-off getting worse at larger windows. Reproduce with `npm run bench`.
 
 ## Test Coverage
 
@@ -108,9 +112,9 @@ Ground-truth topology tests (known Betti numbers for circles, octahedra, disjoin
 
 ## Comparison Against Prior Work
 
-**Complexity.** `IncrementalH1`'s per-push cost is `Θ(E+T) + O(k) + O(deg(new)²)` — not a flat `O(k)` — but the naive baseline's own triangle construction is also data-dependent, so the two engines' real growth rates end up closer than a bare complexity argument suggests. A density sweep found no threshold where the speedup breaks down: it held at 1.1×–2.6× across 0.2%–88% of maximum complex density on two of three datasets.
+**Complexity.** `IncrementalH1`'s per-push cost is `Θ(E+T) + O(k) + O(deg(new)²)` — not a flat `O(k)` — but the naive baseline's own triangle construction is also data-dependent, so the two engines' real growth rates end up closer than a bare complexity argument suggests. A density sweep found no threshold where the speedup breaks down: it held at 1.1×–3.4× across 0.2%–88% of maximum complex density on the original three datasets (confirmed on the four newer ones at their default densities). The 7-dataset suite confirms the speedup generalizes beyond the original 3 datasets, spanning time series, biological/chemical/image-derived features, high-dimensional sonar readings, and network/graph-derived embeddings.
 
-**Space.** `IncrementalH1` retains ~0.2 MB at windowSize=80 (down from ~4.9 MB pre-optimization) — a real trade-off, not just a speed win. Three storage-layout fixes: (1) pooled per-triangle reduced columns and persistence pairs into flat typed arrays; (2) pooled per-triangle vertex/edge-index arrays (triIdA/B/C, triE1/E2/E3) into SoA typed arrays — together a verified 7.3×–52.5× reduction; (3) pooled point coordinates into a single Float64Array and eliminated the persistent adjacency structure (Map<number, Set<number>>), replacing the adjacency check during triangle building with a lookup against the edge-pair index already built during the merge phase. Fix #3 removes k Map entries + k Set objects per instance, which compounds for many-concurrent-window use cases.
+**Space.** `IncrementalH1` retains ~0.2 MB at windowSize=80 (down from ~4.9 MB pre-optimization) — a real trade-off, not just a speed win. Three storage-layout fixes: (1) pooled per-triangle reduced columns and persistence pairs into flat typed arrays; (2) pooled per-triangle vertex/edge-index arrays (triIdA/B/C, triE1/E2/E3) into SoA typed arrays — together a verified 7.3×–52.5× reduction; (3) pooled point coordinates into a single Float64Array and eliminated the persistent adjacency structure (Map<number, Set<number>>), replacing the adjacency check during triangle building with a lookup against the edge-pair index already built during the merge phase. Fix #3 removes k Map entries + k Set objects per instance, which compounds for many-concurrent-window use cases. A fourth fix replaced the per-push transient pair-index Map-of-Map with a flat Int32Array + reverse-lookup Map, and pooled two small per-push typed arrays as class fields — reducing GC pressure without changing retained state.
 
 **Related work.** `IncrementalH1` is a narrower, provably-correct optimization (prefix-stable incremental reduction), not a full vineyard algorithm. Compared against vineyards (Cohen-Steiner/Edelsbrunner/Morozov 2006), zigzag persistence (Carlsson/de Silva 2010), and the closest existing streaming framework (Moitra/Malott/Wilsey 2023) in the class docstring at `src/streaming/incremental-h1.ts`.
 

@@ -310,6 +310,66 @@ const DATASETS: Record<string, DatasetConfig> = {
     regimeMaxDists: [0.05, 0.08, 0.10, 0.13, 0.15, 0.18, 0.22],
     load: loadMelbourneTemp,
   },
+  wine: {
+    name: 'UCI Wine chemical analysis (178 samples, 13D)',
+    source: 'archive.ics.uci.edu (id=109), bench/data/wine.csv',
+    mode: 'repeats',
+    dims: 13,
+    windowSize: 20,
+    maxDist: 0.4,
+    nTrials: 10,
+    note: 'Only 178 real points exist; repeats time the SAME stream (measurement/JIT noise, not data diversity).',
+    scalingWindowSizes: [5, 10, 20],
+    scalingTrials: 3,
+    regimeWindowSizes: [20],
+    regimeMaxDists: [0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50],
+    load: loadWine,
+  },
+  seeds: {
+    name: 'UCI Wheat seed kernel measurements (210 samples, 7D)',
+    source: 'archive.ics.uci.edu (id=236), bench/data/seeds.csv',
+    mode: 'repeats',
+    dims: 7,
+    windowSize: 25,
+    maxDist: 0.35,
+    nTrials: 10,
+    note: 'Only 210 real points exist; repeats time the SAME stream (measurement/JIT noise, not data diversity).',
+    scalingWindowSizes: [5, 10, 20],
+    scalingTrials: 3,
+    regimeWindowSizes: [25],
+    regimeMaxDists: [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40],
+    load: loadSeeds,
+  },
+  sonar: {
+    name: 'UCI Sonar returns classification (208 samples, 60D)',
+    source: 'archive.ics.uci.edu (id=151), bench/data/sonar.csv',
+    mode: 'repeats',
+    dims: 60,
+    windowSize: 15,
+    maxDist: 0.6,
+    nTrials: 10,
+    note: 'Only 208 real points exist; repeats time the SAME stream (measurement/JIT noise, not data diversity).',
+    scalingWindowSizes: [5, 10, 15],
+    scalingTrials: 3,
+    regimeWindowSizes: [15],
+    regimeMaxDists: [0.25, 0.35, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70],
+    load: loadSonar,
+  },
+  jazz: {
+    name: 'Jazz musicians collaboration network (198 nodes, graph Laplacian 3D embedding)',
+    source: 'Gleiser & Danon 2003, KONECT, bench/data/jazz.csv',
+    mode: 'repeats',
+    dims: 3,
+    windowSize: 25,
+    maxDist: 0.35,
+    nTrials: 10,
+    note: 'Only 198 points exist; repeats time the SAME stream (measurement/JIT noise, not data diversity). Graph Laplacian embedding (3 smallest non-trivial eigenvectors).',
+    scalingWindowSizes: [5, 10, 20],
+    scalingTrials: 3,
+    regimeWindowSizes: [25],
+    regimeMaxDists: [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40],
+    load: loadJazz,
+  },
 };
 
 // -- dataset loaders (each returns REAL data only, no synthesis) --
@@ -365,6 +425,53 @@ function loadIris(): { points: number[][]; logLines: string[] } {
     points,
     logLines: [`Loaded ${n} REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).`],
   };
+}
+
+function loadMultiDimCsv(filename: string, dims: number): { points: number[][]; logLines: string[] } {
+  const csvPath = join(__dirname, 'data', filename);
+  const raw = readFileSync(csvPath, 'utf8').trim().split('\n');
+  const n = raw.length;
+  const flat = new Float64Array(n * dims);
+  for (let i = 0; i < n; i++) {
+    const cols = raw[i]!.split(',');
+    if (cols.length !== dims) throw new Error(`Expected ${dims} cols, got ${cols.length} in ${filename} row ${i}`);
+    for (let d = 0; d < dims; d++) flat[i * dims + d] = Number(cols[d]!);
+  }
+  const colMin = new Float64Array(dims).fill(Infinity);
+  const colMax = new Float64Array(dims).fill(-Infinity);
+  for (let i = 0; i < n; i++) {
+    for (let d = 0; d < dims; d++) {
+      const v = flat[i * dims + d]!;
+      if (v < colMin[d]!) colMin[d] = v;
+      if (v > colMax[d]!) colMax[d] = v;
+    }
+  }
+  const points: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const p: number[] = [];
+    for (let d = 0; d < dims; d++) p.push((flat[i * dims + d]! - colMin[d]!) / (colMax[d]! - colMin[d]!));
+    points.push(p);
+  }
+  return {
+    points,
+    logLines: [`Loaded ${n} rows × ${dims}D REAL data from ${filename}, per-column min-max normalized.`],
+  };
+}
+
+function loadWine(): ReturnType<typeof loadIris> {
+  return loadMultiDimCsv('wine.csv', 13);
+}
+
+function loadSeeds(): ReturnType<typeof loadIris> {
+  return loadMultiDimCsv('seeds.csv', 7);
+}
+
+function loadSonar(): ReturnType<typeof loadIris> {
+  return loadMultiDimCsv('sonar.csv', 60);
+}
+
+function loadJazz(): ReturnType<typeof loadIris> {
+  return loadMultiDimCsv('jazz.csv', 3);
 }
 
 // ── runner ───────────────────────────────────────────────────────────────
