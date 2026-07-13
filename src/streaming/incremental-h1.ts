@@ -1045,11 +1045,22 @@ export class IncrementalH1 {
         }
       }
 
-      // Build triangle lookup: (idA,idB,idC) → index in merged triangle list
-      const triIdxMap = new Map<string, number>();
+      // Build triangle lookup: (idA,idB,idC) → index in merged triangle list.
+      // Uses Number-keyed Map with packed offset-from-min-ID to avoid string
+      // concatenation (which the class's own docstring documents as a ~50x
+      // slowdown in an earlier version of this very hot path).
+      const minId = this.pointOrder[0]!;
+      const stride = this.windowSize;
+      const triIdxMap = new Map<number, number>();
       for (let i = 0; i < newTrisCount; i++) {
-        triIdxMap.set(`${mIdA[i]!},${mIdB[i]!},${mIdC[i]!}`, i);
+        triIdxMap.set(
+          ((mIdA[i]! - minId) * stride + (mIdB[i]! - minId)) * stride +
+            (mIdC[i]! - minId),
+          i
+        );
       }
+      const triLookup = (a: number, b: number, c: number): number | undefined =>
+        triIdxMap.get(((a - minId) * stride + (b - minId)) * stride + (c - minId));
 
       // For each surviving tetrahedron, remap its boundary triangle indices
       const survTetCount = survivingTetOrigIdx.length;
@@ -1071,11 +1082,14 @@ export class IncrementalH1 {
         sTetVal[ci] = this.tetVal[oi]!;
         // Boundary triangles: remap old tri index to new tri index
         const lookupTri = (oldTriIdx: number): number => {
-          const key = `${this.triIdA[oldTriIdx]!},${this.triIdB[oldTriIdx]!},${this.triIdC[oldTriIdx]!}`;
-          const found = triIdxMap.get(key);
+          const found = triLookup(
+            this.triIdA[oldTriIdx]!,
+            this.triIdB[oldTriIdx]!,
+            this.triIdC[oldTriIdx]!
+          );
           if (found === undefined) {
             throw new Error(
-              `BUG: surviving tetrahedron's boundary triangle ${oldTriIdx} not found in merged triangle list; key="${key}", tet=(${this.tetIdA[oi]},${this.tetIdB[oi]},${this.tetIdC[oi]},${this.tetIdD[oi]}). This should never happen — it means a triangle whose vertices all survived eviction is missing from the new triangle list.`
+              `BUG: surviving tetrahedron's boundary triangle ${oldTriIdx} not found in merged triangle list; tet=(${this.tetIdA[oi]},${this.tetIdB[oi]},${this.tetIdC[oi]},${this.tetIdD[oi]}). This should never happen — it means a triangle whose vertices all survived eviction is missing from the new triangle list.`
             );
           }
           return found;
@@ -1103,7 +1117,7 @@ export class IncrementalH1 {
           ) {
             continue;
           }
-          const triIdx = triIdxMap.get(`${pa},${pb},${pc}`);
+          const triIdx = triLookup(pa, pb, pc);
           if (triIdx === undefined) {
             continue;
           }
@@ -1123,10 +1137,10 @@ export class IncrementalH1 {
           );
           const verts = [newId, pa, pb, pc].toSorted((a, b) => a - b);
           const [a, b, c, d] = [verts[0]!, verts[1]!, verts[2]!, verts[3]!];
-          const t1 = triIdxMap.get(`${a},${b},${c}`);
-          const t2 = triIdxMap.get(`${a},${b},${d}`);
-          const t3 = triIdxMap.get(`${a},${c},${d}`);
-          const t4 = triIdxMap.get(`${b},${c},${d}`);
+          const t1 = triLookup(a, b, c);
+          const t2 = triLookup(a, b, d);
+          const t3 = triLookup(a, c, d);
+          const t4 = triLookup(b, c, d);
           if (
             t1 === undefined ||
             t2 === undefined ||
