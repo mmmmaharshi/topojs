@@ -51,7 +51,7 @@ function runDifferentialTrial(
   assertDense = false
 ): void {
   const rng = mulberry32(seed);
-  const inc = new IncrementalH1({ dims, maxDist, windowSize });
+  const inc = new IncrementalH1({ dims, maxDim: 2, maxDist, windowSize });
   const allPoints: number[][] = [];
   let sawTetrahedra = false;
 
@@ -323,7 +323,12 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // is the octahedron 2-sphere. No tetrahedra exist (any 4 vertices
     // include at least one antipodal pair).
     const eps = Math.SQRT2 + 0.01;
-    const inc = new IncrementalH1({ dims: 3, maxDist: eps, windowSize: 8 });
+    const inc = new IncrementalH1({
+        dims: 3,
+        maxDim: 2,
+        maxDist: eps,
+        windowSize: 8,
+      });
     const updates: ReturnType<typeof inc.push>[] = [];
     for (const pt of octPts) {
       updates.push(inc.push(pt));
@@ -353,13 +358,18 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
       [0, 0, 1],
       [0, 0, -1],
     ];
-    const inc = new IncrementalH1({ dims: 3, maxDist: 2.1, windowSize: 8 });
-    const updates: ReturnType<typeof inc.push>[] = [];
-    for (const pt of octPts) {
-      updates.push(inc.push(pt));
-    }
-    // Push 5 (0-indexed) is the 6th push — all 6 unique octahedron points
-    // are now in the window with ALL 15 edges (antipodal distance 2 < 2.1).
+      const inc = new IncrementalH1({
+        dims: 3,
+        maxDim: 2,
+        maxDist: 2.1,
+        windowSize: 8,
+      });
+      const updates: ReturnType<typeof inc.push>[] = [];
+      for (const pt of octPts) {
+        updates.push(inc.push(pt));
+      }
+      // Push 5 (0-indexed) is the 6th push — all 6 unique octahedron points
+      // are now in the window with ALL 15 edges (antipodal distance 2 < 2.1).
     const update = updates[5]!;
     expect(update.complex.numTetrahedra).toBeGreaterThan(0);
     // Essential H2 should be 0 (all 2-cycles killed by tetrahedra)
@@ -391,12 +401,17 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
       [scale, 0, -1],
     ];
     const eps = Math.SQRT2 + 0.01;
-    const inc = new IncrementalH1({ dims: 3, maxDist: eps, windowSize: 12 });
-    const updates: ReturnType<typeof inc.push>[] = [];
-    for (const pt of octPts) {
-      updates.push(inc.push(pt));
-    }
-    // Push 11 (0-indexed) is the 12th push — all 12 unique octahedron
+    const inc = new IncrementalH1({
+        dims: 3,
+        maxDim: 2,
+        maxDist: eps,
+        windowSize: 12,
+      });
+      const updates: ReturnType<typeof inc.push>[] = [];
+      for (const pt of octPts) {
+        updates.push(inc.push(pt));
+      }
+      // Push 11 (0-indexed) is the 12th push — all 12 unique octahedron
     // points are now in the window. No edge connects the two octahedra
     // since the closest inter-octahedron distance is ~1000 >> maxDist.
     const update = updates[11]!;
@@ -434,9 +449,14 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
   it("handles maxDist=Infinity (maximal complex up to window capacity)", () => {
     // With maxDist=Infinity, all pairs are within distance. For 4+ points
     // in 3D, tetrahedra must form.
-    const inc = new IncrementalH1({ dims: 3, maxDist: Infinity, windowSize: 6 });
-    for (let i = 0; i < 6; i++) {
-      const update = inc.push([i, i, i]);
+    const inc = new IncrementalH1({
+        dims: 3,
+        maxDim: 2,
+        maxDist: Infinity,
+        windowSize: 6,
+      });
+      for (let i = 0; i < 6; i++) {
+        const update = inc.push([i, i, i]);
       if (!update) continue;
       if (update.complex.numVertices >= 4) {
         expect(update.complex.numTetrahedra).toBeGreaterThan(0);
@@ -453,11 +473,16 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
   it("handles zero-distance duplicate points (coincident)", () => {
     // Four coincident points at the origin: all edges have val=0.
     // With maxDist > 0, all 4 points form a 4-clique with tetrahedra.
-    const inc = new IncrementalH1({ dims: 3, maxDist: 1, windowSize: 8 });
-    for (let i = 0; i < 4; i++) {
-      inc.push([0, 0, 0]);
-    }
-    const update = inc.push([0, 0, 0]); // push 5
+    const inc = new IncrementalH1({
+        dims: 3,
+        maxDim: 2,
+        maxDist: 1,
+        windowSize: 8,
+      });
+      for (let i = 0; i < 4; i++) {
+        inc.push([0, 0, 0]);
+      }
+      const update = inc.push([0, 0, 0]); // push 5
     if (update) {
       expect(update.complex.numEdges).toBeGreaterThan(0);
       expect(update.complex.numTriangles).toBeGreaterThan(0);
@@ -471,9 +496,14 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // Checks basic invariants on every push and a full differential
     // comparison on the final push.
     const rng = mulberry32(71);
-    const inc = new IncrementalH1({ dims: 3, maxDist: 0.8, windowSize: 12 });
-    const allPts: number[][] = [];
-    let lastUpdate: Exclude<ReturnType<typeof inc.push>, null> | null = null;
+    const inc = new IncrementalH1({
+        dims: 3,
+        maxDim: 2,
+        maxDist: 0.8,
+        windowSize: 12,
+      });
+      const allPts: number[][] = [];
+      let lastUpdate: Exclude<ReturnType<typeof inc.push>, null> | null = null;
     for (let i = 0; i < 500; i++) {
       const pt = [rng(), rng(), rng()];
       allPts.push(pt);
@@ -527,13 +557,13 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
 
   it("rejects out-of-range maxDim values", () => {
     expect(
-      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 10, maxDim: -1 })
+      () => new IncrementalH1({ dims: 2, maxDim: -1, maxDist: 1, windowSize: 10 })
     ).toThrow("maxDim");
     expect(
-      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 10, maxDim: 3 })
+      () => new IncrementalH1({ dims: 2, maxDim: 3, maxDist: 1, windowSize: 10 })
     ).toThrow("maxDim");
     expect(
-      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 10, maxDim: 1.5 })
+      () => new IncrementalH1({ dims: 2, maxDim: 1.5, maxDist: 1, windowSize: 10 })
     ).toThrow("maxDim");
   });
 });

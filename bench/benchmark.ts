@@ -105,7 +105,7 @@ function benchNaive(
   warmup: number,
   timedSteps: number
 ): number {
-  const s = new StreamingHomology({ dims, maxDim: 2, maxDist, windowSize });
+  const s = new StreamingHomology({ dims, maxDim: 1, maxDist, windowSize });
   for (let i = 0; i < warmup; i++) {
     s.push(points[i]!);
   }
@@ -124,7 +124,7 @@ function benchIncremental(
   warmup: number,
   timedSteps: number
 ): { ms: number; reReducedFrac: number } {
-  const s = new IncrementalH1({ dims, maxDist, windowSize });
+  const s = new IncrementalH1({ dims, maxDim: 1, maxDist, windowSize });
   for (let i = 0; i < warmup; i++) {
     s.push(points[i]!);
   }
@@ -1030,7 +1030,7 @@ function runMemorySweep(key: string, windowSizes: number[]): void {
     const naiveMB = measureHeapMBMedian(() => {
       const s = new StreamingHomology({
         dims: cfg.dims,
-        maxDim: 2,
+        maxDim: 1,
         maxDist: cfg.maxDist,
         windowSize,
       });
@@ -1042,6 +1042,7 @@ function runMemorySweep(key: string, windowSizes: number[]): void {
     const incrMB = measureHeapMBMedian(() => {
       const s = new IncrementalH1({
         dims: cfg.dims,
+        maxDim: 1,
         maxDist: cfg.maxDist,
         windowSize,
       });

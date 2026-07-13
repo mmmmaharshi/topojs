@@ -163,11 +163,10 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  *  C(k,3) triangles vs C(k,4) tetrahedra), so the absolute memory impact
  *  of H2 support is modest compared to the existing triangle-level state.
  *
- * Scope: H0 + H1 + H2 when `maxDim` is set to 2 (the default). H0 is
+ * Scope: H0 + H1 + H2 when `maxDim` is set to 2. Default is 1 (H0+H1) for
  * recomputed fresh via union-find on every push — that step is already
  * O(E α(n)), not the bottleneck, so there is nothing to gain by making it
- * incremental too. Set `maxDim` to 1 for H0+H1 only (matches this class's
- * original scope before H2 was added).
+ * incremental too.
  */
 
 /** Configuration for {@link IncrementalH1}. */
@@ -498,7 +497,7 @@ export class IncrementalH1 {
       // catches negative AND NaN (NaN >= 0 is false)
       throw new Error("IncrementalH1: maxDist must be a non-negative number");
     }
-    const maxDim = opts.maxDim ?? 2;
+    const maxDim = opts.maxDim ?? 1;
     if (!Number.isInteger(maxDim) || maxDim < 0 || maxDim > 2) {
       throw new Error("IncrementalH1: maxDim must be 0, 1, or 2");
     }

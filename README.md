@@ -26,7 +26,7 @@ console.log(cubical.pairs);
 - **Cubical persistence** — H₀+H₁ on 2D grayscale images
 - **Bottleneck distance** — L∞ distance between two persistence diagrams, cross-validated against a brute-force reference
 - **Small footprint** — demo bundle ~10.3 KB raw / ~4.0 KB gzipped, runs in any ES2020 environment
-- **Streaming / incremental homology** — `IncrementalH1` updates H₀+H₁ without a full recompute on every push (1.3×–1.9× speedup on real data, at a real memory cost)
+- **Streaming / incremental homology** — `IncrementalH1` updates H₀+H₁ (and optionally H₂) without a full recompute on every push (1.3×–1.9× speedup on real data, at a real memory cost)
 - **Real-world datasets bundled** — MNIST digits, Iris flowers, terrain DEMs, natural image patches, torus/sphere 3D scans
 
 ## API
@@ -85,7 +85,7 @@ console.log(cubical.pairs);
 | --- | --- |
 | `SlidingWindow` | Fixed-capacity ring buffer of the most recent points, feeding both engines below |
 | `StreamingHomology` | Naive baseline — full recompute on every `push()`. Every incremental engine is differential-tested against this. |
-| `IncrementalH1` | Prefix-stable incremental engine — updates H₀+H₁+H₂ without a full recompute. Configured via `maxDim` (0=H₀ only, 1=H₀+H₁, 2=H₀+H₁+H₂, default 2). Returns `numTetrahedra` in `complex` and `reReducedTetrahedra`/`totalTetrahedra` in `stats`. Validated across many seeds/regimes against full recompute. See Benchmarks for the speed-to-memory trade-off. |
+| `IncrementalH1` | Prefix-stable incremental engine — updates H₀+H₁+H₂ without a full recompute. Configured via `maxDim` (0=H₀ only, 1=H₀+H₁, default, 2=H₀+H₁+H₂). Returns `numTetrahedra` in `complex` and `reReducedTetrahedra`/`totalTetrahedra` in `stats`. Validated across many seeds/regimes against full recompute. See Benchmarks for the speed-to-memory trade-off. |
 | `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result, for either streaming engine |
 
 ### Example datasets
