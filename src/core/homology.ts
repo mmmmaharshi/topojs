@@ -100,12 +100,13 @@ export function computePersistentHomology(
   // ── Phase 3: H2 (2-dimensional persistence) ──
   const h2Pairs: PersistencePair[] = [];
 
-  // rank(∂₂) = number of H1 pivots (edges paired with triangles)
-  const rank_d2 = h1Pivots.reduce((c, v) => c + (v >= 0 ? 1 : 0), 0);
-  // dim(ker(∂₂)) = triangles whose boundary is not linearly independent
-  const ker_d2 = triangles.length - rank_d2;
-
-  if (maxDim >= 3 && ker_d2 > 0) {
+  // rank(∂₂) = number of H1 pivots (edges paired with triangles);
+  // dim(ker(∂₂)) = triangles whose boundary is not linearly independent.
+  // We always run the tetrahedron reduction below (even when ker(∂₂) = 0)
+  // because finite H2 pairs (tetrahedron → triangle) are valid regardless.
+  // Essential H2 pairs (ker(∂₂) \ im(∂₃)) naturally turn up as nullspace
+  // triangles that survive the pivot table with no claimant.
+  if (maxDim >= 3) {
     // Which triangles generate 2-cycles (their H1 column reduced to zero)
     const nullspaceTrigs = new Uint8Array(triangles.length);
     for (let ci = 0; ci < triangles.length; ci++) {

@@ -3,7 +3,8 @@ import { computeH0PhaseFromArrays } from "../core/h0.ts";
 import { DenseWorkingCol } from "../core/reduction.ts";
 
 /**
- * Streaming persistent homology — Phase B: prefix-stable incremental H1.
+ * Streaming persistent homology — Phase B: prefix-stable incremental
+ * H0+H1+H2.
  *
  * IMPORTANT SCOPING NOTE (read before assuming this is a full "vineyard"
  * algorithm): it is not. The general vineyard algorithm (Cohen-Steiner,
@@ -25,6 +26,9 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  * are simply copied forward, no recomputation. Only the SUFFIX (from the
  * first point of divergence onward) is re-reduced from its raw boundary,
  * using the standard reduction loop from src/core/homology.ts.
+ * This same property applies to tetrahedra: their reduced form depends only
+ * on triangles strictly before them in filtration order, so the same prefix-
+ * stable copy-forward works for H2.
  *
  * This is correct by construction (it's the same proven algorithm, just
  * skipping a provably-unaffected prefix), not a heuristic.
@@ -113,7 +117,10 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  * triangle enumeration -- it uses bit-set adjacency intersection, cost
  * O(E*k/w), which is data-dependent too -- the real reason the two
  * engines' measured growth rates end up closer than an unqualified
- * "O(k) vs O(k^3)" framing would predict.
+ * "O(k) vs O(k^3)" framing would predict. With H2 support, the same
+ * Theta(T+Q) + O(deg(new)^3) cost applies to tetrahedron building (Q =
+ * tetrahedron count, O(deg(new)^3) for new tetrahedra enumeration), and
+ * the prefix-stable reduction extends identically to the H2 phase.
  *
  * DOES DENSITY PREDICT THE BREAKDOWN? Tested directly (`npm run bench --
  * --regime`): swept realized triangle density from <1% to 88% of the
@@ -147,12 +154,20 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  *  or a few concurrent windows; a real limitation for use cases with many
  *  concurrent windows (e.g. one per sensor across a fleet), where
  *  StreamingHomology's near-zero retained state may be the better choice
- *  despite its slower per-push time.
+ *  despite its slower per-push time. H2 support adds tetrahedron-level
+ *  cached state in the same pooled-typed-array pattern, roughly 8× the
+ *  per-tetrahedron storage of a TriRec (4 vertices + value + 4 boundary
+ *  triangle indices = 9 Int32s + 1 Float64 vs a TriRec's 6 Int32s + 1
+ *  Float64). In practice tetrahedron counts are 1-2 orders of magnitude
+ *  smaller than triangle counts for typical point clouds (a 4-simplex has
+ *  C(k,3) triangles vs C(k,4) tetrahedra), so the absolute memory impact
+ *  of H2 support is modest compared to the existing triangle-level state.
  *
- * Scope: H0 + H1 only (matches Phase A's default maxDim=2 scope). H0 is
+ * Scope: H0 + H1 + H2 when `maxDim` is set to 2 (the default). H0 is
  * recomputed fresh via union-find on every push — that step is already
  * O(E α(n)), not the bottleneck, so there is nothing to gain by making it
- * incremental too. H2 is out of scope for Phase B.
+ * incremental too. Set `maxDim` to 1 for H0+H1 only (matches this class's
+ * original scope before H2 was added).
  */
 
 /** Configuration for {@link IncrementalH1}. */
@@ -163,6 +178,12 @@ export interface IncrementalH1Options {
   dims: number;
   /** Vietoris–Rips threshold epsilon applied within each window. */
   maxDist: number;
+  /**
+   * Maximum homology dimension to compute: 0 = H0 only, 1 = H0+H1,
+   * 2 = H0+H1+H2. Default 2 (was 1 before H2 support was added; setting
+   * it to 1 matches the original behavior of this class).
+   */
+  maxDim?: number;
 }
 
 /** Result returned by {@link IncrementalH1}'s `push()` after each new point. */
@@ -170,9 +191,19 @@ export interface IncrementalH1Update {
   windowSize: number;
   isFull: boolean;
   pairs: PersistencePair[];
-  complex: { numVertices: number; numEdges: number; numTriangles: number };
+  complex: {
+    numVertices: number;
+    numEdges: number;
+    numTriangles: number;
+    numTetrahedra: number;
+  };
   /** How much of the matrix was actually re-reduced this push (diagnostics). */
-  stats: { reReducedTriangles: number; totalTriangles: number };
+  stats: {
+    reReducedTriangles: number;
+    totalTriangles: number;
+    reReducedTetrahedra: number;
+    totalTetrahedra: number;
+  };
 }
 
 interface EdgeRec {
@@ -189,6 +220,18 @@ interface TriRec {
   e1: number; // index into the (NEW) edgeOrder array for edge (idA,idB)
   e2: number; // index for edge (idA,idC)
   e3: number; // index for edge (idB,idC)
+}
+
+interface TetRec {
+  idA: number; // stable point id, idA < idB < idC < idD
+  idB: number;
+  idC: number;
+  idD: number;
+  val: number;
+  t1: number; // index into the (NEW) triOrder array for triangle (idA,idB,idC)
+  t2: number; // index for triangle (idA,idB,idD)
+  t3: number; // index for triangle (idA,idC,idD)
+  t4: number; // index for triangle (idB,idC,idD)
 }
 
 function cmpEdge(x: EdgeRec, y: EdgeRec): number {
@@ -212,6 +255,22 @@ function cmpTri(x: TriRec, y: TriRec): number {
     return x.idB - y.idB;
   }
   return x.idC - y.idC;
+}
+
+function cmpTet(x: TetRec, y: TetRec): number {
+  if (x.val !== y.val) {
+    return x.val - y.val;
+  }
+  if (x.idA !== y.idA) {
+    return x.idA - y.idA;
+  }
+  if (x.idB !== y.idB) {
+    return x.idB - y.idB;
+  }
+  if (x.idC !== y.idC) {
+    return x.idC - y.idC;
+  }
+  return x.idD - y.idD;
 }
 
 /**
@@ -272,12 +331,14 @@ export class IncrementalH1 {
   // grows the backing storage only when the current push's edge count
   // exceeds what's already allocated, otherwise reuses it as-is.
   private readonly working: DenseWorkingCol = new DenseWorkingCol(0);
+  private readonly workingH2: DenseWorkingCol = new DenseWorkingCol(0);
 
   // Reused per-push typed arrays -- replaces a new Int32Array(n).fill(-1)
   // allocation per push (oldEdgeIdxToNew) and a new Int32Array(3) per push
   // (boundaryScratch).
   private oldEdgeIdxToNew: Int32Array = new Int32Array(0);
   private boundaryScratch: Int32Array = new Int32Array(3);
+  private boundaryScratch4: Int32Array = new Int32Array(4);
 
   // reducedCols and triPair used to be `(Int32Array | null)[]` / `(PersistencePair
   // | null)[]` -- one separate small heap object (TypedArray+ArrayBuffer, or a
@@ -304,6 +365,26 @@ export class IncrementalH1 {
   private triPairHas: Uint8Array = new Uint8Array(0); // len = triIdA.length
   private triPairBirth: Float64Array = new Float64Array(0);
   private triPairDeath: Float64Array = new Float64Array(0);
+  /** Which triangles reduced to zero during H1 (ker(∂₂)), cached for H2 nullspace carry-forward. */
+  private triNullspace: Uint8Array = new Uint8Array(0);
+
+  // --- H2: tetrahedron pooled state (same pattern as triangles) ---
+  private tetIdA: Int32Array = new Int32Array(0);
+  private tetIdB: Int32Array = new Int32Array(0);
+  private tetIdC: Int32Array = new Int32Array(0);
+  private tetIdD: Int32Array = new Int32Array(0);
+  private tetVal: Float64Array = new Float64Array(0);
+  private tetT1: Int32Array = new Int32Array(0); // index into triOrder
+  private tetT2: Int32Array = new Int32Array(0);
+  private tetT3: Int32Array = new Int32Array(0);
+  private tetT4: Int32Array = new Int32Array(0);
+  private pivotOfTriIdx: Int32Array = new Int32Array(0); // len = triIdA.length
+  private tetColPool: Int32Array = new Int32Array(0);
+  private tetColOffset: Int32Array = new Int32Array(0);
+  private tetColLength: Int32Array = new Int32Array(0);
+  private tetPairHas: Uint8Array = new Uint8Array(0);
+  private tetPairBirth: Float64Array = new Float64Array(0);
+  private tetPairDeath: Float64Array = new Float64Array(0);
 
   /** Pack a transient array-of-(Int32Array|null) into the pooled representation. */
   private packReducedCols(cols: (Int32Array | null)[]): void {
@@ -331,6 +412,32 @@ export class IncrementalH1 {
     this.colLength = length;
   }
 
+  /** Pack a transient array-of-(Int32Array|null) into the tetra pooled representation. */
+  private packTetReducedCols(cols: (Int32Array | null)[]): void {
+    const n = cols.length;
+    const offset = new Int32Array(n);
+    const length = new Int32Array(n);
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const len = cols[i]?.length ?? 0;
+      length[i] = len;
+      total += len;
+    }
+    const pool = new Int32Array(total);
+    let cursor = 0;
+    for (let i = 0; i < n; i++) {
+      const c = cols[i];
+      offset[i] = cursor;
+      if (c && c.length > 0) {
+        pool.set(c, cursor);
+        cursor += c.length;
+      }
+    }
+    this.tetColPool = pool;
+    this.tetColOffset = offset;
+    this.tetColLength = length;
+  }
+
   /** Pack a transient array-of-(PersistencePair|null) into the pooled representation. */
   private packTriPair(pairs: (PersistencePair | null)[]): void {
     const n = pairs.length;
@@ -349,6 +456,27 @@ export class IncrementalH1 {
     this.triPairBirth = birth;
     this.triPairDeath = death;
   }
+
+  /** Pack a transient array-of-(PersistencePair|null) into the tetra pooled representation. */
+  private packTetPair(pairs: (PersistencePair | null)[]): void {
+    const n = pairs.length;
+    const has = new Uint8Array(n);
+    const birth = new Float64Array(n);
+    const death = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const p = pairs[i];
+      if (p) {
+        has[i] = 1;
+        birth[i] = p.birth;
+        death[i] = p.death;
+      }
+    }
+    this.tetPairHas = has;
+    this.tetPairBirth = birth;
+    this.tetPairDeath = death;
+  }
+
+  private readonly maxDim: number;
 
   constructor(opts: IncrementalH1Options) {
     // Matches SlidingWindow's validation (src/streaming/sliding-window.ts) --
@@ -370,6 +498,11 @@ export class IncrementalH1 {
       // catches negative AND NaN (NaN >= 0 is false)
       throw new Error("IncrementalH1: maxDist must be a non-negative number");
     }
+    const maxDim = opts.maxDim ?? 2;
+    if (!Number.isInteger(maxDim) || maxDim < 0 || maxDim > 2) {
+      throw new Error("IncrementalH1: maxDim must be 0, 1, or 2");
+    }
+    this.maxDim = maxDim;
     this.windowSize = opts.windowSize;
     this.dims = opts.dims;
     this.maxDist = opts.maxDist;
@@ -789,6 +922,7 @@ export class IncrementalH1 {
 
     this.working.ensureCapacity(newEdges.length);
     const { working } = this;
+    const nullspaceTrigs = new Uint8Array(newTrisCount); // 1 = triangle in ker(∂₂)
     for (let ci = triSafeCount; ci < newTrisCount; ci++) {
       this.boundaryScratch[0] = mE1[ci]!;
       this.boundaryScratch[1] = mE2[ci]!;
@@ -798,6 +932,7 @@ export class IncrementalH1 {
         const pivot = working.pivot();
         if (pivot < 0) {
           newReducedCols[ci] = new Int32Array(0);
+          nullspaceTrigs[ci] = 1;
           break;
         }
         const prev = newPivotOfEdgeIdx[pivot]!;
@@ -819,6 +954,10 @@ export class IncrementalH1 {
         }
         working.xorSparse(prevCol);
       }
+    }
+    // Carry forward nullspace for the safe prefix triangles
+    for (let ci = 0; ci < triSafeCount; ci++) {
+      nullspaceTrigs[ci] = this.triNullspace[ci] ?? 0;
     }
 
     // --- H0, recomputed fresh each push (cheap; not the optimization target) ---
@@ -864,6 +1003,368 @@ export class IncrementalH1 {
       }
     }
 
+    // --- H2: prefix-stable incremental tetrahedron reduction ---
+    const h2Pairs: PersistencePair[] = [];
+    let newTetCount = 0;
+    let tetSafeCount = 0;
+    let newPivotOfTriIdx: Int32Array = new Int32Array(0);
+    let newTetReducedCols: (Int32Array | null)[] = [];
+    let newTetPair: (PersistencePair | null)[] = [];
+    let mTetIdA: Int32Array = new Int32Array(0);
+    let mTetIdB: Int32Array = new Int32Array(0);
+    let mTetIdC: Int32Array = new Int32Array(0);
+    let mTetIdD: Int32Array = new Int32Array(0);
+    let mTetVal: Float64Array = new Float64Array(0);
+    let mTetT1: Int32Array = new Int32Array(0);
+    let mTetT2: Int32Array = new Int32Array(0);
+    let mTetT3: Int32Array = new Int32Array(0);
+    let mTetT4: Int32Array = new Int32Array(0);
+
+    if (this.maxDim >= 2) {
+      const tetCount = this.tetIdA.length;
+
+      // Filter tetrahedra that involve the evicted point
+      const survivingTetOrigIdx: number[] = [];
+      if (evictedId === null) {
+        for (let i = 0; i < tetCount; i++) {
+          survivingTetOrigIdx.push(i);
+        }
+      } else {
+        for (let i = 0; i < tetCount; i++) {
+          if (
+            this.tetIdA[i] === evictedId ||
+            this.tetIdB[i] === evictedId ||
+            this.tetIdC[i] === evictedId ||
+            this.tetIdD[i] === evictedId
+          ) {
+            continue;
+          }
+          survivingTetOrigIdx.push(i);
+        }
+      }
+
+      // Build triangle lookup: (idA,idB,idC) → index in merged triangle list
+      const triIdxMap = new Map<string, number>();
+      for (let i = 0; i < newTrisCount; i++) {
+        triIdxMap.set(`${mIdA[i]!},${mIdB[i]!},${mIdC[i]!}`, i);
+      }
+
+      // For each surviving tetrahedron, remap its boundary triangle indices
+      const survTetCount = survivingTetOrigIdx.length;
+      const sTetIdA = new Int32Array(survTetCount);
+      const sTetIdB = new Int32Array(survTetCount);
+      const sTetIdC = new Int32Array(survTetCount);
+      const sTetIdD = new Int32Array(survTetCount);
+      const sTetVal = new Float64Array(survTetCount);
+      const sTetT1 = new Int32Array(survTetCount);
+      const sTetT2 = new Int32Array(survTetCount);
+      const sTetT3 = new Int32Array(survTetCount);
+      const sTetT4 = new Int32Array(survTetCount);
+      for (let ci = 0; ci < survTetCount; ci++) {
+        const oi = survivingTetOrigIdx[ci]!;
+        sTetIdA[ci] = this.tetIdA[oi]!;
+        sTetIdB[ci] = this.tetIdB[oi]!;
+        sTetIdC[ci] = this.tetIdC[oi]!;
+        sTetIdD[ci] = this.tetIdD[oi]!;
+        sTetVal[ci] = this.tetVal[oi]!;
+        // Boundary triangles: remap old tri index to new tri index
+        const lookupTri = (oldTriIdx: number): number => {
+          const key = `${this.triIdA[oldTriIdx]!},${this.triIdB[oldTriIdx]!},${this.triIdC[oldTriIdx]!}`;
+          const found = triIdxMap.get(key);
+          if (found === undefined) {
+            if (typeof process !== "undefined" && process.env.DEBUG) {
+              console.log(
+                `  BUG: surviving tet ${ci} tri ${oldTriIdx} not found, key="${key}", tet=(${this.tetIdA[oi]},${this.tetIdB[oi]},${this.tetIdC[oi]},${this.tetIdD[oi]})`
+              );
+            }
+            return -1;
+          }
+          return found;
+        };
+        sTetT1[ci] = lookupTri(this.tetT1[oi]!);
+        sTetT2[ci] = lookupTri(this.tetT2[oi]!);
+        sTetT3[ci] = lookupTri(this.tetT3[oi]!);
+        sTetT4[ci] = lookupTri(this.tetT4[oi]!);
+      }
+
+      // Enumerate new tetrahedra formed by the new point: for each surviving
+      // triangle whose 3 vertices are ALL neighbors of the new point, the
+      // 4-vertex set {newId, p, q, r} forms a tetrahedron.
+      const newTetCandidates: TetRec[] = [];
+      const neighborsSet = new Set(newNeighborsArr);
+      if (newNeighborsArr.length >= 3) {
+        for (let ci = 0; ci < survCount; ci++) {
+          const pa = sIdA[ci]!;
+          const pb = sIdB[ci]!;
+          const pc = sIdC[ci]!;
+          if (
+            !neighborsSet.has(pa) ||
+            !neighborsSet.has(pb) ||
+            !neighborsSet.has(pc)
+          ) {
+            continue;
+          }
+          const triIdx = triIdxMap.get(`${pa},${pb},${pc}`);
+          if (triIdx === undefined) {
+            continue;
+          }
+          // Look up edge values for (newId, pa), (newId, pb), (newId, pc)
+          const getNewEdgeVal = (otherId: number): number => {
+            const ei = getEdgeIdx(newId, otherId);
+            if (ei >= 0 && ei < newEdges.length) {
+              return newEdges[ei]!.val;
+            }
+            return this.maxDist;
+          };
+          const val = Math.max(
+            sVal[ci]!,
+            getNewEdgeVal(pa),
+            getNewEdgeVal(pb),
+            getNewEdgeVal(pc)
+          );
+          const verts = [newId, pa, pb, pc].toSorted((a, b) => a - b);
+          const [a, b, c, d] = [verts[0]!, verts[1]!, verts[2]!, verts[3]!];
+          const t1 = triIdxMap.get(`${a},${b},${c}`);
+          const t2 = triIdxMap.get(`${a},${b},${d}`);
+          const t3 = triIdxMap.get(`${a},${c},${d}`);
+          const t4 = triIdxMap.get(`${b},${c},${d}`);
+          if (
+            t1 === undefined ||
+            t2 === undefined ||
+            t3 === undefined ||
+            t4 === undefined
+          ) {
+            continue;
+          }
+          newTetCandidates.push({
+            idA: a,
+            idB: b,
+            idC: c,
+            idD: d,
+            t1,
+            t2,
+            t3,
+            t4,
+            val,
+          });
+        }
+      }
+      newTetCandidates.sort(cmpTet);
+
+      // Merge surviving + new tetrahedra
+      newTetCount = survTetCount + newTetCandidates.length;
+      mTetIdA = new Int32Array(newTetCount);
+      mTetIdB = new Int32Array(newTetCount);
+      mTetIdC = new Int32Array(newTetCount);
+      mTetIdD = new Int32Array(newTetCount);
+      mTetVal = new Float64Array(newTetCount);
+      mTetT1 = new Int32Array(newTetCount);
+      mTetT2 = new Int32Array(newTetCount);
+      mTetT3 = new Int32Array(newTetCount);
+      mTetT4 = new Int32Array(newTetCount);
+      {
+        let i = 0;
+        let j = 0;
+        let w = 0;
+        while (i < survTetCount && j < newTetCandidates.length) {
+          const n = newTetCandidates[j]!;
+          let d = sTetVal[i]! - n.val;
+          if (d === 0) {
+            d = sTetIdA[i]! - n.idA;
+          }
+          if (d === 0) {
+            d = sTetIdB[i]! - n.idB;
+          }
+          if (d === 0) {
+            d = sTetIdC[i]! - n.idC;
+          }
+          if (d === 0) {
+            d = sTetIdD[i]! - n.idD;
+          }
+          if (d <= 0) {
+            mTetIdA[w] = sTetIdA[i]!;
+            mTetIdB[w] = sTetIdB[i]!;
+            mTetIdC[w] = sTetIdC[i]!;
+            mTetIdD[w] = sTetIdD[i]!;
+            mTetVal[w] = sTetVal[i]!;
+            mTetT1[w] = sTetT1[i]!;
+            mTetT2[w] = sTetT2[i]!;
+            mTetT3[w] = sTetT3[i]!;
+            mTetT4[w] = sTetT4[i]!;
+            i++;
+          } else {
+            mTetIdA[w] = n.idA;
+            mTetIdB[w] = n.idB;
+            mTetIdC[w] = n.idC;
+            mTetIdD[w] = n.idD;
+            mTetVal[w] = n.val;
+            mTetT1[w] = n.t1;
+            mTetT2[w] = n.t2;
+            mTetT3[w] = n.t3;
+            mTetT4[w] = n.t4;
+            j++;
+          }
+          w++;
+        }
+        while (i < survTetCount) {
+          mTetIdA[w] = sTetIdA[i]!;
+          mTetIdB[w] = sTetIdB[i]!;
+          mTetIdC[w] = sTetIdC[i]!;
+          mTetIdD[w] = sTetIdD[i]!;
+          mTetVal[w] = sTetVal[i]!;
+          mTetT1[w] = sTetT1[i]!;
+          mTetT2[w] = sTetT2[i]!;
+          mTetT3[w] = sTetT3[i]!;
+          mTetT4[w] = sTetT4[i]!;
+          i++;
+          w++;
+        }
+        while (j < newTetCandidates.length) {
+          const n = newTetCandidates[j]!;
+          mTetIdA[w] = n.idA;
+          mTetIdB[w] = n.idB;
+          mTetIdC[w] = n.idC;
+          mTetIdD[w] = n.idD;
+          mTetVal[w] = n.val;
+          mTetT1[w] = n.t1;
+          mTetT2[w] = n.t2;
+          mTetT3[w] = n.t3;
+          mTetT4[w] = n.t4;
+          j++;
+          w++;
+        }
+      }
+
+      // Longest common tetra identity prefix vs previous push
+      let tetSafeCountRaw = 0;
+      while (
+        tetSafeCountRaw < tetCount &&
+        tetSafeCountRaw < newTetCount &&
+        this.tetIdA[tetSafeCountRaw] === mTetIdA[tetSafeCountRaw] &&
+        this.tetIdB[tetSafeCountRaw] === mTetIdB[tetSafeCountRaw] &&
+        this.tetIdC[tetSafeCountRaw] === mTetIdC[tetSafeCountRaw] &&
+        this.tetIdD[tetSafeCountRaw] === mTetIdD[tetSafeCountRaw]
+      ) {
+        tetSafeCountRaw++;
+      }
+
+      // Shrink: every safe tetrahedron's 4 boundary triangles must be within
+      // the safe triangle prefix (otherwise the triangle's pivot may have
+      // changed during H1 re-reduction, invalidating the cached tetra column).
+      tetSafeCount = 0;
+      for (; tetSafeCount < tetSafeCountRaw; tetSafeCount++) {
+        if (
+          mTetT1[tetSafeCount]! >= triSafeCount ||
+          mTetT2[tetSafeCount]! >= triSafeCount ||
+          mTetT3[tetSafeCount]! >= triSafeCount ||
+          mTetT4[tetSafeCount]! >= triSafeCount
+        ) {
+          break;
+        }
+      }
+
+      // Carry forward safe tetra prefix, init rest
+      newPivotOfTriIdx = new Int32Array(newTrisCount).fill(-1);
+      newTetReducedCols = Array.from<Int32Array | null>({
+        length: newTetCount,
+      }).fill(null);
+      newTetPair = Array.from<PersistencePair | null>({
+        length: newTetCount,
+      }).fill(null);
+
+      for (let ci = 0; ci < tetSafeCount; ci++) {
+        const off = this.tetColOffset[ci]!;
+        const len = this.tetColLength[ci]!;
+        newTetReducedCols[ci] = this.tetColPool.subarray(off, off + len);
+        newTetPair[ci] = this.tetPairHas[ci]
+          ? {
+              birth: this.tetPairBirth[ci]!,
+              death: this.tetPairDeath[ci]!,
+              dim: 2,
+            }
+          : null;
+      }
+
+      // Carry forward pivot-of-triangle entries for triangles in the safe
+      // prefix that were claimed by a safe (carried-forward) tetrahedron
+      // in the previous push. Without this, the essential-H2 scan below
+      // (nullspaceTrigs[t] && newPivotOfTriIdx[t] < 0) would incorrectly
+      // emit triangles that ARE killed by a persisted tetrahedron as
+      // essential 2-cycles.
+      for (let ti = 0; ti < triSafeCount; ti++) {
+        const prev = this.pivotOfTriIdx[ti]!;
+        if (prev >= 0 && prev < tetSafeCount) {
+          newPivotOfTriIdx[ti] = prev;
+        }
+      }
+
+      // H2 reduction: tetrahedron columns vs triangle pivots
+      this.workingH2.ensureCapacity(newTrisCount);
+      const { workingH2: working2 } = this;
+      for (let ci = tetSafeCount; ci < newTetCount; ci++) {
+        this.boundaryScratch4[0] = mTetT1[ci]!;
+        this.boundaryScratch4[1] = mTetT2[ci]!;
+        this.boundaryScratch4[2] = mTetT3[ci]!;
+        this.boundaryScratch4[3] = mTetT4[ci]!;
+        working2.loadFromArray(this.boundaryScratch4);
+        while (true) {
+          const pivot = working2.pivot();
+          if (pivot < 0) {
+            newTetReducedCols[ci] = new Int32Array(0);
+            break;
+          }
+          const prev = newPivotOfTriIdx[pivot]!;
+          if (prev < 0) {
+            newPivotOfTriIdx[pivot] = ci;
+            newTetReducedCols[ci] = working2.toSparse();
+            if (mTetVal[ci]! > mVal[pivot]!) {
+              newTetPair[ci] = {
+                birth: mVal[pivot]!,
+                death: mTetVal[ci]!,
+                dim: 2,
+              };
+            }
+            break;
+          }
+          const prevCol = newTetReducedCols[prev];
+          if (prevCol === null || prevCol === undefined) {
+            break;
+          }
+          working2.xorSparse(prevCol);
+        }
+      }
+
+      // Collect H2 pairs: finite (from reduction) + essential (nullspace triangles)
+      for (let ci = 0; ci < newTetCount; ci++) {
+        if (newTetPair[ci]) {
+          const p = newTetPair[ci]!;
+          // Find the pivot triangle index for this tetrahedron
+          let pivot = -1;
+          for (let ti = 0; ti < newTrisCount; ti++) {
+            if (newPivotOfTriIdx[ti] === ci) {
+              pivot = ti;
+              break;
+            }
+          }
+          if (typeof process !== "undefined" && process.env.DEBUG) {
+            const t1 = mTetT1[ci]!,
+              t2 = mTetT2[ci]!,
+              t3 = mTetT3[ci]!,
+              t4 = mTetT4[ci]!;
+            console.log(
+              `  H2 pair emitted: tet=${ci} val=${mTetVal[ci]} pivotTri=${pivot} pivotVal=${mVal[pivot]!} boundary=[${t1}(v=${mVal[t1]!}),${t2}(v=${mVal[t2]!}),${t3}(v=${mVal[t3]!}),${t4}(v=${mVal[t4]!})] tetVerts=(${mTetIdA[ci]},${mTetIdB[ci]},${mTetIdC[ci]},${mTetIdD[ci]})`
+            );
+          }
+          h2Pairs.push(p);
+        }
+      }
+      for (let ti = 0; ti < newTrisCount; ti++) {
+        if (nullspaceTrigs[ti] && newPivotOfTriIdx[ti]! < 0) {
+          h2Pairs.push({ birth: mVal[ti]!, death: -1, dim: 2 });
+        }
+      }
+    }
+
     // commit new state for next push. reducedCols/triPair are packed into
     // pooled storage here (see field comment above) -- newReducedCols and
     // newTriPair (the transient array-of-objects used only for this push's
@@ -880,19 +1381,35 @@ export class IncrementalH1 {
     this.triE2 = mE2;
     this.triE3 = mE3;
     this.pivotOfEdgeIdx = newPivotOfEdgeIdx;
+    this.triNullspace = nullspaceTrigs;
     this.packReducedCols(newReducedCols);
     this.packTriPair(newTriPair);
+    this.tetIdA = mTetIdA;
+    this.tetIdB = mTetIdB;
+    this.tetIdC = mTetIdC;
+    this.tetIdD = mTetIdD;
+    this.tetVal = mTetVal;
+    this.tetT1 = mTetT1;
+    this.tetT2 = mTetT2;
+    this.tetT3 = mTetT3;
+    this.tetT4 = mTetT4;
+    this.pivotOfTriIdx = newPivotOfTriIdx;
+    this.packTetReducedCols(newTetReducedCols);
+    this.packTetPair(newTetPair);
 
     return {
       complex: {
         numEdges: newEdges.length,
+        numTetrahedra: newTetCount,
         numTriangles: newTrisCount,
         numVertices: k,
       },
       isFull: this.isFull,
-      pairs: [...h0Pairs, ...h1Pairs],
+      pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
       stats: {
+        reReducedTetrahedra: this.maxDim >= 2 ? newTetCount - tetSafeCount : 0,
         reReducedTriangles: newTrisCount - triSafeCount,
+        totalTetrahedra: this.maxDim >= 2 ? newTetCount : 0,
         totalTriangles: newTrisCount,
       },
       windowSize: k,
