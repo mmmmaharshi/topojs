@@ -3,7 +3,7 @@ import type { PersistencePair } from './h0.ts';
 import { computeH0Phase } from './h0.ts';
 import type { HomologyResult } from './homology.ts';
 import { buildRipsComplex } from './complex.ts';
-import { DenseWorkingCol } from './reduction.ts';
+import { DenseWorkingCol, ColumnStore } from './reduction.ts';
 
 /**
  * Persistent homology of H1 computed via PERSISTENT COHOMOLOGY (reduction in
@@ -178,7 +178,7 @@ export function computePersistentHomologyCohomology(
   // column) -- so later edges whose cascade reaches the same pivot can
   // XOR against it directly with no conversion.
   const triPivotOwner = new Int32Array(triangles.length).fill(-1);
-  const edgeReducedCol: (Int32Array | null)[] = new Array(edges.length).fill(null);
+  const edgeReducedCol = new ColumnStore(edges.length);
 
   const w = new DenseWorkingCol(triangles.length);
 
@@ -191,7 +191,6 @@ export function computePersistentHomologyCohomology(
     while (true) {
       const flippedPivot = w.pivot();
       if (flippedPivot < 0) {
-        // Column reduced fully to zero: essential (infinite) H1 class.
         h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
         break;
       }
@@ -199,14 +198,14 @@ export function computePersistentHomologyCohomology(
       const owner = triPivotOwner[pivot]!;
       if (owner < 0) {
         triPivotOwner[pivot] = ei;
-        edgeReducedCol[ei] = w.toSparse();
+        w.storeInto(edgeReducedCol, ei);
         if (triangles[pivot]!.val > edges[ei]!.val) {
           h1Pairs.push({ birth: edges[ei]!.val, death: triangles[pivot]!.val, dim: 1 });
         }
         break;
       }
-      const prevCol = edgeReducedCol[owner];
-      if (prevCol === null || prevCol === undefined) break;
+      const prevCol = edgeReducedCol.get(owner);
+      if (prevCol === null) break;
       w.xorSparse(prevCol);
     }
   }
@@ -265,7 +264,7 @@ export function computePersistentHomologyCohomology(
     }
 
     const tetPivotOwner = new Int32Array(tetrahedra.length).fill(-1);
-    const triReducedCol: (Int32Array | null)[] = new Array(triangles.length).fill(null);
+    const triReducedCol = new ColumnStore(triangles.length);
 
     const w2 = new DenseWorkingCol(tetrahedra.length);
 
@@ -290,14 +289,14 @@ export function computePersistentHomologyCohomology(
         const owner = tetPivotOwner[pivot]!;
         if (owner < 0) {
           tetPivotOwner[pivot] = ci;
-          triReducedCol[ci] = w2.toSparse();
+          w2.storeInto(triReducedCol, ci);
           if (tetrahedra[pivot]!.val > triangles[ci]!.val) {
             h2Pairs.push({ birth: triangles[ci]!.val, death: tetrahedra[pivot]!.val, dim: 2 });
           }
           break;
         }
-        const prevCol = triReducedCol[owner];
-        if (prevCol === null || prevCol === undefined) break;
+        const prevCol = triReducedCol.get(owner);
+        if (prevCol === null) break;
         w2.xorSparse(prevCol);
       }
     }
