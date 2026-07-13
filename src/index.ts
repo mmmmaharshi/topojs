@@ -85,16 +85,14 @@ export {
 } from "./data/realworld-datasets.ts";
 
 // ── Streaming persistent homology ──
-export { SlidingWindow } from "./streaming/sliding-window.ts";
-export { StreamingHomology } from "./streaming/streaming-homology.ts";
-export type {
-  StreamingHomologyOptions,
-  StreamingUpdate,
-} from "./streaming/streaming-homology.ts";
-export { summarizeForStreaming } from "./streaming/topological-summary.ts";
-export type { TopologicalSummary } from "./streaming/topological-summary.ts";
-export { IncrementalH1 } from "./streaming/incremental-h1.ts";
-export type {
-  IncrementalH1Options,
-  IncrementalH1Update,
-} from "./streaming/incremental-h1.ts";
+export {
+  SlidingWindow,
+  StreamingHomology,
+  type StreamingHomologyOptions,
+  type StreamingUpdate,
+  IncrementalH1,
+  type IncrementalH1Options,
+  type IncrementalH1Update,
+  summarizeForStreaming,
+  type TopologicalSummary,
+} from "./streaming/index.ts";
