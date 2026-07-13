@@ -19,9 +19,6 @@ const disabled = [
 
 export default defineConfig({
   extends: [core, vitest],
-  ignorePatterns: [
-    ...(core.ignorePatterns ?? []),
-    "demo/topojs-bundle.mjs",
-  ],
+  ignorePatterns: [...(core.ignorePatterns ?? []), "demo/topojs-bundle.mjs"],
   rules: Object.fromEntries(disabled.map((r) => [r, "off"])),
 });
