@@ -11,12 +11,12 @@ TopoJS is a zero-dependency, pure-TypeScript library for computing persistent ho
 - Build: `npm run build` (runs `tsc`, output in `dist/`, gitignored)
 - Typecheck only: `npx tsc --noEmit`
 - Test: `npm test` (`vitest run`) — `npm run test:watch` for watch mode, `npm run test:coverage` for a coverage report
-- Lint: `npm run lint` (`eslint .`)
+- Lint: `npm run lint` (`ultracite check`, wraps oxlint)
 - Demo bundle: `npm run build:demo` (esbuild, bundles `demo/bundle-entry.ts` to `demo/topojs-bundle.mjs`) — re-run this after any change to a function re-exported from `demo/bundle-entry.ts`, otherwise the demo page silently drifts from `src/` (this happened once; see git history for finding #3)
 - Benchmarks (real data only, not part of the published package): `npm run bench` or `npm run bench -- <dataset>` (see `bench/benchmark.ts` for the dataset registry and flags: `--scaling`, `--regime`, `--memory`). `npm run bench:all` runs every axis (default, `--scaling`, `--memory`, `--regime`) across every registered dataset in one command — takes a few minutes; requires a POSIX shell (macOS/Linux/WSL/git-bash), not plain Windows `cmd.exe`, since it uses a `for` loop.
 - Ripser cross-check (separate Python script, own dependencies — see `bench/requirements.txt`): `python3 bench/compare_ripser.py`
 
-CI (`.github/workflows/ci.yml`) runs `npm test`, `npx tsc --noEmit`, and `npm run lint` on Node 20/22/24. Note: `bench`/`demo:real-data` require Node ≥22.7 (`--experimental-strip-types` -- plain type stripping, not the now-removed `--experimental-transform-types`; this codebase uses no enums/namespaces, so plain stripping has always been sufficient) and are NOT run in CI.
+CI (`.github/workflows/ci.yml`) runs `npm test`, `npx tsc --noEmit`, and `npm run lint` on Node 22/24. Note: `bench`/`demo:real-data` require Node ≥22.7 (`--experimental-strip-types` -- plain type stripping, not the now-removed `--experimental-transform-types`; this codebase uses no enums/namespaces, so plain stripping has always been sufficient) and are NOT run in CI.
 
 ## Public API boundary
 
@@ -32,7 +32,7 @@ Only what is re-exported from `src/index.ts` is the public contract (`package.js
 
 ## Where to look first
 
-- `src/index.ts` — the full public API surface, one file, with docstrings explaining what's validated and how.
+- `src/index.ts` — the full public API surface, one file. Docstrings live in the individual implementation modules, not the barrel.
 - `README.md`'s "Comparison Against Prior Work" section — the honest, measured (not claimed) performance and correctness story, including known limitations.
 - `test/helpers.ts` — shared test utilities (seeded RNG, ground-truth topology generators) used across the suite.
 
