@@ -156,3 +156,13 @@ compound for many-concurrent-window use cases (k instances avoid k×Map/Set).
   melbourne-temp:  windowSize=10/20/40/80 -> 0.005/0.007/0.018/0.185 MB, ratio 1.48/1.18/2.09/3.51
   (Iris not re-run; k=20 incr expected to show a proportionally larger
   relative reduction given it has fewer edges/triangles to dominate.)
+
+AFTER FIX 4 (2026-07-12): pairIndex Map-of-Map replaced with flat Int32Array + reverse-
+lookup Map (eliminates O(deg(new)) Map objects + O(E_relevant) Map Entry objects per
+push); oldEdgeIdxToNew and boundaryScratch pooled as class fields (same reuse pattern as
+DenseWorkingCol). Fix #4 targets transient (per-push) GC pressure, not retained state,
+so incr_MB is essentially identical to fix #3 within harness noise -- confirmed by a full
+memory sweep of all three datasets after the change:
+  sunspots:        windowSize=10/20/40/80 -> 0.010/0.019/0.095/0.212 MB, ratio 1.50/10.81/4.18/7.10
+  melbourne-temp:  windowSize=10/20/40/80 -> 0.009/0.006/0.039/0.188 MB, ratio 2.20/1.09/1.83/5.07
+  iris:            windowSize=5/10/20     -> 0.009/0.010/0.027 MB,       ratio 1.36/2.70/8.86

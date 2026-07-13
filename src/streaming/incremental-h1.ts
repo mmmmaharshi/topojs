@@ -1,5 +1,5 @@
 import type { PersistencePair } from '../core/h0.ts';
-import { computeH0Phase } from '../core/h0.ts';
+import { computeH0PhaseFromArrays } from '../core/h0.ts';
 import { DenseWorkingCol } from '../core/reduction.ts';
 
 /**
@@ -263,34 +263,11 @@ export class IncrementalH1 {
   // exceeds what's already allocated, otherwise reuses it as-is.
   private readonly working: DenseWorkingCol = new DenseWorkingCol(0);
 
-  /** Pack a transient TriRec[] into the pooled SoA representation. */
-  private packTriOrder(tris: TriRec[]): void {
-    const n = tris.length;
-    const idA = new Int32Array(n);
-    const idB = new Int32Array(n);
-    const idC = new Int32Array(n);
-    const val = new Float64Array(n);
-    const e1 = new Int32Array(n);
-    const e2 = new Int32Array(n);
-    const e3 = new Int32Array(n);
-    for (let i = 0; i < n; i++) {
-      const t = tris[i]!;
-      idA[i] = t.idA;
-      idB[i] = t.idB;
-      idC[i] = t.idC;
-      val[i] = t.val;
-      e1[i] = t.e1;
-      e2[i] = t.e2;
-      e3[i] = t.e3;
-    }
-    this.triIdA = idA;
-    this.triIdB = idB;
-    this.triIdC = idC;
-    this.triVal = val;
-    this.triE1 = e1;
-    this.triE2 = e2;
-    this.triE3 = e3;
-  }
+  // Reused per-push typed arrays -- replaces a new Int32Array(n).fill(-1)
+  // allocation per push (oldEdgeIdxToNew) and a new Int32Array(3) per push
+  // (boundaryScratch).
+  private oldEdgeIdxToNew: Int32Array = new Int32Array(0);
+  private boundaryScratch: Int32Array = new Int32Array(3);
 
   // reducedCols and triPair used to be `(Int32Array | null)[]` / `(PersistencePair
   // | null)[]` -- one separate small heap object (TypedArray+ArrayBuffer, or a
@@ -472,12 +449,6 @@ export class IncrementalH1 {
     }
     newEdgeCandidates.sort(cmpEdge);
 
-    // Every id that can appear in a NEW triangle this push (must include
-    // newId itself). The pair-index built below is scoped to just this
-    // small set, not all k points.
-    const relevant = new Set<number>(newNeighbors);
-    relevant.add(newId);
-
     // Merge survivingEdges (already sorted from last push) with
     // newEdgeCandidates (sorted, small) into the final sorted edge list —
     // O(total edges), not an O(k log k) full re-sort. While merging:
@@ -485,23 +456,32 @@ export class IncrementalH1 {
     //     (positions shift because of the filter/merge), needed to fix up
     //     survivingTris' boundary-edge indices below;
     // (b) record a small pair-index for any edge whose both endpoints are
-    //     in `relevant` — exactly what's needed to resolve the boundary
-    //     edges of the new triangles built further down.
+    //     among the new point and its neighbors — exactly what's needed
+    //     to resolve the boundary edges of the new triangles further down.
+    //     Uses a flat Int32Array indexed by position-within-relevant-set
+    //     (replaces a previous Map-of-Map that created O(deg(new)) Map
+    //     objects per push — fix #4).
+    const relevantIdx = new Map<number, number>();
+    for (const id of newNeighbors) relevantIdx.set(id, relevantIdx.size);
+    relevantIdx.set(newId, relevantIdx.size);
+    const r = relevantIdx.size;
+    const pairIdxFlat = new Int32Array(r * r).fill(-1);
+    const recordPair = (e: EdgeRec, idx: number): void => {
+      const pi = relevantIdx.get(e.idA);
+      if (pi === undefined) return;
+      const pj = relevantIdx.get(e.idB);
+      if (pj === undefined) return;
+      pairIdxFlat[pi * r + pj] = idx;
+    };
     const newEdges: EdgeRec[] = new Array(survivingEdges.length + newEdgeCandidates.length);
     // Indexed by ORIGINAL position in this.edgeOrder (pre-filter) — that is
     // the index space survivingTrisUnfiltered's e1/e2/e3 were written in.
-    const oldEdgeIdxToNew = new Int32Array(this.edgeOrder.length).fill(-1);
-    const pairIndex = new Map<number, Map<number, number>>();
-    const recordPair = (e: EdgeRec, idx: number): void => {
-      if (relevant.has(e.idA) && relevant.has(e.idB)) {
-        let inner = pairIndex.get(e.idA);
-        if (!inner) {
-          inner = new Map();
-          pairIndex.set(e.idA, inner);
-        }
-        inner.set(e.idB, idx);
+    {
+      if (this.oldEdgeIdxToNew.length < this.edgeOrder.length) {
+        this.oldEdgeIdxToNew = new Int32Array(this.edgeOrder.length);
       }
-    };
+      this.oldEdgeIdxToNew.fill(-1, 0, this.edgeOrder.length);
+    }
     {
       let i = 0;
       let j = 0;
@@ -511,7 +491,7 @@ export class IncrementalH1 {
         const b = newEdgeCandidates[j]!;
         if (cmpEdge(a, b) <= 0) {
           newEdges[w] = a;
-          oldEdgeIdxToNew[survivingEdgeOrigIdx[i]!] = w;
+          this.oldEdgeIdxToNew[survivingEdgeOrigIdx[i]!] = w;
           recordPair(a, w);
           i++;
         } else {
@@ -524,7 +504,7 @@ export class IncrementalH1 {
       while (i < survivingEdges.length) {
         const a = survivingEdges[i]!;
         newEdges[w] = a;
-        oldEdgeIdxToNew[survivingEdgeOrigIdx[i]!] = w;
+        this.oldEdgeIdxToNew[survivingEdgeOrigIdx[i]!] = w;
         recordPair(a, w);
         i++;
         w++;
@@ -541,26 +521,35 @@ export class IncrementalH1 {
     const getEdgeIdx = (x: number, y: number): number => {
       const lo = Math.min(x, y);
       const hi = Math.max(x, y);
-      return pairIndex.get(lo)?.get(hi) ?? -1;
+      const pi = relevantIdx.get(lo);
+      if (pi === undefined) return -1;
+      const pj = relevantIdx.get(hi);
+      if (pj === undefined) return -1;
+      return pairIdxFlat[pi * r + pj]!;
     };
 
     // Remap surviving triangles' boundary-edge indices to their new
     // positions (identity/value unchanged, only array position shifts).
     // Reads straight from the pooled arrays via each survivor's original
-    // index -- same cost as reading TriRec object fields did before, just
-    // through a different storage layout.
-    const survivingTris: TriRec[] = new Array(survivingTriOrigIdx.length);
-    for (let ci = 0; ci < survivingTriOrigIdx.length; ci++) {
+    // index -- builds flat SoA arrays directly instead of TriRec objects
+    // (fix #6: ~O(T) TriRec object allocations per push eliminated).
+    const survCount = survivingTriOrigIdx.length;
+    const sIdA = new Int32Array(survCount);
+    const sIdB = new Int32Array(survCount);
+    const sIdC = new Int32Array(survCount);
+    const sVal = new Float64Array(survCount);
+    const sE1 = new Int32Array(survCount);
+    const sE2 = new Int32Array(survCount);
+    const sE3 = new Int32Array(survCount);
+    for (let ci = 0; ci < survCount; ci++) {
       const oi = survivingTriOrigIdx[ci]!;
-      survivingTris[ci] = {
-        idA: this.triIdA[oi]!,
-        idB: this.triIdB[oi]!,
-        idC: this.triIdC[oi]!,
-        val: this.triVal[oi]!,
-        e1: oldEdgeIdxToNew[this.triE1[oi]!]!,
-        e2: oldEdgeIdxToNew[this.triE2[oi]!]!,
-        e3: oldEdgeIdxToNew[this.triE3[oi]!]!,
-      };
+      sIdA[ci] = this.triIdA[oi]!;
+      sIdB[ci] = this.triIdB[oi]!;
+      sIdC[ci] = this.triIdC[oi]!;
+      sVal[ci] = this.triVal[oi]!;
+      sE1[ci] = this.oldEdgeIdxToNew[this.triE1[oi]!]!;
+      sE2[ci] = this.oldEdgeIdxToNew[this.triE2[oi]!]!;
+      sE3[ci] = this.oldEdgeIdxToNew[this.triE3[oi]!]!;
     }
 
     // New triangles provably must include the new point: every pair of the
@@ -588,20 +577,49 @@ export class IncrementalH1 {
     }
     newTriCandidates.sort(cmpTri);
 
-    // Merge survivingTris (already sorted) with newTriCandidates (sorted,
-    // small) — O(total triangles), yields the same total order as a full
-    // sort would.
-    const newTris: TriRec[] = new Array(survivingTris.length + newTriCandidates.length);
+    // Merge survivors (flat SoA arrays, sorted) with newTriCandidates (sorted
+    // TriRec[], small) into flat output arrays -- avoids creating ~O(T) TriRec
+    // objects per push (fix #6).
+    const newTrisCount = survCount + newTriCandidates.length;
+    const mIdA = new Int32Array(newTrisCount);
+    const mIdB = new Int32Array(newTrisCount);
+    const mIdC = new Int32Array(newTrisCount);
+    const mVal = new Float64Array(newTrisCount);
+    const mE1 = new Int32Array(newTrisCount);
+    const mE2 = new Int32Array(newTrisCount);
+    const mE3 = new Int32Array(newTrisCount);
     {
       let i = 0;
       let j = 0;
       let w = 0;
-      while (i < survivingTris.length && j < newTriCandidates.length) {
-        if (cmpTri(survivingTris[i]!, newTriCandidates[j]!) <= 0) newTris[w++] = survivingTris[i++]!;
-        else newTris[w++] = newTriCandidates[j++]!;
+      while (i < survCount && j < newTriCandidates.length) {
+        const n = newTriCandidates[j]!;
+        let d = sVal[i]! - n.val;
+        if (d === 0) d = sIdA[i]! - n.idA;
+        if (d === 0) d = sIdB[i]! - n.idB;
+        if (d === 0) d = sIdC[i]! - n.idC;
+        if (d <= 0) {
+          mIdA[w] = sIdA[i]!; mIdB[w] = sIdB[i]!; mIdC[w] = sIdC[i]!;
+          mVal[w] = sVal[i]!; mE1[w] = sE1[i]!; mE2[w] = sE2[i]!; mE3[w] = sE3[i]!;
+          i++;
+        } else {
+          mIdA[w] = n.idA; mIdB[w] = n.idB; mIdC[w] = n.idC;
+          mVal[w] = n.val; mE1[w] = n.e1; mE2[w] = n.e2; mE3[w] = n.e3;
+          j++;
+        }
+        w++;
       }
-      while (i < survivingTris.length) newTris[w++] = survivingTris[i++]!;
-      while (j < newTriCandidates.length) newTris[w++] = newTriCandidates[j++]!;
+      while (i < survCount) {
+        mIdA[w] = sIdA[i]!; mIdB[w] = sIdB[i]!; mIdC[w] = sIdC[i]!;
+        mVal[w] = sVal[i]!; mE1[w] = sE1[i]!; mE2[w] = sE2[i]!; mE3[w] = sE3[i]!;
+        i++; w++;
+      }
+      while (j < newTriCandidates.length) {
+        const n = newTriCandidates[j]!;
+        mIdA[w] = n.idA; mIdB[w] = n.idB; mIdC[w] = n.idC;
+        mVal[w] = n.val; mE1[w] = n.e1; mE2[w] = n.e2; mE3[w] = n.e3;
+        j++; w++;
+      }
     }
     // --- end incremental geometry update; everything below is unchanged ---
 
@@ -619,10 +637,10 @@ export class IncrementalH1 {
     let triSafeCountRaw = 0;
     while (
       triSafeCountRaw < triCount &&
-      triSafeCountRaw < newTris.length &&
-      this.triIdA[triSafeCountRaw] === newTris[triSafeCountRaw]!.idA &&
-      this.triIdB[triSafeCountRaw] === newTris[triSafeCountRaw]!.idB &&
-      this.triIdC[triSafeCountRaw] === newTris[triSafeCountRaw]!.idC
+      triSafeCountRaw < newTrisCount &&
+      this.triIdA[triSafeCountRaw] === mIdA[triSafeCountRaw] &&
+      this.triIdB[triSafeCountRaw] === mIdB[triSafeCountRaw] &&
+      this.triIdC[triSafeCountRaw] === mIdC[triSafeCountRaw]
     ) {
       triSafeCountRaw++;
     }
@@ -634,14 +652,13 @@ export class IncrementalH1 {
     // chain). e1/e2/e3 already point into the CURRENT (new) edgeOrder.
     let triSafeCount = 0;
     for (; triSafeCount < triSafeCountRaw; triSafeCount++) {
-      const t = newTris[triSafeCount]!;
-      if (t.e1 >= edgeSafeCount || t.e2 >= edgeSafeCount || t.e3 >= edgeSafeCount) break;
+      if (mE1[triSafeCount]! >= edgeSafeCount || mE2[triSafeCount]! >= edgeSafeCount || mE3[triSafeCount]! >= edgeSafeCount) break;
     }
 
     // --- carry forward the safe prefix, re-reduce the rest ---
     const newPivotOfEdgeIdx = new Int32Array(newEdges.length).fill(-1);
-    const newReducedCols: (Int32Array | null)[] = new Array(newTris.length).fill(null);
-    const newTriPair: (PersistencePair | null)[] = new Array(newTris.length).fill(null);
+    const newReducedCols: (Int32Array | null)[] = new Array(newTrisCount).fill(null);
+    const newTriPair: (PersistencePair | null)[] = new Array(newTrisCount).fill(null);
 
     for (let i = 0; i < edgeSafeCount; i++) {
       const prevPivot = this.pivotOfEdgeIdx[i]!;
@@ -666,13 +683,11 @@ export class IncrementalH1 {
 
     this.working.ensureCapacity(newEdges.length);
     const working = this.working;
-    const boundaryScratch = new Int32Array(3);
-    for (let ci = triSafeCount; ci < newTris.length; ci++) {
-      const tri = newTris[ci]!;
-      boundaryScratch[0] = tri.e1;
-      boundaryScratch[1] = tri.e2;
-      boundaryScratch[2] = tri.e3;
-      working.loadFromArray(boundaryScratch);
+    for (let ci = triSafeCount; ci < newTrisCount; ci++) {
+      this.boundaryScratch[0] = mE1[ci]!;
+      this.boundaryScratch[1] = mE2[ci]!;
+      this.boundaryScratch[2] = mE3[ci]!;
+      working.loadFromArray(this.boundaryScratch);
       while (true) {
         const pivot = working.pivot();
         if (pivot < 0) {
@@ -683,8 +698,8 @@ export class IncrementalH1 {
         if (prev < 0) {
           newPivotOfEdgeIdx[pivot] = ci;
           newReducedCols[ci] = working.toSparse();
-          if (tri.val > newEdges[pivot]!.val) {
-            newTriPair[ci] = { birth: newEdges[pivot]!.val, death: tri.val, dim: 1 };
+          if (mVal[ci]! > newEdges[pivot]!.val) {
+            newTriPair[ci] = { birth: newEdges[pivot]!.val, death: mVal[ci]!, dim: 1 };
           }
           break;
         }
@@ -695,30 +710,30 @@ export class IncrementalH1 {
     }
 
     // --- H0, recomputed fresh each push (cheap; not the optimization target) ---
-    // Shared via computeH0Phase (src/core/h0.ts) -- same function every
-    // other engine in this codebase uses, found during a codebase audit to
-    // have been copy-pasted (with a hand-rolled, non-union-by-size
-    // union-find) inline here instead. This site's edges are keyed by
-    // stable point id (idA/idB), not already-local indices, so they're
-    // remapped to local window indices [0,k) first -- a small, O(k)
-    // per-push allocation, consistent with this phase already being
-    // documented as "cheap; not the optimization target."
-    // Correctness-validated by this file's own exact-match-against-full-
-    // recompute differential tests (test/incremental.test.ts).
+    // Uses computeH0PhaseFromArrays (src/core/h0.ts) -- same function every
+    // other engine in this codebase uses, refactored behind a shared
+    // implementation to also accept flat typed arrays. This site's edges are
+    // keyed by stable point id (idA/idB), not already-local indices, so they're
+    // remapped to local window indices [0,k) into flat arrays first -- avoids
+    // allocating one EdgeEntry object per edge (~|newEdges| objects per push).
     const ids = this.pointOrder;
-    // local-index lookup by stable id (small, O(k), not the bottleneck)
-    const localIndexById = new Map<number, number>();
-    for (let i = 0; i < k; i++) localIndexById.set(ids[i]!, i);
-
-    const localEdges = newEdges.map(e => ({
-      u: localIndexById.get(e.idA)!,
-      v: localIndexById.get(e.idB)!,
-      val: e.val,
-    }));
-    const { h0Pairs, cycleEdges: cycleEdge } = computeH0Phase(k, localEdges);
+    const uArr = new Int32Array(newEdges.length);
+    const vArr = new Int32Array(newEdges.length);
+    const valArr = new Float64Array(newEdges.length);
+    {
+      const localIndexById = new Map<number, number>();
+      for (let i = 0; i < k; i++) localIndexById.set(ids[i]!, i);
+      for (let ei = 0; ei < newEdges.length; ei++) {
+        const e = newEdges[ei]!;
+        uArr[ei] = localIndexById.get(e.idA)!;
+        vArr[ei] = localIndexById.get(e.idB)!;
+        valArr[ei] = e.val;
+      }
+    }
+    const { h0Pairs, cycleEdges: cycleEdge } = computeH0PhaseFromArrays(k, uArr, vArr, valArr, newEdges.length);
 
     const h1Pairs: PersistencePair[] = [];
-    for (let ci = 0; ci < newTris.length; ci++) {
+    for (let ci = 0; ci < newTrisCount; ci++) {
       if (newTriPair[ci]) h1Pairs.push(newTriPair[ci]!);
     }
     for (let ei = 0; ei < newEdges.length; ei++) {
@@ -732,9 +747,16 @@ export class IncrementalH1 {
     // newTriPair (the transient array-of-objects used only for this push's
     // computation, already fully consumed by h1Pairs above) become garbage
     // immediately after this, instead of being what's retained until the
-    // next push.
+    // next push. triOrder is already in flat SoA arrays (mIdA/B/C, mVal,
+    // mE1/E2/E3) — assigned directly, skipping the former packTriOrder call.
     this.edgeOrder = newEdges;
-    this.packTriOrder(newTris);
+    this.triIdA = mIdA;
+    this.triIdB = mIdB;
+    this.triIdC = mIdC;
+    this.triVal = mVal;
+    this.triE1 = mE1;
+    this.triE2 = mE2;
+    this.triE3 = mE3;
     this.pivotOfEdgeIdx = newPivotOfEdgeIdx;
     this.packReducedCols(newReducedCols);
     this.packTriPair(newTriPair);
@@ -743,8 +765,8 @@ export class IncrementalH1 {
       windowSize: k,
       isFull: this.isFull,
       pairs: [...h0Pairs, ...h1Pairs],
-      complex: { numVertices: k, numEdges: newEdges.length, numTriangles: newTris.length },
-      stats: { reReducedTriangles: newTris.length - triSafeCount, totalTriangles: newTris.length },
+      complex: { numVertices: k, numEdges: newEdges.length, numTriangles: newTrisCount },
+      stats: { reReducedTriangles: newTrisCount - triSafeCount, totalTriangles: newTrisCount },
     };
   }
 }
