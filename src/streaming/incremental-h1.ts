@@ -1074,12 +1074,9 @@ export class IncrementalH1 {
           const key = `${this.triIdA[oldTriIdx]!},${this.triIdB[oldTriIdx]!},${this.triIdC[oldTriIdx]!}`;
           const found = triIdxMap.get(key);
           if (found === undefined) {
-            if (typeof process !== "undefined" && process.env.DEBUG) {
-              console.log(
-                `  BUG: surviving tet ${ci} tri ${oldTriIdx} not found, key="${key}", tet=(${this.tetIdA[oi]},${this.tetIdB[oi]},${this.tetIdC[oi]},${this.tetIdD[oi]})`
-              );
-            }
-            return -1;
+            throw new Error(
+              `BUG: surviving tetrahedron's boundary triangle ${oldTriIdx} not found in merged triangle list; key="${key}", tet=(${this.tetIdA[oi]},${this.tetIdB[oi]},${this.tetIdC[oi]},${this.tetIdD[oi]}). This should never happen — it means a triangle whose vertices all survived eviction is missing from the new triangle list.`
+            );
           }
           return found;
         };
