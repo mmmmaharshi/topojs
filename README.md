@@ -72,6 +72,13 @@ console.log(cubical.pairs);
 | `summarize(pairs)` | Statistics (counts, max death, min birth). `total` always equals `h0+h1+h2+higher`. |
 | `splitByDimension(pairs)` | Separates H₀/H₁/H₂ (finite and essential) plus a `higher` bucket for dim≥3 — no pair is ever dropped. |
 
+### Persistence vectorization
+
+| Function | Description |
+| --- | --- |
+| `computePersistenceLandscape(pairs, options?)` | Persistence landscape (Bubenik 2015) — returns `k × resolution` grid of landscape values Λ₁..Λₖ. Handles essential pairs (as half-line tent functions). Options: `maxLandscape`, `resolution`, `maxFiltration`. |
+| `computePersistenceImage(pairs, options?)` | Persistence image (Adams et al. 2017) — returns `yRes × xRes` grid of pixel values. Gaussian blur at each birth–persistence point, weighted linearly by persistence. Options: `resolution`, `variance`, `weightFunction`, `maxFiltration`. |
+
 ### Streaming / incremental homology
 
 | Function / Class | Description |

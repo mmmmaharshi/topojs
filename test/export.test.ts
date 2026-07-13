@@ -9,6 +9,10 @@ import {
   summarize,
   splitByDimension,
 } from "../src/export/persistence-diagram.ts";
+import {
+  computePersistenceLandscape,
+  computePersistenceImage,
+} from "../src/export/vectorization.ts";
 import { mulberry32 } from "./helpers.ts";
 
 const SAMPLE_PAIRS: PersistencePair[] = [
@@ -193,5 +197,88 @@ describe("export / serialization round-trips", () => {
         PAIRS_WITH_HIGHER_DIMS.length
       );
     });
+  });
+});
+
+describe("persistence vectorization", () => {
+  const pairs: PersistencePair[] = [
+    { birth: 0, death: 1, dim: 0 },
+    { birth: 0.2, death: 0.8, dim: 1 },
+    { birth: 0.5, death: -1, dim: 1 },
+  ];
+
+  it("landscape shape matches options", () => {
+    const L = computePersistenceLandscape(pairs, {
+      maxFiltration: 1,
+      maxLandscape: 3,
+      resolution: 10,
+    });
+    expect(L).toHaveLength(3);
+    for (const layer of L) {
+      expect(layer).toHaveLength(10);
+      for (const v of layer) {
+        expect(v).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it("landscape first layer is non-zero somewhere", () => {
+    const L = computePersistenceLandscape(pairs, {
+      maxFiltration: 1,
+      maxLandscape: 3,
+      resolution: 50,
+    });
+    const hasNonZero = L[0]!.some((v) => v > 0);
+    expect(hasNonZero).toBeTruthy();
+  });
+
+  it("landscape defaults handle empty pairs", () => {
+    const L = computePersistenceLandscape([], { maxFiltration: 1 });
+    expect(L).toHaveLength(5);
+    for (const layer of L) {
+      for (const v of layer) {
+        expect(v).toBe(0);
+      }
+    }
+  });
+
+  it("image shape matches options", () => {
+    const img = computePersistenceImage(pairs, {
+      maxFiltration: 1,
+      resolution: [20, 15],
+      variance: 0.05,
+    });
+    expect(img).toHaveLength(15);
+    for (const row of img) {
+      expect(row).toHaveLength(20);
+    }
+  });
+
+  it("image is non-zero near a pair", () => {
+    const single: PersistencePair[] = [{ birth: 0.4, death: 0.6, dim: 1 }];
+    const img = computePersistenceImage(single, {
+      maxFiltration: 1,
+      resolution: [50, 50],
+      variance: 0.02,
+    });
+    const sum = img.reduce((s, row) => s + row.reduce((a, b) => a + b, 0), 0);
+    expect(sum).toBeGreaterThan(0);
+  });
+
+  it("image handles empty pairs", () => {
+    const img = computePersistenceImage([], { maxFiltration: 1 });
+    expect(img).toHaveLength(50);
+    expect(img[0]).toHaveLength(50);
+    expect(img[0]![0]).toBe(0);
+  });
+
+  it("image with none weight and zero persistence yields empty", () => {
+    const zeroPers: PersistencePair[] = [{ birth: 0.5, death: 0.5, dim: 1 }];
+    const img = computePersistenceImage(zeroPers, {
+      maxFiltration: 1,
+      weightFunction: "linear",
+    });
+    const sum = img.reduce((s, row) => s + row.reduce((a, b) => a + b, 0), 0);
+    expect(sum).toBe(0);
   });
 });

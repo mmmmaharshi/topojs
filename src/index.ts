@@ -67,6 +67,16 @@ export type {
   DiagramStats,
 } from "./export/persistence-diagram.ts";
 
+// ── Persistence vectorization ──
+export {
+  computePersistenceLandscape,
+  computePersistenceImage,
+} from "./export/vectorization.ts";
+export type {
+  PersistenceLandscapeOptions,
+  PersistenceImageOptions,
+} from "./export/vectorization.ts";
+
 // ── Real-world example datasets ──
 export {
   loadMNISTDigits,

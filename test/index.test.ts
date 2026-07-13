@@ -59,6 +59,11 @@ describe("public API barrel (src/index.ts)", () => {
   });
   /* eslint-enable vitest/max-expects */
 
+  it("exports every documented persistence-vectorization function", () => {
+    expect(topojs.computePersistenceLandscape).toBeTypeOf("function");
+    expect(topojs.computePersistenceImage).toBeTypeOf("function");
+  });
+
   it("exports every documented streaming/incremental class and helper", () => {
     expect(topojs.SlidingWindow).toBeTypeOf("function"); // class
     expect(topojs.StreamingHomology).toBeTypeOf("function"); // class
