@@ -1,6 +1,7 @@
 import type { Points } from './distance.ts';
 import { SpatialGrid } from './spatial-grid.ts';
 import type { EdgeEntry } from './h0.ts';
+import { selectLandmarks } from './landmarks.ts';
 
 function euclidean(points: Points, dims: number, i: number, j: number): number {
   const bi = i * dims;
@@ -11,6 +12,23 @@ function euclidean(points: Points, dims: number, i: number, j: number): number {
     sq += diff * diff;
   }
   return Math.sqrt(sq);
+}
+
+/**
+ * Metadata for the Sheehy sparse Rips construction.
+ * (1+epsilon)-interleaving guarantee with the full Rips filtration.
+ */
+export interface SheehyInfo {
+  /** Permutation of point indices (greedy permutation order). */
+  perm: Int32Array;
+  /** Insertion radius of each point in the permutation (radii[0] = 0). */
+  radii: Float64Array;
+  /** Approximation parameter. */
+  epsilon: number;
+  /** Number of active points at the given maxDist. */
+  activeCount: number;
+  /** The covering radius (largest insertion radius of any non-active point). */
+  coveringRadius: number;
 }
 
 /** A triangle (2-simplex) in the Rips complex. */
@@ -121,6 +139,15 @@ export interface RipsComplex {
   edges: EdgeEntry[];
   triangles: TriangleEntry[];
   tetrahedra: TetraEntry[];
+
+  /** Bit-vector adjacency (n words of ceil(n/32) Uint32). Present when
+   * `epsilon` was provided for the Sheehy sparse Rips, or when the
+   * downstream caller needs on-demand column generation (implicit matrix). */
+  adjBits?: Uint32Array[];
+  /** Maps packed vertex-key (u*n+v)*n+w → triangle index. */
+  triMap?: Map<number, number>;
+  /** Sheehy sparse Rips metadata, present when `epsilon` was provided. */
+  sheehy?: SheehyInfo;
 }
 
 function triKey(u: number, v: number, w: number, n: number): number {
@@ -168,27 +195,77 @@ export function buildRipsComplex(
   dims: number,
   maxDist: number,
   maxDim: number = 2,
+  epsilon?: number,
 ): RipsComplex {
   const n = points.length / dims;
+
+  // ── Sheehy sparse Rips: compute greedy permutation and active subset ──
+  // When epsilon is provided, only points whose insertion radius (distance
+  // to nearest earlier point in the greedy permutation) is <= epsilon *
+  // maxDist are "active" at this scale. This gives a (1+epsilon)-interleaving
+  // with the full Rips filtration (Sheehy 2013, "Linear-Size Approximations
+  // to the Vietoris-Rips Filtration", DCG 49(4)).
+  let perm: Int32Array | null = null;
+  let radii: Float64Array | null = null;
+  let activeCount = n;
+  let sheehy: SheehyInfo | undefined = undefined;
+  if (epsilon !== undefined && epsilon > 0 && Number.isFinite(epsilon)) {
+    const lm = selectLandmarks(points, dims, n, n, 0);
+    perm = lm.landmarkIndices;
+    radii = lm.insertionRadii;
+    radii[0] = 0; // first point's insertion radius is 0 (always active)
+    // radii is non-increasing: radii[1] >= radii[2] >= ... >= radii[n-1]
+    // Active: points with radii[i] <= epsilon * maxDist (always includes point 0)
+    const threshold = epsilon * maxDist;
+    // radii is non-increasing: radii[0]=0, radii[1] >= radii[2] >= ...
+    // Points with radii > threshold are skipped (inactive); the remaining
+    // suffix of the permutation is active (radii <= threshold).
+    let inactivePrefix = 0;
+    for (let i = 1; i < n && radii[i]! > threshold; i++) inactivePrefix++;
+    activeCount = n - inactivePrefix;
+    let maxCovering = 0;
+    for (let i = 1; i <= inactivePrefix; i++) {
+      if (radii[i]! > maxCovering) maxCovering = radii[i]!;
+    }
+    sheehy = {
+      perm,
+      radii,
+      epsilon,
+      activeCount,
+      coveringRadius: maxCovering,
+    };
+  }
 
   // ── Build edges ──
   const tempEdges: TempEdge[] = [];
   const adj: number[][] = Array.from({ length: n }, () => []);
+
+  // Sheehy active-point filter: when epsilon is provided, only edges where
+  // BOTH endpoints are among the first `activeCount` points of the greedy
+  // permutation are included. Permutation rank arrays map origIdx → permIdx.
+  const permRank: Int32Array | null = perm ? new Int32Array(n) : null;
+  if (permRank && perm) {
+    permRank.fill(-1);
+    for (let pi = 0; pi < perm.length; pi++) permRank[perm[pi]!] = pi;
+  }
+  const isActive = (idx: number): boolean =>
+    permRank === null ? true : permRank[idx]! < activeCount;
 
   // Grid only makes sense for a finite, positive cellSize -- see this
   // function's docstring and spatial-grid.ts for why 0/negative/Infinity/NaN
   // maxDist fall back to brute force instead. Also gated on n >= GRID_MIN_N:
   // below that, the grid's own overhead measurably loses to brute force (see
   // this file's top docstring for the benchmark numbers behind the cutoff).
-  const useGrid = maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
+  // NOTE: when epsilon is provided (Sheehy sparse), skip the grid since the
+  // active-point subset is typically small (the grid's overhead isn't worth it).
+  const useGrid = !epsilon && maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
   const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
 
   for (let i = 0; i < n; i++) {
-    // candidates is ascending-j (matches the brute-force loop's order
-    // exactly, so origIdx tie-break values -- and therefore output -- are
-    // identical either way, see spatial-grid.ts's candidatesAfter() docstring).
+    if (!isActive(i)) continue;
     const candidates = grid ? grid.candidatesAfter(points, i) : null;
     const checkPair = (j: number): void => {
+      if (!isActive(j)) return;
       const d = euclidean(points, dims, i, j);
       if (d <= maxDist) {
         tempEdges.push({ u: i, v: j, val: d, origIdx: adj[i]!.length });
@@ -305,10 +382,13 @@ export function buildRipsComplex(
   triangles.sort((a, b) => a.val - b.val);
 
   // ── Build vertex→triangle index map ──
-  const triMap = new Map<number, number>();
+  // Exposed as an optional return field for the implicit-matrix cohomology
+  // engine (which generates coboundary columns on-demand instead of using
+  // a pre-built CSR inverted index).
+  const triMapExposed = new Map<number, number>();
   for (let ti = 0; ti < triangles.length; ti++) {
     const [tu, tv, tw] = triangles[ti]!.verts;
-    triMap.set(triKey(tu, tv, tw, n), ti);
+    triMapExposed.set(triKey(tu, tv, tw, n), ti);
   }
 
   // ── Build tetrahedra (if maxDim >= 3) ──
@@ -347,9 +427,9 @@ export function buildRipsComplex(
 
           tetrahedra.push({
             triangles: [
-              triMap.get(triKey(sv, sw, x, n))!,
-              triMap.get(triKey(su, sw, x, n))!,
-              triMap.get(triKey(su, sv, x, n))!,
+              triMapExposed.get(triKey(sv, sw, x, n))!,
+              triMapExposed.get(triKey(su, sw, x, n))!,
+              triMapExposed.get(triKey(su, sv, x, n))!,
               ti,
             ],
             val: birth,
@@ -361,5 +441,5 @@ export function buildRipsComplex(
     tetrahedra.sort((a, b) => a.val - b.val);
   }
 
-  return { n, edges, triangles, tetrahedra };
+  return { n, edges, triangles, tetrahedra, adjBits: adjBits, triMap: triMapExposed, sheehy };
 }
