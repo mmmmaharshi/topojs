@@ -32,7 +32,7 @@ export function computeCubicalHomology(
   pixels: Float64Array,
   height: number,
   width: number,
-  maxDim = 1,
+  maxDim = 1
 ): CubicalResult {
   const V = height * width;
   const HE = height * (width - 1);
@@ -124,7 +124,12 @@ export function computeCubicalHomology(
       const c10 = i * width + j + 1;
       const c01 = (i + 1) * width + j;
       const c11 = (i + 1) * width + j + 1;
-      const val = Math.max(pixels[c00]!, pixels[c10]!, pixels[c01]!, pixels[c11]!);
+      const val = Math.max(
+        pixels[c00]!,
+        pixels[c10]!,
+        pixels[c01]!,
+        pixels[c11]!
+      );
 
       const upperEdge = origToSorted[i * (width - 1) + j]!;
       const lowerEdge = origToSorted[(i + 1) * (width - 1) + j]!;

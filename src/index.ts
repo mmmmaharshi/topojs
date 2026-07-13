@@ -13,13 +13,19 @@ export {
   computePersistentHomologyCohomologyFromComplex,
   HomologyEngine,
 } from "./core/homology-unified.ts";
-export type { HomologyResult, HomologyOptions } from "./core/homology-unified.ts";
+export type {
+  HomologyResult,
+  HomologyOptions,
+} from "./core/homology-unified.ts";
 
 // ── Rips persistence, ARBITRARY dimension (H0..Hk, k unbounded) ──
 export { computePersistentHomologyGeneral } from "./core/homology-general.ts";
 export type { HomologyResultGeneral } from "./core/homology-general.ts";
 export { buildGeneralRipsComplex } from "./core/complex-general.ts";
-export type { GeneralRipsComplex, GeneralSimplexEntry } from "./core/complex-general.ts";
+export type {
+  GeneralRipsComplex,
+  GeneralSimplexEntry,
+} from "./core/complex-general.ts";
 
 // ── Rips persistence, APPROXIMATE via landmark subsampling ──
 export { computeSparseRipsHomology } from "./core/sparse-rips.ts";
@@ -40,7 +46,12 @@ export { bottleneckDistance } from "./core/bottleneck.ts";
 
 // ── Core types ──
 export type { PersistencePair, EdgeEntry } from "./core/h0.ts";
-export type { TriangleEntry, TetraEntry, RipsComplex, SheehyInfo } from "./core/complex.ts";
+export type {
+  TriangleEntry,
+  TetraEntry,
+  RipsComplex,
+  SheehyInfo,
+} from "./core/complex.ts";
 
 // ── Export / serialization ──
 export {
@@ -51,16 +62,29 @@ export {
   splitByDimension,
   summarize,
 } from "./export/persistence-diagram.ts";
-export type { PerDimensionPairs, DiagramStats } from "./export/persistence-diagram.ts";
+export type {
+  PerDimensionPairs,
+  DiagramStats,
+} from "./export/persistence-diagram.ts";
 
 // ── Real-world example datasets ──
-export { loadMNISTDigits, loadIrisDataset, generateTerrain } from "./data/realworld-datasets.ts";
+export {
+  loadMNISTDigits,
+  loadIrisDataset,
+  generateTerrain,
+} from "./data/realworld-datasets.ts";
 
 // ── Streaming persistent homology ──
 export { SlidingWindow } from "./streaming/sliding-window.ts";
 export { StreamingHomology } from "./streaming/streaming-homology.ts";
-export type { StreamingHomologyOptions, StreamingUpdate } from "./streaming/streaming-homology.ts";
+export type {
+  StreamingHomologyOptions,
+  StreamingUpdate,
+} from "./streaming/streaming-homology.ts";
 export { summarizeForStreaming } from "./streaming/topological-summary.ts";
 export type { TopologicalSummary } from "./streaming/topological-summary.ts";
 export { IncrementalH1 } from "./streaming/incremental-h1.ts";
-export type { IncrementalH1Options, IncrementalH1Update } from "./streaming/incremental-h1.ts";
+export type {
+  IncrementalH1Options,
+  IncrementalH1Update,
+} from "./streaming/incremental-h1.ts";

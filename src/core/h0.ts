@@ -35,7 +35,7 @@ function computeH0PhaseImpl(
   edgeCount: number,
   getU: (i: number) => number,
   getV: (i: number) => number,
-  getVal: (i: number) => number,
+  getVal: (i: number) => number
 ): { h0Pairs: PersistencePair[]; cycleEdges: Uint8Array } {
   const uf = new UnionFind(nVertices);
   const h0Pairs: PersistencePair[] = [];
@@ -103,14 +103,14 @@ function computeH0PhaseImpl(
  */
 export function computeH0Phase(
   nVertices: number,
-  edges: EdgeEntry[],
+  edges: EdgeEntry[]
 ): { h0Pairs: PersistencePair[]; cycleEdges: Uint8Array } {
   return computeH0PhaseImpl(
     nVertices,
     edges.length,
     (i) => edges[i]!.u,
     (i) => edges[i]!.v,
-    (i) => edges[i]!.val,
+    (i) => edges[i]!.val
   );
 }
 
@@ -135,14 +135,14 @@ export function computeH0PhaseFromArrays(
   uArr: Int32Array,
   vArr: Int32Array,
   valArr: Float64Array,
-  length: number,
+  length: number
 ): { h0Pairs: PersistencePair[]; cycleEdges: Uint8Array } {
   return computeH0PhaseImpl(
     nVertices,
     length,
     (i) => uArr[i]!,
     (i) => vArr[i]!,
-    (i) => valArr[i]!,
+    (i) => valArr[i]!
   );
 }
 
@@ -160,6 +160,9 @@ export function computeH0PhaseFromArrays(
  * fixed here by delegating to computeH0Phase() -- the same function every
  * live engine now uses -- so this can't drift again.
  */
-export function computeH0(nVertices: number, edges: EdgeEntry[]): PersistencePair[] {
+export function computeH0(
+  nVertices: number,
+  edges: EdgeEntry[]
+): PersistencePair[] {
   return computeH0Phase(nVertices, edges).h0Pairs;
 }

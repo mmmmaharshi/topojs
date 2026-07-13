@@ -115,7 +115,7 @@ export function toDiagramCSV(pairs: PersistencePair[]): string {
     grouped.h1finite.length,
     grouped.h1essential.length,
     grouped.h2finite.length,
-    grouped.h2essential.length,
+    grouped.h2essential.length
   );
 
   for (let i = 0; i < maxLen; i++) {

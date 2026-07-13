@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { computeH0, computeH0Phase } from "../src/core/h0.ts";
 import type { EdgeEntry } from "../src/core/h0.ts";
 
@@ -26,7 +27,7 @@ describe(computeH0Phase, () => {
     const { h0Pairs, cycleEdges } = computeH0Phase(2, edges);
     expect(h0Pairs).toContainEqual({ birth: 0, death: 0.5, dim: 0 });
     expect(h0Pairs.filter((p) => p.death < 0)).toHaveLength(1);
-    expect(Array.from(cycleEdges)).toStrictEqual([0]); // the merging edge is NOT a cycle edge
+    expect([...cycleEdges]).toStrictEqual([0]); // the merging edge is NOT a cycle edge
   });
 
   it("a triangle (3 points, 3 edges) -> 2 finite merges + 1 essential, 1 cycle edge", () => {
@@ -42,7 +43,7 @@ describe(computeH0Phase, () => {
     const essential = h0Pairs.filter((p) => p.death < 0);
     expect(finite).toHaveLength(2);
     expect(essential).toHaveLength(1);
-    expect(Array.from(cycleEdges)).toStrictEqual([0, 0, 1]); // only the 3rd edge is a cycle edge
+    expect([...cycleEdges]).toStrictEqual([0, 0, 1]); // only the 3rd edge is a cycle edge
   });
 
   it("fully disconnected points (no edges) -> one essential class per point", () => {
@@ -67,7 +68,11 @@ describe(computeH0Phase, () => {
 
   it("total pairs always equals n - (number of components) + (number of components) = n - components + components... i.e. finite = n - components, essential = components", () => {
     // General invariant check, several random-ish configurations.
-    const cases: { n: number; edges: EdgeEntry[]; expectedComponents: number }[] = [
+    const cases: {
+      n: number;
+      edges: EdgeEntry[];
+      expectedComponents: number;
+    }[] = [
       {
         edges: [
           { u: 0, v: 1, val: 1 },

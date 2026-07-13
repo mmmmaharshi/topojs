@@ -1,7 +1,8 @@
 /* eslint-disable vitest/expect-expect */
 import { describe, it, expect } from "vitest";
-import { computePersistentHomology } from "../src/core/homology.ts";
+
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
 import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
 
 /**
@@ -16,13 +17,25 @@ function canon(pairs: { dim: number; birth: number; death: number }[]): string {
   return JSON.stringify(
     pairs
       .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted((a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death),
+      .toSorted(
+        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
+      )
   );
 }
 
-function checkMatches(points: Float64Array, dims: number, maxDist: number, maxDim: number): void {
+function checkMatches(
+  points: Float64Array,
+  dims: number,
+  maxDist: number,
+  maxDim: number
+): void {
   const expected = computePersistentHomology(points, dims, maxDist, maxDim);
-  const actual = computePersistentHomologyCohomology(points, dims, maxDist, maxDim);
+  const actual = computePersistentHomologyCohomology(
+    points,
+    dims,
+    maxDist,
+    maxDim
+  );
   expect(actual.complex).toStrictEqual(expected.complex);
   expect(canon(actual.pairs)).toBe(canon(expected.pairs));
 }
@@ -158,13 +171,17 @@ describe("computePersistentHomologyCohomology (cohomology direction) vs. compute
     // essential H2 void). Fixed by removing that gate: an unclaimed cycle
     // triangle with an empty coboundary (no tetrahedra cofacets at all) is
     // unconditionally essential.
-    const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+    const pts = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
     for (const maxDist of [1.42, 1.5, 1.7, 1.9, 1.99]) {
       const expected = computePersistentHomology(pts, 3, maxDist, 3);
       const actual = computePersistentHomologyCohomology(pts, 3, maxDist, 3);
       expect(expected.complex.numTetrahedra).toBe(0); // sanity: this IS the zero-tetrahedra case
       expect(canon(actual.pairs)).toBe(canon(expected.pairs));
-      const b2 = actual.pairs.filter((p) => p.dim === 2 && p.death === -1).length;
+      const b2 = actual.pairs.filter(
+        (p) => p.dim === 2 && p.death === -1
+      ).length;
       expect(b2).toBe(1); // genuine essential H2 class, not silently dropped
     }
   });

@@ -1,7 +1,8 @@
 /* eslint-disable vitest/expect-expect */
 import { describe, it, expect } from "vitest";
-import { computePersistentHomology } from "../src/core/homology.ts";
+
 import { computePersistentHomologyFast } from "../src/core/homology-fast.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
 import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
 
 /**
@@ -15,11 +16,18 @@ function canon(pairs: { dim: number; birth: number; death: number }[]): string {
   return JSON.stringify(
     pairs
       .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted((a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death),
+      .toSorted(
+        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
+      )
   );
 }
 
-function checkMatches(points: Float64Array, dims: number, maxDist: number, maxDim: number): void {
+function checkMatches(
+  points: Float64Array,
+  dims: number,
+  maxDist: number,
+  maxDim: number
+): void {
   const expected = computePersistentHomology(points, dims, maxDist, maxDim);
   const actual = computePersistentHomologyFast(points, dims, maxDist, maxDim);
   expect(actual.complex).toStrictEqual(expected.complex);
@@ -27,7 +35,7 @@ function checkMatches(points: Float64Array, dims: number, maxDist: number, maxDi
   // sanity: diagnostics must be internally consistent
   expect(actual.diagnostics.reReducedTriangles).toBeGreaterThanOrEqual(0);
   expect(actual.diagnostics.reReducedTriangles).toBeLessThanOrEqual(
-    actual.diagnostics.totalTriangles,
+    actual.diagnostics.totalTriangles
   );
   expect(actual.diagnostics.totalTriangles).toBe(actual.complex.numTriangles);
 }
@@ -137,6 +145,8 @@ describe("computePersistentHomologyFast (apparent pairs) vs. computePersistentHo
     const flat = generatePoints(pts);
     const result = computePersistentHomologyFast(flat, 2, 0.4, 2);
     expect(result.diagnostics.totalTriangles).toBeGreaterThan(0);
-    expect(result.diagnostics.reReducedTriangles).toBeLessThan(result.diagnostics.totalTriangles);
+    expect(result.diagnostics.reReducedTriangles).toBeLessThan(
+      result.diagnostics.totalTriangles
+    );
   });
 });

@@ -38,7 +38,9 @@ export class SlidingWindow {
   /** Push one point, evicting the oldest point if the window is already full. */
   push(point: number[] | Float64Array): void {
     if (point.length !== this.dims) {
-      throw new Error(`SlidingWindow: expected point of length ${this.dims}, got ${point.length}`);
+      throw new Error(
+        `SlidingWindow: expected point of length ${this.dims}, got ${point.length}`
+      );
     }
     const base = this.writeIndex * this.dims;
     for (let d = 0; d < this.dims; d++) {
@@ -65,8 +67,17 @@ export class SlidingWindow {
     }
     // Full and wrapped: oldest point is at writeIndex, newest just before it.
     const tailCount = this.capacity - this.writeIndex;
-    out.set(this.buffer.subarray(this.writeIndex * this.dims, this.capacity * this.dims), 0);
-    out.set(this.buffer.subarray(0, this.writeIndex * this.dims), tailCount * this.dims);
+    out.set(
+      this.buffer.subarray(
+        this.writeIndex * this.dims,
+        this.capacity * this.dims
+      ),
+      0
+    );
+    out.set(
+      this.buffer.subarray(0, this.writeIndex * this.dims),
+      tailCount * this.dims
+    );
     return out;
   }
 }

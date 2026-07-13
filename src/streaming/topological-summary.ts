@@ -30,7 +30,7 @@ export interface TopologicalSummary {
  */
 export function summarizeForStreaming(
   pairs: PersistencePair[],
-  significanceThreshold = 0,
+  significanceThreshold = 0
 ): TopologicalSummary {
   let totalPersistenceH1 = 0;
   let maxPersistenceH1 = 0;
@@ -55,5 +55,10 @@ export function summarizeForStreaming(
     }
   }
 
-  return { essentialH1Count, maxPersistenceH1, significantH1Count, totalPersistenceH1 };
+  return {
+    essentialH1Count,
+    maxPersistenceH1,
+    significantH1Count,
+    totalPersistenceH1,
+  };
 }

@@ -72,14 +72,14 @@ export function computeSparseRipsHomology(
   numLandmarks: number,
   maxDist = Infinity,
   maxDim = 2,
-  startIndex = 0,
+  startIndex = 0
 ): SparseRipsResult {
   const { landmarkIndices, coveringRadius } = selectLandmarks(
     points,
     dims,
     n,
     numLandmarks,
-    startIndex,
+    startIndex
   );
   const L = landmarkIndices.length;
 
@@ -92,7 +92,12 @@ export function computeSparseRipsHomology(
     }
   }
 
-  const result = computePersistentHomology(landmarkPoints, dims, maxDist, maxDim);
+  const result = computePersistentHomology(
+    landmarkPoints,
+    dims,
+    maxDist,
+    maxDim
+  );
 
   return {
     ...result,

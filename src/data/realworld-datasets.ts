@@ -266,7 +266,8 @@ export function generateTerrain(size = 64, octaves = 6): Float64Array {
       for (let x = 0; x < size; x++) {
         const nx = (x / size) * frequency;
         const ny = (y / size) * frequency;
-        data[y * size + x] = (data[y * size + x] ?? 0) + noise2D(nx, ny) * amplitude;
+        data[y * size + x] =
+          (data[y * size + x] ?? 0) + noise2D(nx, ny) * amplitude;
       }
     }
     maxVal += amplitude;
@@ -282,7 +283,12 @@ export function generateTerrain(size = 64, octaves = 6): Float64Array {
 }
 
 // ── 4. Torus point cloud (simulating a 3D scan) ──
-export function generateTorus3D(n = 300, R = 2, r = 1, noise = 0.05): Float64Array {
+export function generateTorus3D(
+  n = 300,
+  R = 2,
+  r = 1,
+  noise = 0.05
+): Float64Array {
   const pts = new Float64Array(n * 3);
   resetSeed(99);
   for (let i = 0; i < n; i++) {
@@ -299,7 +305,11 @@ export function generateTorus3D(n = 300, R = 2, r = 1, noise = 0.05): Float64Arr
 }
 
 // ── 5. Sphere point cloud (simulating a 3D scan) ──
-export function generateSphere3D(n = 300, radius = 1, noise = 0.03): Float64Array {
+export function generateSphere3D(
+  n = 300,
+  radius = 1,
+  noise = 0.03
+): Float64Array {
   const pts = new Float64Array(n * 3);
   resetSeed(77);
   for (let i = 0; i < n; i++) {
@@ -344,7 +354,8 @@ export function generateNaturalImage(size = 64): Float64Array {
       } else {
         const dist = (y - ridgeY) / (size * 0.6);
         const brightness = 60 + 40 * (1 - dist) + (seededRandom() - 0.5) * 15;
-        const texture = Math.sin(x * 0.5 + y * 0.3) * 8 + Math.sin(x * 1.2 + y * 0.7) * 5;
+        const texture =
+          Math.sin(x * 0.5 + y * 0.3) * 8 + Math.sin(x * 1.2 + y * 0.7) * 5;
         img[y * size + x] = Math.max(0, Math.min(255, brightness + texture));
       }
     }
@@ -357,7 +368,7 @@ export function generateNaturalImage(size = 64): Float64Array {
 export function extractImagePatches(
   image: Float64Array,
   size: number,
-  threshold = 30,
+  threshold = 30
 ): Float64Array {
   const patches: number[] = [];
   for (let y = 1; y < size - 1; y++) {

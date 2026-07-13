@@ -1,14 +1,20 @@
 /* eslint-disable vitest/no-conditional-expect */
 import { describe, it, expect } from "vitest";
+
+import { bottleneckDistance } from "../src/core/bottleneck.ts";
+import type { Points } from "../src/core/distance.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
 import { selectLandmarks } from "../src/core/landmarks.ts";
 import { computeSparseRipsHomology } from "../src/core/sparse-rips.ts";
-import { computePersistentHomology } from "../src/core/homology.ts";
-import { bottleneckDistance } from "../src/core/bottleneck.ts";
 import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
 import { mulberry32 } from "./helpers.ts";
-import type { Points } from "../src/core/distance.ts";
 
-function randomPoints(rng: () => number, n: number, dims: number, scale = 1): Points {
+function randomPoints(
+  rng: () => number,
+  n: number,
+  dims: number,
+  scale = 1
+): Points {
   const pts = new Float64Array(n * dims);
   for (let i = 0; i < pts.length; i++) {
     pts[i] = rng() * scale;
@@ -23,7 +29,7 @@ function bruteForceCoveringRadius(
   points: Points,
   dims: number,
   n: number,
-  landmarkIndices: Int32Array,
+  landmarkIndices: Int32Array
 ): number {
   let maxMin = 0;
   for (let i = 0; i < n; i++) {
@@ -74,7 +80,12 @@ describe(selectLandmarks, () => {
       const dims = 2 + Math.floor(rng() * 3);
       const numLandmarks = 2 + Math.floor(rng() * (n - 1));
       const pts = randomPoints(rng, n, dims);
-      const { landmarkIndices, coveringRadius } = selectLandmarks(pts, dims, n, numLandmarks);
+      const { landmarkIndices, coveringRadius } = selectLandmarks(
+        pts,
+        dims,
+        n,
+        numLandmarks
+      );
       const brute = bruteForceCoveringRadius(pts, dims, n, landmarkIndices);
       expect(coveringRadius).toBeCloseTo(brute, 9);
     }
@@ -86,14 +97,21 @@ describe(selectLandmarks, () => {
     const { insertionRadii } = selectLandmarks(pts, 2, 50, 20);
     expect(insertionRadii[0]).toBe(Infinity);
     for (let i = 2; i < insertionRadii.length; i++) {
-      expect(insertionRadii[i]!).toBeLessThanOrEqual(insertionRadii[i - 1]! + 1e-12);
+      expect(insertionRadii[i]!).toBeLessThanOrEqual(
+        insertionRadii[i - 1]! + 1e-12
+      );
     }
   });
 
   it("numLandmarks >= n clamps to n landmarks with coveringRadius exactly 0", () => {
     const rng = mulberry32(5);
     const pts = randomPoints(rng, 15, 2);
-    const { landmarkIndices, coveringRadius } = selectLandmarks(pts, 2, 15, 100);
+    const { landmarkIndices, coveringRadius } = selectLandmarks(
+      pts,
+      2,
+      15,
+      100
+    );
     expect(landmarkIndices).toHaveLength(15);
     expect(coveringRadius).toBe(0);
   });
@@ -102,7 +120,7 @@ describe(selectLandmarks, () => {
     const rng = mulberry32(6);
     const pts = randomPoints(rng, 20, 2);
     const { landmarkIndices } = selectLandmarks(pts, 2, 20, 1, 3);
-    expect(Array.from(landmarkIndices)).toStrictEqual([3]);
+    expect([...landmarkIndices]).toStrictEqual([3]);
   });
 
   it("throws on out-of-range startIndex", () => {
@@ -131,7 +149,14 @@ describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
       const pts = randomPoints(rng, n, dims);
 
       const exact = computePersistentHomology(pts, dims, maxDist, 2);
-      const approx = computeSparseRipsHomology(pts, dims, n, numLandmarks, maxDist, 2);
+      const approx = computeSparseRipsHomology(
+        pts,
+        dims,
+        n,
+        numLandmarks,
+        maxDist,
+        2
+      );
 
       for (const dim of [0, 1]) {
         const db = bottleneckDistance(exact.pairs, approx.pairs, dim);
@@ -159,7 +184,14 @@ describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
       const pts = randomPoints(rng, n, dims);
 
       const exact = computePersistentHomology(pts, dims, maxDist, 3);
-      const approx = computeSparseRipsHomology(pts, dims, n, numLandmarks, maxDist, 3);
+      const approx = computeSparseRipsHomology(
+        pts,
+        dims,
+        n,
+        numLandmarks,
+        maxDist,
+        3
+      );
 
       for (const dim of [0, 1, 2]) {
         const db = bottleneckDistance(exact.pairs, approx.pairs, dim);
@@ -195,7 +227,8 @@ describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     const norm = new Float64Array(n * dims);
     for (let i = 0; i < n; i++) {
       for (let d = 0; d < dims; d++) {
-        norm[i * dims + d] = (flat[i * dims + d]! - colMin[d]!) / (colMax[d]! - colMin[d]!);
+        norm[i * dims + d] =
+          (flat[i * dims + d]! - colMin[d]!) / (colMax[d]! - colMin[d]!);
       }
     }
 

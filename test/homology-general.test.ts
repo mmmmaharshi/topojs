@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
+
+import type { Points } from "../src/core/distance.ts";
+import type { PersistencePair } from "../src/core/h0.ts";
 import { computePersistentHomologyGeneral } from "../src/core/homology-general.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
 import { mulberry32 } from "./helpers.ts";
-import type { Points } from "../src/core/distance.ts";
-import type { PersistencePair } from "../src/core/h0.ts";
 
 function randomPoints(rng: () => number, n: number, dims: number): Points {
   const pts = new Float64Array(n * dims);
@@ -37,7 +38,9 @@ describe("computePersistentHomologyGeneral: differential test against computePer
       // homology.ts: maxDim 1 and 2 are equivalent, both H0+H1 only) --
       // restrict exact's output to dim<=1 to match general's maxHomologyDim=1 scope.
       const exactRestricted = exact.pairs.filter((p) => p.dim <= 1);
-      expect(sortedKeys(general.pairs)).toStrictEqual(sortedKeys(exactRestricted));
+      expect(sortedKeys(general.pairs)).toStrictEqual(
+        sortedKeys(exactRestricted)
+      );
     }
   });
 
@@ -68,7 +71,9 @@ describe("computePersistentHomologyGeneral: differential test against computePer
     const general = computePersistentHomologyGeneral(pts, 2, chord + 0.05, 1);
     expect(general.simplexCounts[0]).toBe(12);
     expect(general.simplexCounts[1]).toBe(12);
-    expect(general.pairs.filter((p) => p.dim === 1 && p.death < 0)).toHaveLength(1);
+    expect(
+      general.pairs.filter((p) => p.dim === 1 && p.death < 0)
+    ).toHaveLength(1);
   });
 });
 
@@ -87,8 +92,8 @@ describe("computePersistentHomologyGeneral: H3 ground truth (16-cell boundary = 
   // triangulation of S^3: f-vector (8, 24, 32, 16), Betti (1, 0, 0, 1).
   function crossPolytope4D(): Points {
     return new Float64Array([
-      1, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0,
-      0, -1,
+      1, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0,
+      0, 0, 0, 1, 0, 0, 0, -1,
     ]);
   }
 
@@ -148,13 +153,15 @@ describe("computePersistentHomologyGeneral: edge cases", () => {
     const general = computePersistentHomologyGeneral(pts, 2, maxDist, 0);
     const exact = computePersistentHomology(pts, 2, maxDist, 0);
     expect(sortedKeys(general.pairs)).toStrictEqual(
-      sortedKeys(exact.pairs.filter((p) => p.dim === 0)),
+      sortedKeys(exact.pairs.filter((p) => p.dim === 0))
     );
   });
 
   it("throws on negative maxHomologyDim", () => {
     const pts = new Float64Array([0, 0, 1, 0]);
-    expect(() => computePersistentHomologyGeneral(pts, 2, 1, -1)).toThrow(RangeError);
+    expect(() => computePersistentHomologyGeneral(pts, 2, 1, -1)).toThrow(
+      RangeError
+    );
   });
 
   it("single point: H0 essential only, no higher dims", () => {

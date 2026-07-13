@@ -1,9 +1,9 @@
+import { buildRipsComplex } from "./complex.ts";
+import type { RipsComplex } from "./complex.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
-import { buildRipsComplex } from "./complex.ts";
-import type { RipsComplex } from "./complex.ts";
 import { DenseWorkingCol, ColumnStore } from "./reduction.ts";
 
 function packedKey(a: number, b: number, c: number, n: number): number {
@@ -25,7 +25,7 @@ function loadEdgeCoboundary(
   adjBits: Uint32Array[],
   triMap: Map<number, number>,
   n: number,
-  nt: number,
+  nt: number
 ): void {
   const { u, v } = edges[ei]!;
   const flip = (ci: number) => nt - 1 - ci;
@@ -112,7 +112,7 @@ function loadEdgeCoboundary(
  */
 export function computePersistentHomologyCohomologyFromComplex(
   complex: RipsComplex,
-  maxDim = 2,
+  maxDim = 2
 ): HomologyResult {
   const { edges, triangles, tetrahedra, adjBits, triMap } = complex;
   const { n } = complex;
@@ -120,7 +120,7 @@ export function computePersistentHomologyCohomologyFromComplex(
   if (!adjBits || !triMap) {
     throw new Error(
       "computePersistentHomologyCohomologyFromComplex requires adjBits and triMap " +
-        "on the RipsComplex. Use buildRipsComplex() to create the complex.",
+        "on the RipsComplex. Use buildRipsComplex() to create the complex."
     );
   }
 
@@ -155,7 +155,11 @@ export function computePersistentHomologyCohomologyFromComplex(
         triPivotOwner[pivot] = ei;
         w.storeInto(edgeReducedCol, ei);
         if (triangles[pivot]!.val > edges[ei]!.val) {
-          h1Pairs.push({ birth: edges[ei]!.val, death: triangles[pivot]!.val, dim: 1 });
+          h1Pairs.push({
+            birth: edges[ei]!.val,
+            death: triangles[pivot]!.val,
+            dim: 1,
+          });
         }
         break;
       }
@@ -199,7 +203,9 @@ export function computePersistentHomologyCohomologyFromComplex(
     }
     const triTetListFlipped = new Int32Array(triTetStart[triangles.length]!);
     {
-      const fillPos = Int32Array.from(triTetStart.subarray(0, triangles.length));
+      const fillPos = Int32Array.from(
+        triTetStart.subarray(0, triangles.length)
+      );
       for (let ci = 0; ci < tetrahedra.length; ci++) {
         const tt = tetrahedra[ci]!.triangles;
         const fci = flip2(ci);
@@ -238,7 +244,11 @@ export function computePersistentHomologyCohomologyFromComplex(
           tetPivotOwner[pivot] = ci;
           w2.storeInto(triReducedCol, ci);
           if (tetrahedra[pivot]!.val > triangles[ci]!.val) {
-            h2Pairs.push({ birth: triangles[ci]!.val, death: tetrahedra[pivot]!.val, dim: 2 });
+            h2Pairs.push({
+              birth: triangles[ci]!.val,
+              death: tetrahedra[pivot]!.val,
+              dim: 2,
+            });
           }
           break;
         }
@@ -272,7 +282,7 @@ export function computePersistentHomologyCohomologyImplicit(
   dims: number,
   maxDist = Infinity,
   maxDim = 2,
-  epsilon?: number,
+  epsilon?: number
 ): HomologyResult {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim, epsilon);
   return computePersistentHomologyCohomologyFromComplex(complex, maxDim);

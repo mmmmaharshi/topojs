@@ -55,7 +55,7 @@ export function selectLandmarks(
   dims: number,
   n: number,
   numLandmarks: number,
-  startIndex = 0,
+  startIndex = 0
 ): LandmarkResult {
   if (n <= 0) {
     return {

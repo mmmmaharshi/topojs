@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
+
+import type { PersistencePair } from "../src/core/h0.ts";
 import { bottleneckDistance } from "../src/core/homology.ts";
 import { mulberry32 } from "./helpers.ts";
-import type { PersistencePair } from "../src/core/h0.ts";
 
 describe("bottleneck distance", () => {
   it("distance between a diagram and itself is 0", () => {
@@ -128,7 +129,9 @@ describe("bottleneck distance", () => {
       // claims. An essential class has no essential-class partner in the
       // empty diagram and (unlike a finite pair) cannot fall back to
       // matching the diagonal, so no finite-cost matching exists at all.
-      const withEssential: PersistencePair[] = [{ birth: 0, death: -1, dim: 0 }];
+      const withEssential: PersistencePair[] = [
+        { birth: 0, death: -1, dim: 0 },
+      ];
       const empty: PersistencePair[] = [];
       expect(bottleneckDistance(withEssential, empty, 0)).toBe(Infinity);
       expect(bottleneckDistance(empty, withEssential, 0)).toBe(Infinity); // symmetric
@@ -293,7 +296,7 @@ describe("bottleneck distance", () => {
             candidates.add(supNorm(p, q));
           }
         }
-        const sorted = Array.from(candidates).toSorted((a, b) => a - b);
+        const sorted = [...candidates].toSorted((a, b) => a - b);
         for (const eps of sorted) {
           if (bruteForceFeasible(D1, D2, eps)) {
             return eps;

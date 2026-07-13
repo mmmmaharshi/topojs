@@ -1,7 +1,8 @@
 /* eslint-disable vitest/expect-expect */
 import { describe, it, expect } from "vitest";
-import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
+
 import { computePersistentHomology } from "../src/core/homology.ts";
+import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
 import { mulberry32, circlePoints } from "./helpers.ts";
 
 /**
@@ -16,7 +17,9 @@ function canon(pairs: { dim: number; birth: number; death: number }[]): string {
   return JSON.stringify(
     pairs
       .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted((a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death),
+      .toSorted(
+        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
+      )
   );
 }
 
@@ -35,7 +38,7 @@ function runDifferentialTrial(
   windowSize: number,
   maxDist: number,
   dims: number,
-  steps: number,
+  steps: number
 ): void {
   const rng = mulberry32(seed);
   const inc = new IncrementalH1({ dims, maxDist, windowSize });
@@ -84,18 +87,34 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // non-integer windowSize, dims<=0, or a negative/NaN maxDist would be
     // accepted silently and fail confusingly (or not at all) later on
     // push(), instead of failing clearly at construction time.
-    expect(() => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 0 })).toThrow("windowSize");
-    expect(() => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 1 })).toThrow("windowSize"); // push() can never return non-null below 2
-    expect(() => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: -5 })).toThrow("windowSize");
-    expect(() => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 2.5 })).toThrow("windowSize");
-    expect(() => new IncrementalH1({ dims: 0, maxDist: 1, windowSize: 10 })).toThrow("dims");
-    expect(() => new IncrementalH1({ dims: -1, maxDist: 1, windowSize: 10 })).toThrow("dims");
-    expect(() => new IncrementalH1({ dims: 2, maxDist: -1, windowSize: 10 })).toThrow("maxDist");
-    expect(() => new IncrementalH1({ dims: 2, maxDist: Number.NaN, windowSize: 10 })).toThrow(
-      "maxDist",
-    );
+    expect(
+      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 0 })
+    ).toThrow("windowSize");
+    expect(
+      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 1 })
+    ).toThrow("windowSize"); // push() can never return non-null below 2
+    expect(
+      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: -5 })
+    ).toThrow("windowSize");
+    expect(
+      () => new IncrementalH1({ dims: 2, maxDist: 1, windowSize: 2.5 })
+    ).toThrow("windowSize");
+    expect(
+      () => new IncrementalH1({ dims: 0, maxDist: 1, windowSize: 10 })
+    ).toThrow("dims");
+    expect(
+      () => new IncrementalH1({ dims: -1, maxDist: 1, windowSize: 10 })
+    ).toThrow("dims");
+    expect(
+      () => new IncrementalH1({ dims: 2, maxDist: -1, windowSize: 10 })
+    ).toThrow("maxDist");
+    expect(
+      () => new IncrementalH1({ dims: 2, maxDist: Number.NaN, windowSize: 10 })
+    ).toThrow("maxDist");
     // sanity: valid parameters still construct fine
-    expect(() => new IncrementalH1({ dims: 1, maxDist: 0, windowSize: 2 })).not.toThrow();
+    expect(
+      () => new IncrementalH1({ dims: 1, maxDist: 0, windowSize: 2 })
+    ).not.toThrow();
   });
   /* eslint-enable vitest/max-expects */
 
@@ -194,7 +213,9 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
         continue;
       }
       expect(update.stats.reReducedTriangles).toBeGreaterThanOrEqual(0);
-      expect(update.stats.reReducedTriangles).toBeLessThanOrEqual(update.stats.totalTriangles);
+      expect(update.stats.reReducedTriangles).toBeLessThanOrEqual(
+        update.stats.totalTriangles
+      );
     }
   });
 });

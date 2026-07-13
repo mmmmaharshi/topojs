@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import { computeCubicalHomology } from "../src/core/cubical.ts";
 import { mulberry32, countByDim } from "./helpers.ts";
 
@@ -14,7 +15,7 @@ import { mulberry32, countByDim } from "./helpers.ts";
 function cubicalEulerCheck(
   pairs: { dim: number; death: number }[],
   height: number,
-  width: number,
+  width: number
 ): { chiSimplicial: number; chiBetti: number; b0: number; b1: number } {
   const V = height * width;
   const E = height * (width - 1) + (height - 1) * width;
@@ -164,10 +165,12 @@ describe("cubical persistence", () => {
     // of tie the property-based sweep below exercises via low-cardinality
     // random values, but this case pins the exact degenerate shape down as
     // a named regression test.
-    const pix = new Float64Array([0, 0, 5, 5, 0, 0, 5, 5, 0, 0, 5, 5, 0, 0, 5, 5]);
+    const pix = new Float64Array([
+      0, 0, 5, 5, 0, 0, 5, 5, 0, 0, 5, 5, 0, 0, 5, 5,
+    ]);
     const res = computeCubicalHomology(pix, 4, 4, 1);
     const zeroPersistenceH1 = res.pairs.filter(
-      (p) => p.dim === 1 && p.death >= 0 && p.death === p.birth,
+      (p) => p.dim === 1 && p.death >= 0 && p.death === p.birth
     );
     expect(zeroPersistenceH1).toHaveLength(0);
     const ec = cubicalEulerCheck(res.pairs, 4, 4);
@@ -199,9 +202,12 @@ describe("cubical persistence", () => {
         } // very tie-heavy
         const res = computeCubicalHomology(pix, h, w, 1);
         const zeroPersistenceH1 = res.pairs.filter(
-          (p) => p.dim === 1 && p.death >= 0 && p.death === p.birth,
+          (p) => p.dim === 1 && p.death >= 0 && p.death === p.birth
         );
-        expect(zeroPersistenceH1, `shape ${h}x${w} trial ${trial}`).toHaveLength(0);
+        expect(
+          zeroPersistenceH1,
+          `shape ${h}x${w} trial ${trial}`
+        ).toHaveLength(0);
       }
     }
   });
@@ -231,7 +237,9 @@ describe("cubical persistence", () => {
         } // low-cardinality -> exercises ties AND real permutation
         const res = computeCubicalHomology(pix, h, w, 1);
         const ec = cubicalEulerCheck(res.pairs, h, w);
-        expect(ec.chiSimplicial, `shape ${h}x${w} trial ${trial}`).toBe(ec.chiBetti);
+        expect(ec.chiSimplicial, `shape ${h}x${w} trial ${trial}`).toBe(
+          ec.chiBetti
+        );
       }
     }
   });

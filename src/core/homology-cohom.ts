@@ -1,8 +1,8 @@
+import { buildRipsComplex } from "./complex.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
-import { buildRipsComplex } from "./complex.ts";
 import { DenseWorkingCol, ColumnStore } from "./reduction.ts";
 
 /**
@@ -102,7 +102,7 @@ export function computePersistentHomologyCohomology(
   points: Points,
   dims: number,
   maxDist = Infinity,
-  maxDim = 2,
+  maxDim = 2
 ): HomologyResult {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim);
   const { edges, triangles, tetrahedra } = complex;
@@ -202,7 +202,11 @@ export function computePersistentHomologyCohomology(
         triPivotOwner[pivot] = ei;
         w.storeInto(edgeReducedCol, ei);
         if (triangles[pivot]!.val > edges[ei]!.val) {
-          h1Pairs.push({ birth: edges[ei]!.val, death: triangles[pivot]!.val, dim: 1 });
+          h1Pairs.push({
+            birth: edges[ei]!.val,
+            death: triangles[pivot]!.val,
+            dim: 1,
+          });
         }
         break;
       }
@@ -256,7 +260,9 @@ export function computePersistentHomologyCohomology(
     }
     const triTetListFlipped = new Int32Array(triTetStart[triangles.length]!);
     {
-      const fillPos = Int32Array.from(triTetStart.subarray(0, triangles.length));
+      const fillPos = Int32Array.from(
+        triTetStart.subarray(0, triangles.length)
+      );
       for (let ci = 0; ci < tetrahedra.length; ci++) {
         const tt = tetrahedra[ci]!.triangles;
         const fci = flip2(ci);
@@ -297,7 +303,11 @@ export function computePersistentHomologyCohomology(
           tetPivotOwner[pivot] = ci;
           w2.storeInto(triReducedCol, ci);
           if (tetrahedra[pivot]!.val > triangles[ci]!.val) {
-            h2Pairs.push({ birth: triangles[ci]!.val, death: tetrahedra[pivot]!.val, dim: 2 });
+            h2Pairs.push({
+              birth: triangles[ci]!.val,
+              death: tetrahedra[pivot]!.val,
+              dim: 2,
+            });
           }
           break;
         }

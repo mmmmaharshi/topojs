@@ -36,6 +36,7 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
+
 import { StreamingHomology } from "../src/streaming/streaming-homology.ts";
 import { summarizeForStreaming } from "../src/streaming/topological-summary.ts";
 
@@ -56,7 +57,7 @@ function mulberry32(seed: number): () => number {
 }
 
 function shuffle<T>(arr: T[], rng: () => number): T[] {
-  const out = arr.slice();
+  const out = [...arr];
   for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
     [out[i], out[j]] = [out[j]!, out[i]!];
@@ -75,7 +76,7 @@ const monthly: { year: number; value: number }[] = raw.map((line) => {
 });
 console.log(
   `Loaded ${monthly.length} real monthly sunspot readings ` +
-    `(${monthly[0]!.year}-${monthly.at(-1)!.year}).`,
+    `(${monthly[0]!.year}-${monthly.at(-1)!.year}).`
 );
 
 // Aggregate to yearly means (this is the classic resolution at which the
@@ -87,10 +88,12 @@ for (const { year, value } of monthly) {
   }
   byYear.get(year)!.push(value);
 }
-const years = Array.from(byYear.keys()).toSorted((a, b) => a - b);
+const years = [...byYear.keys()].toSorted((a, b) => a - b);
 // Drop the final partial year if the source data doesn't end in December.
 const fullYears = years.filter((y) => byYear.get(y)!.length === 12);
-const yearly = fullYears.map((y) => byYear.get(y)!.reduce((a, b) => a + b, 0) / 12);
+const yearly = fullYears.map(
+  (y) => byYear.get(y)!.reduce((a, b) => a + b, 0) / 12
+);
 console.log(`Aggregated to ${yearly.length} full yearly means.`);
 
 // --- Data-driven lag selection (autocorrelation, first crossing below 1/e) ---
@@ -110,7 +113,9 @@ function autocorrelation(series: number[], lag: number): number {
 
 const ACF_THRESHOLD = 1 / Math.E;
 let LAG = 1;
-console.log("\nAutocorrelation (data-driven lag selection, not fit to the result):");
+console.log(
+  "\nAutocorrelation (data-driven lag selection, not fit to the result):"
+);
 for (let lag = 1; lag <= 8; lag++) {
   const acf = autocorrelation(yearly, lag);
   console.log(`  lag=${lag}  ACF=${acf.toFixed(4)}`);
@@ -121,7 +126,9 @@ for (let lag = 1; lag <= 8; lag++) {
 if (LAG === 1) {
   LAG = 3;
 } // fallback if ACF never crosses in the scanned range
-console.log(`Selected LAG=${LAG} (first lag with ACF < 1/e = ${ACF_THRESHOLD.toFixed(4)}).`);
+console.log(
+  `Selected LAG=${LAG} (first lag with ACF < 1/e = ${ACF_THRESHOLD.toFixed(4)}).`
+);
 
 const min = Math.min(...yearly);
 const max = Math.max(...yearly);
@@ -165,13 +172,13 @@ console.log();
 console.log("=".repeat(78));
 console.log("  Real-world validation: solar cycle loop vs. permutation null");
 console.log(
-  `  window=${WINDOW_SIZE}  lag=${LAG}yr (data-driven)  maxDist=${MAX_DIST}  significance=${SIGNIFICANCE}`,
+  `  window=${WINDOW_SIZE}  lag=${LAG}yr (data-driven)  maxDist=${MAX_DIST}  significance=${SIGNIFICANCE}`
 );
 console.log("=".repeat(78));
 
 const observed = meanMaxPersistence(embed(yearly));
 console.log(
-  `Observed statistic (real data, mean maxPersistenceH1 per window): ${observed.toFixed(5)}`,
+  `Observed statistic (real data, mean maxPersistenceH1 per window): ${observed.toFixed(5)}`
 );
 
 const N_PERMUTATIONS = 200;
@@ -183,7 +190,8 @@ for (let trial = 0; trial < N_PERMUTATIONS; trial++) {
 }
 
 const nullMean = nullStats.reduce((a, b) => a + b, 0) / nullStats.length;
-const nullVar = nullStats.reduce((a, b) => a + (b - nullMean) ** 2, 0) / nullStats.length;
+const nullVar =
+  nullStats.reduce((a, b) => a + (b - nullMean) ** 2, 0) / nullStats.length;
 const nullStd = Math.sqrt(nullVar);
 const countGE = nullStats.filter((v) => v >= observed).length;
 const pValue = (countGE + 1) / (N_PERMUTATIONS + 1);
@@ -191,24 +199,38 @@ const zScore = (observed - nullMean) / nullStd;
 
 console.log(
   `Null distribution (${N_PERMUTATIONS} shuffles): mean=${nullMean.toFixed(5)}  std=${nullStd.toFixed(5)}  ` +
-    `min=${Math.min(...nullStats).toFixed(5)}  max=${Math.max(...nullStats).toFixed(5)}`,
+    `min=${Math.min(...nullStats).toFixed(5)}  max=${Math.max(...nullStats).toFixed(5)}`
 );
-console.log(`Permutations with null statistic >= observed: ${countGE} / ${N_PERMUTATIONS}`);
+console.log(
+  `Permutations with null statistic >= observed: ${countGE} / ${N_PERMUTATIONS}`
+);
 console.log(`Permutation p-value: ${pValue.toFixed(4)}`);
 console.log(`Effect size (z-score of observed vs. null): ${zScore.toFixed(2)}`);
 
 console.log("-".repeat(78));
 if (pValue < 0.01) {
-  console.log("RESULT: the real, historically-observed ~11-year solar cycle produces a");
-  console.log("significantly stronger topological (H1 loop) signal than chance, under a");
   console.log(
-    `nonparametric permutation test (p=${pValue.toFixed(4)}, z=${zScore.toFixed(2)}, n=${N_PERMUTATIONS} shuffles).`,
+    "RESULT: the real, historically-observed ~11-year solar cycle produces a"
   );
-  console.log("Lag was selected from the data (ACF < 1/e), not fit to this result. This is");
-  console.log("a genuine, statistically defensible real-world validation of the streaming");
+  console.log(
+    "significantly stronger topological (H1 loop) signal than chance, under a"
+  );
+  console.log(
+    `nonparametric permutation test (p=${pValue.toFixed(4)}, z=${zScore.toFixed(2)}, n=${N_PERMUTATIONS} shuffles).`
+  );
+  console.log(
+    "Lag was selected from the data (ACF < 1/e), not fit to this result. This is"
+  );
+  console.log(
+    "a genuine, statistically defensible real-world validation of the streaming"
+  );
   console.log("homology signal.");
 } else {
-  console.log(`RESULT: p=${pValue.toFixed(4)} does not clear a conventional significance bar.`);
-  console.log("Reporting this honestly rather than adjusting parameters to force p<0.01.");
+  console.log(
+    `RESULT: p=${pValue.toFixed(4)} does not clear a conventional significance bar.`
+  );
+  console.log(
+    "Reporting this honestly rather than adjusting parameters to force p<0.01."
+  );
   process.exitCode = 1;
 }

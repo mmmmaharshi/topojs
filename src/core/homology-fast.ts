@@ -1,8 +1,8 @@
+import { buildRipsComplex } from "./complex.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
-import { buildRipsComplex } from "./complex.ts";
 import { DenseWorkingCol } from "./reduction.ts";
 
 /**
@@ -87,7 +87,7 @@ export function computePersistentHomologyFast(
   points: Points,
   dims: number,
   maxDist = Infinity,
-  maxDim = 2,
+  maxDim = 2
 ): HomologyResultFast {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim);
   const { edges, triangles, tetrahedra } = complex;
@@ -234,7 +234,11 @@ export function computePersistentHomologyFast(
           h2Pivots[pivot] = ci;
           h2reduced[ci] = w2.toSparse();
           if (tet.val > triangles[pivot]!.val) {
-            h2Pairs.push({ birth: triangles[pivot]!.val, death: tet.val, dim: 2 });
+            h2Pairs.push({
+              birth: triangles[pivot]!.val,
+              death: tet.val,
+              dim: 2,
+            });
           }
           break;
         }
@@ -265,7 +269,10 @@ export function computePersistentHomologyFast(
       numTriangles: triangles.length,
       numVertices: complex.n,
     },
-    diagnostics: { reReducedTriangles: reReducedCount, totalTriangles: triangles.length },
+    diagnostics: {
+      reReducedTriangles: reReducedCount,
+      totalTriangles: triangles.length,
+    },
     pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
   };
 }

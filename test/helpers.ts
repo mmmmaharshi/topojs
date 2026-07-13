@@ -55,9 +55,25 @@ export function countByDim(pairs: { dim: number }[], dim: number): number {
  */
 export function eulerCheck(res: {
   pairs: { dim: number; death: number }[];
-  complex: { numVertices: number; numEdges: number; numTriangles: number; numTetrahedra: number };
-}): { chiSimplicial: number; chiBetti: number; b0: number; b1: number; b2: number } {
-  const { numVertices: V, numEdges: E, numTriangles: T, numTetrahedra: Tet } = res.complex;
+  complex: {
+    numVertices: number;
+    numEdges: number;
+    numTriangles: number;
+    numTetrahedra: number;
+  };
+}): {
+  chiSimplicial: number;
+  chiBetti: number;
+  b0: number;
+  b1: number;
+  b2: number;
+} {
+  const {
+    numVertices: V,
+    numEdges: E,
+    numTriangles: T,
+    numTetrahedra: Tet,
+  } = res.complex;
   const chiSimplicial = V - E + T - Tet;
   const b0 = res.pairs.filter((p) => p.dim === 0 && p.death < 0).length;
   const b1 = res.pairs.filter((p) => p.dim === 1 && p.death < 0).length;

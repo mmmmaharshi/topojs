@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { computePairwiseDistances } from "../src/core/homology.ts";
+
 import { lookupDist } from "../src/core/distance.ts";
+import { computePairwiseDistances } from "../src/core/homology.ts";
 import { UnionFind } from "../src/core/unionfind.ts";
 import { generatePoints, mulberry32 } from "./helpers.ts";
 
@@ -64,7 +65,7 @@ describe("distance: computePairwiseDistances + lookupDist", () => {
         expect(lookupDist(dm, i, j)).toBeGreaterThanOrEqual(0);
         for (let k = 0; k < n; k++) {
           expect(lookupDist(dm, i, k)).toBeLessThanOrEqual(
-            lookupDist(dm, i, j) + lookupDist(dm, j, k) + 1e-10,
+            lookupDist(dm, i, j) + lookupDist(dm, j, k) + 1e-10
           );
         }
       }

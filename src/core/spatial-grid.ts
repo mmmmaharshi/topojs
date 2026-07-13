@@ -125,7 +125,8 @@ export class SpatialGrid {
       for (let d = 0; d < this.dims; d++) {
         const offsetIdx = rem % 3;
         rem = Math.floor(rem / 3);
-        const biased = centerCoords[d]! + offsets[offsetIdx]! + SpatialGrid.BIAS;
+        const biased =
+          centerCoords[d]! + offsets[offsetIdx]! + SpatialGrid.BIAS;
         key = (key << 32n) | BigInt(biased);
       }
       const bucket = this.buckets.get(key);

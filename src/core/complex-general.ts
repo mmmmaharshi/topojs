@@ -105,7 +105,7 @@ export function buildGeneralRipsComplex(
   points: Points,
   dims: number,
   maxDist: number,
-  maxSimplexDim: number,
+  maxSimplexDim: number
 ): GeneralRipsComplex {
   const n = points.length / dims;
 
@@ -114,7 +114,8 @@ export function buildGeneralRipsComplex(
   }
 
   // ── Level 1: edges (brute force -- see this file's SCOPE note) ──
-  const tempEdges: { u: number; v: number; val: number; origIdx: number }[] = [];
+  const tempEdges: { u: number; v: number; val: number; origIdx: number }[] =
+    [];
   const adj: number[][] = Array.from({ length: n }, () => []);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -127,7 +128,11 @@ export function buildGeneralRipsComplex(
     }
   }
   tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
-  const edgeLevel: EdgeEntry[] = tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val }));
+  const edgeLevel: EdgeEntry[] = tempEdges.map((e) => ({
+    u: e.u,
+    v: e.v,
+    val: e.val,
+  }));
 
   const edgeIndex = new Map<bigint, number>();
   for (let i = 0; i < edgeLevel.length; i++) {
@@ -178,7 +183,7 @@ export function buildGeneralRipsComplex(
       for (const pvv of pv) {
         const b = adjBits[pvv]!;
         if (bits === null) {
-          bits = b.slice();
+          bits = new Uint32Array(b);
         } else {
           for (let w = 0; w < words; w++) {
             bits[w]! &= b[w]!;

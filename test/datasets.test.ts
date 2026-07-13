@@ -1,7 +1,8 @@
 /* eslint-disable typescript/prefer-for-of */
 import { describe, it, expect } from "vitest";
-import { computePersistentHomology } from "../src/core/homology.ts";
+
 import { computeCubicalHomology } from "../src/core/cubical.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
 import {
   loadMNISTDigits,
   loadIrisDataset,
@@ -55,7 +56,9 @@ describe("real-world datasets", () => {
       ];
       for (const [size, octaves] of cases) {
         const terrain = generateTerrain(size, octaves);
-        expect(terrain, `size=${size} octaves=${octaves}`).toHaveLength(size * size);
+        expect(terrain, `size=${size} octaves=${octaves}`).toHaveLength(
+          size * size
+        );
         for (let i = 0; i < terrain.length; i++) {
           expect(terrain[i]!).toBeGreaterThanOrEqual(0);
           expect(terrain[i]!).toBeLessThanOrEqual(255);
@@ -66,7 +69,7 @@ describe("real-world datasets", () => {
     it("is deterministic: two calls with identical args produce byte-identical output", () => {
       const a = generateTerrain(16, 4);
       const b = generateTerrain(16, 4);
-      expect(Array.from(a)).toStrictEqual(Array.from(b));
+      expect([...a]).toStrictEqual([...b]);
     });
 
     it("is deterministic regardless of what ran before it (shared-PRNG isolation)", () => {
@@ -78,7 +81,7 @@ describe("real-world datasets", () => {
       loadIrisDataset(); // unrelated call, doesn't touch the shared PRNG, but
       generateTerrain(20, 5); // this one DOES consume seededRandom() calls
       const b = generateTerrain(12, 3);
-      expect(Array.from(a)).toStrictEqual(Array.from(b));
+      expect([...a]).toStrictEqual([...b]);
     });
 
     it("cubical homology runs on generated terrain without error", () => {
@@ -91,7 +94,7 @@ describe("real-world datasets", () => {
     it("more octaves changes the output (not a no-op parameter)", () => {
       const low = generateTerrain(16, 1);
       const high = generateTerrain(16, 6);
-      expect(Array.from(low)).not.toStrictEqual(Array.from(high));
+      expect([...low]).not.toStrictEqual([...high]);
     });
   });
 });

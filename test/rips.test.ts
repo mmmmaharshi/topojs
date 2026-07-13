@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
+
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { generatePoints, circlePoints, mulberry32, countByDim, eulerCheck } from "./helpers.ts";
+import {
+  generatePoints,
+  circlePoints,
+  mulberry32,
+  countByDim,
+  eulerCheck,
+} from "./helpers.ts";
 
 describe("rips: known geometric ground truths", () => {
   it("two separate points -> 2 components", () => {
@@ -11,7 +18,9 @@ describe("rips: known geometric ground truths", () => {
     const res = computePersistentHomology(pts, 2, 5);
     expect(res.complex.numVertices).toBe(2);
     expect(countByDim(res.pairs, 0)).toBe(2);
-    expect(res.pairs.filter((p) => p.dim === 0 && p.death >= 0)).toHaveLength(1);
+    expect(res.pairs.filter((p) => p.dim === 0 && p.death >= 0)).toHaveLength(
+      1
+    );
     expect(res.pairs.filter((p) => p.dim === 0 && p.death < 0)).toHaveLength(1);
   });
 
@@ -24,7 +33,9 @@ describe("rips: known geometric ground truths", () => {
     const res = computePersistentHomology(pts, 2, 5);
     expect(countByDim(res.pairs, 0)).toBe(3);
     expect(res.complex.numTriangles).toBeGreaterThanOrEqual(1);
-    const significantH1 = res.pairs.filter((p) => p.dim === 1 && p.death - p.birth > 1e-10);
+    const significantH1 = res.pairs.filter(
+      (p) => p.dim === 1 && p.death - p.birth > 1e-10
+    );
     expect(significantH1).toHaveLength(0);
   });
 
@@ -46,7 +57,7 @@ describe("rips: known geometric ground truths", () => {
     const res = computePersistentHomology(pts, 2, nextChord + 0.05);
     expect(res.complex.numTriangles).toBeGreaterThan(0);
     const significant = res.pairs.filter(
-      (p) => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1),
+      (p) => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1)
     );
     expect(significant).toHaveLength(1);
     const sigH1 = significant[0]!;
@@ -55,7 +66,9 @@ describe("rips: known geometric ground truths", () => {
   });
 
   it("octahedron (6 pts on S^2) -> single essential H2 class", () => {
-    const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+    const pts = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
     const eps = Math.SQRT2;
     const res = computePersistentHomology(pts, 3, eps + 0.01, 3);
     expect(res.complex.numVertices).toBe(6);
@@ -68,7 +81,9 @@ describe("rips: known geometric ground truths", () => {
   it("octahedron + Euler-Poincare cross-check (chi = V-E+T = b0-b1+b2)", () => {
     // Tet === 0 here, so b3 cannot be nonzero — safe to compare the full
     // simplicial Euler characteristic against b0-b1+b2.
-    const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+    const pts = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
     const eps = Math.SQRT2;
     const res = computePersistentHomology(pts, 3, eps + 0.01, 3);
     expect(res.complex.numTetrahedra).toBe(0);
@@ -78,11 +93,15 @@ describe("rips: known geometric ground truths", () => {
   });
 
   it("octahedron tetrahedra kill the H2 cycle", () => {
-    const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+    const pts = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
     const res = computePersistentHomology(pts, 3, 2.1, 3);
     expect(res.complex.numTetrahedra).toBeGreaterThan(0);
     expect(res.pairs.filter((p) => p.dim === 2 && p.death < 0)).toHaveLength(0);
-    expect(res.pairs.filter((p) => p.dim === 2 && p.death >= 0).length).toBeGreaterThan(0);
+    expect(
+      res.pairs.filter((p) => p.dim === 2 && p.death >= 0).length
+    ).toBeGreaterThan(0);
     // NOTE: at this threshold all 6 points form a 6-clique. The 3-skeleton of
     // a 5-simplex has real H3 of rank 5 (wedge of 5 copies of S^3) which this
     // library does not compute (H0-H2 only, per README). Euler-Poincare is
@@ -134,7 +153,7 @@ describe("rips: known geometric ground truths", () => {
     expect(res.complex.numVertices).toBe(24);
     expect(res.pairs.filter((p) => p.dim === 0 && p.death < 0)).toHaveLength(2);
     const significantH1 = res.pairs.filter(
-      (p) => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1),
+      (p) => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1)
     );
     expect(significantH1).toHaveLength(2);
   });
@@ -185,7 +204,9 @@ describe("rips: edge cases & numerical robustness", () => {
       [5, 0],
     ]);
     const res = computePersistentHomology(pts, 2, 10);
-    expect(res.pairs.filter((p) => p.dim === 0 && p.death === 0)).toHaveLength(1);
+    expect(res.pairs.filter((p) => p.dim === 0 && p.death === 0)).toHaveLength(
+      1
+    );
   });
 
   it("maxDist=0 only merges exactly-coincident points", () => {

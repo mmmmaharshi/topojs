@@ -360,7 +360,7 @@ export class IncrementalH1 {
     // a clear error at construction time.
     if (!Number.isInteger(opts.windowSize) || opts.windowSize < 2) {
       throw new Error(
-        "IncrementalH1: windowSize must be an integer >= 2 (push() returns null below 2 points)",
+        "IncrementalH1: windowSize must be an integer >= 2 (push() returns null below 2 points)"
       );
     }
     if (!Number.isInteger(opts.dims) || opts.dims < 1) {
@@ -386,9 +386,11 @@ export class IncrementalH1 {
 
   push(point: number[] | Float64Array): IncrementalH1Update | null {
     if (point.length !== this.dims) {
-      throw new Error(`IncrementalH1: expected point of length ${this.dims}, got ${point.length}`);
+      throw new Error(
+        `IncrementalH1: expected point of length ${this.dims}, got ${point.length}`
+      );
     }
-    const coords = Array.from(point);
+    const coords = [...point];
     const newId = this.nextId++;
 
     const wasFull = this.pointOrder.length === this.windowSize;
@@ -595,7 +597,7 @@ export class IncrementalH1 {
     // New triangles provably must include the new point: every pair of the
     // new point's neighbors that are themselves adjacent forms exactly one
     // new triangle. O(deg(new)^2) worst case, not O(k^3).
-    const newNeighborsArr = Array.from(newNeighbors);
+    const newNeighborsArr = [...newNeighbors];
     const newTriCandidates: TriRec[] = [];
     for (let a = 0; a < newNeighborsArr.length; a++) {
       const p = newNeighborsArr[a]!;
@@ -625,7 +627,11 @@ export class IncrementalH1 {
         const e1 = getEdgeIdx(idA, idB);
         const e2 = getEdgeIdx(idA, idC);
         const e3 = getEdgeIdx(idB, idC);
-        const val = Math.max(newEdges[e1]!.val, newEdges[e2]!.val, newEdges[e3]!.val);
+        const val = Math.max(
+          newEdges[e1]!.val,
+          newEdges[e2]!.val,
+          newEdges[e3]!.val
+        );
         newTriCandidates.push({ e1, e2, e3, idA, idB, idC, val });
       }
     }
@@ -745,16 +751,20 @@ export class IncrementalH1 {
 
     // --- carry forward the safe prefix, re-reduce the rest ---
     const newPivotOfEdgeIdx = new Int32Array(newEdges.length).fill(-1);
-    const newReducedCols: (Int32Array | null)[] = Array.from<Int32Array | null>({
-      length: newTrisCount,
-    }).fill(null);
-    const newTriPair: (PersistencePair | null)[] = Array.from<PersistencePair | null>({
-      length: newTrisCount,
-    }).fill(null);
+    const newReducedCols: (Int32Array | null)[] = Array.from<Int32Array | null>(
+      {
+        length: newTrisCount,
+      }
+    ).fill(null);
+    const newTriPair: (PersistencePair | null)[] =
+      Array.from<PersistencePair | null>({
+        length: newTrisCount,
+      }).fill(null);
 
     for (let i = 0; i < edgeSafeCount; i++) {
       const prevPivot = this.pivotOfEdgeIdx[i]!;
-      newPivotOfEdgeIdx[i] = prevPivot >= 0 && prevPivot < triSafeCount ? prevPivot : -1;
+      newPivotOfEdgeIdx[i] =
+        prevPivot >= 0 && prevPivot < triSafeCount ? prevPivot : -1;
     }
     for (let ci = 0; ci < triSafeCount; ci++) {
       // subarray() is a VIEW into this.colPool (shares the underlying
@@ -769,7 +779,11 @@ export class IncrementalH1 {
       const len = this.colLength[ci]!;
       newReducedCols[ci] = this.colPool.subarray(off, off + len);
       newTriPair[ci] = this.triPairHas[ci]
-        ? { birth: this.triPairBirth[ci]!, death: this.triPairDeath[ci]!, dim: 1 }
+        ? {
+            birth: this.triPairBirth[ci]!,
+            death: this.triPairDeath[ci]!,
+            dim: 1,
+          }
         : null;
     }
 
@@ -791,7 +805,11 @@ export class IncrementalH1 {
           newPivotOfEdgeIdx[pivot] = ci;
           newReducedCols[ci] = working.toSparse();
           if (mVal[ci]! > newEdges[pivot]!.val) {
-            newTriPair[ci] = { birth: newEdges[pivot]!.val, death: mVal[ci]!, dim: 1 };
+            newTriPair[ci] = {
+              birth: newEdges[pivot]!.val,
+              death: mVal[ci]!,
+              dim: 1,
+            };
           }
           break;
         }
@@ -831,7 +849,7 @@ export class IncrementalH1 {
       uArr,
       vArr,
       valArr,
-      newEdges.length,
+      newEdges.length
     );
 
     const h1Pairs: PersistencePair[] = [];
@@ -866,10 +884,17 @@ export class IncrementalH1 {
     this.packTriPair(newTriPair);
 
     return {
-      complex: { numEdges: newEdges.length, numTriangles: newTrisCount, numVertices: k },
+      complex: {
+        numEdges: newEdges.length,
+        numTriangles: newTrisCount,
+        numVertices: k,
+      },
       isFull: this.isFull,
       pairs: [...h0Pairs, ...h1Pairs],
-      stats: { reReducedTriangles: newTrisCount - triSafeCount, totalTriangles: newTrisCount },
+      stats: {
+        reReducedTriangles: newTrisCount - triSafeCount,
+        totalTriangles: newTrisCount,
+      },
       windowSize: k,
     };
   }

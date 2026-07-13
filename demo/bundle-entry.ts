@@ -11,5 +11,8 @@ export {
   summarize,
 } from "../src/export/persistence-diagram.ts";
 export type { PersistencePair } from "../src/core/h0.ts";
-export type { HomologyResult, HomologyEngine } from "../src/core/homology-unified.ts";
+export type {
+  HomologyResult,
+  HomologyEngine,
+} from "../src/core/homology-unified.ts";
 export type { CubicalResult } from "../src/core/cubical.ts";

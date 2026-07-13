@@ -21,7 +21,9 @@ const maxDim = 2;
 
 console.log("Building complex...");
 const complex = buildRipsComplex(pts, dims, maxDist, maxDim);
-console.log(`  ${complex.edges.length} edges, ${complex.triangles.length} triangles`);
+console.log(
+  `  ${complex.edges.length} edges, ${complex.triangles.length} triangles`
+);
 
 function run(N: number, label: string, fn: () => void): void {
   // Warmup
@@ -39,7 +41,7 @@ function run(N: number, label: string, fn: () => void): void {
   const min = times[0]!;
   const max = times.at(-1)!;
   console.log(
-    `${label.padEnd(30)} ${median.toFixed(1).padStart(8)}ms  (${min.toFixed(1)}-${max.toFixed(1)}ms)`,
+    `${label.padEnd(30)} ${median.toFixed(1).padStart(8)}ms  (${min.toFixed(1)}-${max.toFixed(1)}ms)`
   );
 }
 
@@ -47,9 +49,11 @@ const N = 5;
 console.log(`\nBenchmarking (${N} repeats after warmup):`);
 
 // Fair comparison: each engine builds complex internally
-run(N, "general (full)", () => computePersistentHomology(pts, dims, maxDist, maxDim));
+run(N, "general (full)", () =>
+  computePersistentHomology(pts, dims, maxDist, maxDim)
+);
 run(N, "cohomology-CSR (full)", () =>
-  computePersistentHomologyCohomology(pts, dims, maxDist, maxDim),
+  computePersistentHomologyCohomology(pts, dims, maxDist, maxDim)
 );
 run(N, "implicit (full)", () => {
   const c = buildRipsComplex(pts, dims, maxDist, maxDim);
@@ -62,4 +66,6 @@ run(N, "cohomology-CSR (reduce)", () => {
   const c = buildRipsComplex(pts, dims, maxDist, maxDim);
   return computePersistentHomologyCohomologyFromComplex(c, maxDim);
 });
-run(N, "implicit (reduce)", () => computePersistentHomologyCohomologyFromComplex(complex, maxDim));
+run(N, "implicit (reduce)", () =>
+  computePersistentHomologyCohomologyFromComplex(complex, maxDim)
+);

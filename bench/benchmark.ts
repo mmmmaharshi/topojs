@@ -31,9 +31,10 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { StreamingHomology } from "../src/streaming/streaming-homology.ts";
-import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
+
 import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
+import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
+import { StreamingHomology } from "../src/streaming/streaming-homology.ts";
 
 const __dirname = import.meta.dirname;
 
@@ -54,7 +55,11 @@ function autocorrelation(series: number[], lag: number): number {
 }
 
 /** First lag where autocorrelation drops below 1/e (not hand-tuned per dataset). */
-function dataDrivenLag(series: number[], maxScan: number, fallback: number): number {
+function dataDrivenLag(
+  series: number[],
+  maxScan: number,
+  fallback: number
+): number {
   const threshold = 1 / Math.E;
   let lag = 1;
   for (let l = 1; l <= maxScan; l++) {
@@ -98,7 +103,7 @@ function benchNaive(
   windowSize: number,
   maxDist: number,
   warmup: number,
-  timedSteps: number,
+  timedSteps: number
 ): number {
   const s = new StreamingHomology({ dims, maxDim: 2, maxDist, windowSize });
   for (let i = 0; i < warmup; i++) {
@@ -117,7 +122,7 @@ function benchIncremental(
   windowSize: number,
   maxDist: number,
   warmup: number,
-  timedSteps: number,
+  timedSteps: number
 ): { ms: number; reReducedFrac: number } {
   const s = new IncrementalH1({ dims, maxDist, windowSize });
   for (let i = 0; i < warmup; i++) {
@@ -132,7 +137,10 @@ function benchIncremental(
     totalTriangles += u.stats.totalTriangles;
   }
   const ms = performance.now() - start;
-  return { ms, reReducedFrac: totalTriangles > 0 ? totalReReduced / totalTriangles : 0 };
+  return {
+    ms,
+    reReducedFrac: totalTriangles > 0 ? totalReReduced / totalTriangles : 0,
+  };
 }
 
 /** Same as benchNaive, but also reports the realized complex size from the LAST
@@ -143,7 +151,7 @@ function benchNaiveWithDensity(
   windowSize: number,
   maxDist: number,
   warmup: number,
-  timedSteps: number,
+  timedSteps: number
 ): { ms: number; numEdges: number; numTriangles: number } {
   const s = new StreamingHomology({ dims, maxDim: 2, maxDist, windowSize });
   for (let i = 0; i < warmup; i++) {
@@ -169,18 +177,21 @@ function benchNaiveWithDensity(
  */
 function normInv(p: number): number {
   const a = [
-    -3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2,
-    -3.066479806614716e1, 2.506628277459239,
+    -3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2,
+    1.38357751867269e2, -3.066479806614716e1, 2.506628277459239,
   ];
   const b = [
-    -5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1,
-    -1.328068155288572e1,
+    -5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2,
+    6.680131188771972e1, -1.328068155288572e1,
   ];
   const c = [
-    -7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734,
-    4.374664141464968, 2.938163982698783,
+    -7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838,
+    -2.549732539343734, 4.374664141464968, 2.938163982698783,
   ];
-  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+  const d = [
+    7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996,
+    3.754408661907416,
+  ];
   const pLow = 0.02425;
   if (p <= 0 || p >= 1) {
     throw new RangeError("normInv: p must be in (0,1)");
@@ -188,7 +199,8 @@ function normInv(p: number): number {
   if (p < pLow) {
     const q = Math.sqrt(-2 * Math.log(p));
     return (
-      (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) /
+      (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q +
+        c[5]!) /
       ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1)
     );
   }
@@ -196,13 +208,18 @@ function normInv(p: number): number {
     const q = p - 0.5;
     const r = q * q;
     return (
-      ((((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r + a[5]!) * q) /
+      ((((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r +
+        a[5]!) *
+        q) /
       (((((b[0]! * r + b[1]!) * r + b[2]!) * r + b[3]!) * r + b[4]!) * r + 1)
     );
   }
   const q = Math.sqrt(-2 * Math.log(1 - p));
   return (
-    -(((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) /
+    -(
+      ((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q +
+      c[5]!
+    ) /
     ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1)
   );
 }
@@ -226,7 +243,13 @@ function tQuantile(p: number, df: number): number {
   const g2 = (5 * z5 + 16 * z3 + 3 * z) / 96;
   const g3 = (3 * z7 + 19 * z5 + 17 * z3 - 15 * z) / 384;
   const g4 = (79 * z9 + 776 * z7 + 1482 * z5 - 1920 * z3 - 945 * z) / 92_160;
-  return z + g1 / df + g2 / (df * df) + g3 / (df * df * df) + g4 / (df * df * df * df);
+  return (
+    z +
+    g1 / df +
+    g2 / (df * df) +
+    g3 / (df * df * df) +
+    g4 / (df * df * df * df)
+  );
 }
 
 // Two-sided 97.5th-percentile t critical values, df=1..30 (Student's t table).
@@ -237,9 +260,9 @@ function tQuantile(p: number, df: number): number {
 // back to the normal approximation, where the two are indistinguishable to
 // 3 decimal places anyway.
 const T_TABLE_975: number[] = [
-  0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.16,
-  2.145, 2.131, 2.12, 2.11, 2.101, 2.093, 2.086, 2.08, 2.074, 2.069, 2.064, 2.06, 2.056, 2.052,
-  2.048, 2.045, 2.042,
+  0, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+  2.201, 2.179, 2.16, 2.145, 2.131, 2.12, 2.11, 2.101, 2.093, 2.086, 2.08,
+  2.074, 2.069, 2.064, 2.06, 2.056, 2.052, 2.048, 2.045, 2.042,
 ];
 function tCritical95(df: number): number {
   const d = Math.max(1, Math.round(df));
@@ -274,7 +297,8 @@ function lag1Autocorr(x: number[]): number {
 function pairedStats(logSpeedups: number[]) {
   const n = logSpeedups.length;
   const mean = logSpeedups.reduce((a, b) => a + b, 0) / n;
-  const variance = logSpeedups.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
+  const variance =
+    logSpeedups.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1);
   const se = Math.sqrt(variance) / Math.sqrt(n);
   const tCrit = tCritical95(n - 1);
 
@@ -438,7 +462,10 @@ const DATASETS: Record<string, DatasetConfig> = {
 // -- dataset loaders (each returns REAL data only, no synthesis) --
 
 function loadSunspots(): { points: number[][]; logLines: string[] } {
-  const monthly = loadCsvColumn("monthly-sunspots.csv", /^"\d{4}-\d{2}",(?<value>[\d.]+)/u);
+  const monthly = loadCsvColumn(
+    "monthly-sunspots.csv",
+    /^"\d{4}-\d{2}",(?<value>[\d.]+)/u
+  );
   const lag = dataDrivenLag(monthly, 40, 6);
   const points = delayEmbed2D(monthly, lag);
   return {
@@ -452,7 +479,10 @@ function loadSunspots(): { points: number[][]; logLines: string[] } {
 }
 
 function loadMelbourneTemp(): { points: number[][]; logLines: string[] } {
-  const daily = loadCsvColumn("daily-min-temperatures.csv", /^"[\d-]+",(?<value>[\d.]+)/u);
+  const daily = loadCsvColumn(
+    "daily-min-temperatures.csv",
+    /^"[\d-]+",(?<value>[\d.]+)/u
+  );
   const lag = dataDrivenLag(daily, 60, 10);
   const points = delayEmbed2D(daily, lag);
   return {
@@ -500,7 +530,7 @@ function loadIris(): { points: number[][]; logLines: string[] } {
 
 function loadMultiDimCsv(
   filename: string,
-  dims: number,
+  dims: number
 ): { points: number[][]; logLines: string[] } {
   const csvPath = path.join(__dirname, "data", filename);
   const raw = readFileSync(csvPath, "utf-8").trim().split("\n");
@@ -509,7 +539,9 @@ function loadMultiDimCsv(
   for (let i = 0; i < n; i++) {
     const cols = raw[i]!.split(",");
     if (cols.length !== dims) {
-      throw new Error(`Expected ${dims} cols, got ${cols.length} in ${filename} row ${i}`);
+      throw new Error(
+        `Expected ${dims} cols, got ${cols.length} in ${filename} row ${i}`
+      );
     }
     for (let d = 0; d < dims; d++) {
       flat[i * dims + d] = Number(cols[d]!);
@@ -576,7 +608,9 @@ function runDataset(key: string): {
 } {
   const cfg = DATASETS[key];
   if (!cfg) {
-    throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`);
+    throw new Error(
+      `unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`
+    );
   }
 
   console.log(`\n=== ${cfg.name} ===`);
@@ -592,7 +626,7 @@ function runDataset(key: string): {
 
   const warmup = cfg.windowSize + 5;
   console.log(
-    `windowSize=${cfg.windowSize}  maxDist=${cfg.maxDist}  mode=${cfg.mode}  trials=${cfg.nTrials}`,
+    `windowSize=${cfg.windowSize}  maxDist=${cfg.maxDist}  mode=${cfg.mode}  trials=${cfg.nTrials}`
   );
 
   const logSpeedups: number[] = [];
@@ -603,7 +637,7 @@ function runDataset(key: string): {
       "naive_ms".padStart(12) +
       "incr_ms".padStart(12) +
       "speedup".padStart(10) +
-      "reReduced%".padStart(12),
+      "reReduced%".padStart(12)
   );
 
   if (cfg.mode === "chunks") {
@@ -611,14 +645,21 @@ function runDataset(key: string): {
     const timedSteps = Math.min(150, chunkLen - warmup - 5);
     for (let c = 0; c < cfg.nTrials; c++) {
       const chunk = points.slice(c * chunkLen, c * chunkLen + chunkLen);
-      const naiveMs = benchNaive(chunk, cfg.dims, cfg.windowSize, cfg.maxDist, warmup, timedSteps);
+      const naiveMs = benchNaive(
+        chunk,
+        cfg.dims,
+        cfg.windowSize,
+        cfg.maxDist,
+        warmup,
+        timedSteps
+      );
       const { ms: incrMs, reReducedFrac } = benchIncremental(
         chunk,
         cfg.dims,
         cfg.windowSize,
         cfg.maxDist,
         warmup,
-        timedSteps,
+        timedSteps
       );
       const speedup = naiveMs / incrMs;
       logSpeedups.push(Math.log(speedup));
@@ -628,20 +669,27 @@ function runDataset(key: string): {
           naiveMs.toFixed(2).padStart(12) +
           incrMs.toFixed(2).padStart(12) +
           `${speedup.toFixed(3)}x`.padStart(10) +
-          `${(reReducedFrac * 100).toFixed(1)}%`.padStart(12),
+          `${(reReducedFrac * 100).toFixed(1)}%`.padStart(12)
       );
     }
   } else {
     const timedSteps = points.length - warmup - 1;
     for (let r = 0; r < cfg.nTrials; r++) {
-      const naiveMs = benchNaive(points, cfg.dims, cfg.windowSize, cfg.maxDist, warmup, timedSteps);
+      const naiveMs = benchNaive(
+        points,
+        cfg.dims,
+        cfg.windowSize,
+        cfg.maxDist,
+        warmup,
+        timedSteps
+      );
       const { ms: incrMs, reReducedFrac } = benchIncremental(
         points,
         cfg.dims,
         cfg.windowSize,
         cfg.maxDist,
         warmup,
-        timedSteps,
+        timedSteps
       );
       const speedup = naiveMs / incrMs;
       logSpeedups.push(Math.log(speedup));
@@ -651,7 +699,7 @@ function runDataset(key: string): {
           naiveMs.toFixed(3).padStart(12) +
           incrMs.toFixed(3).padStart(12) +
           `${speedup.toFixed(3)}x`.padStart(10) +
-          `${(reReducedFrac * 100).toFixed(1)}%`.padStart(12),
+          `${(reReducedFrac * 100).toFixed(1)}%`.padStart(12)
       );
     }
   }
@@ -671,14 +719,15 @@ function runDataset(key: string): {
     ciLowEff,
     ciHighEff,
   } = stats;
-  const meanReReduced = reReducedFracs.reduce((a, b) => a + b, 0) / reReducedFracs.length;
+  const meanReReduced =
+    reReducedFracs.reduce((a, b) => a + b, 0) / reReducedFracs.length;
 
   console.log(
-    `geometric mean speedup: ${geoMean.toFixed(3)}x  (95% CI: ${ciLow.toFixed(3)}x .. ${ciHigh.toFixed(3)}x)`,
+    `geometric mean speedup: ${geoMean.toFixed(3)}x  (95% CI: ${ciLow.toFixed(3)}x .. ${ciHigh.toFixed(3)}x)`
   );
   console.log(`mean re-reduced fraction: ${(meanReReduced * 100).toFixed(1)}%`);
   console.log(
-    `paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=${n - 1}: t=${tStat.toFixed(3)}`,
+    `paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=${n - 1}: t=${tStat.toFixed(3)}`
   );
   if (cfg.mode === "repeats") {
     // 'repeats' trials are re-timings of the IDENTICAL stream (see dataset
@@ -693,7 +742,7 @@ function runDataset(key: string): {
       `CAVEAT: mode=repeats -- above t-test/CI measure repeatability of one ` +
         `fixed stream's timing, not generalization to other real data (n=${
           n
-        } timed re-runs of the SAME 150-point ordering, not independent trials).`,
+        } timed re-runs of the SAME 150-point ordering, not independent trials).`
     );
   }
   if (cfg.mode === "chunks") {
@@ -701,17 +750,30 @@ function runDataset(key: string): {
     // report the residual correlation between them directly instead of just
     // assuming n=chunk-count independent trials (see pairedStats docstring).
     const flag =
-      Math.abs(chunkAutocorr) > 0.3 ? "  [non-trivial -- see effective-N line]" : "  [low]";
+      Math.abs(chunkAutocorr) > 0.3
+        ? "  [non-trivial -- see effective-N line]"
+        : "  [low]";
     console.log(
-      `chunk-order lag-1 autocorrelation of log(speedup): ${chunkAutocorr.toFixed(3)}${flag}`,
+      `chunk-order lag-1 autocorrelation of log(speedup): ${chunkAutocorr.toFixed(3)}${flag}`
     );
     console.log(
       `effective-N adjusted: n_eff=${nEff.toFixed(2)} (of ${n} raw), t=${tStatEff.toFixed(3)}, ` +
-        `95% CI: ${ciLowEff.toFixed(3)}x .. ${ciHighEff.toFixed(3)}x`,
+        `95% CI: ${ciLowEff.toFixed(3)}x .. ${ciHighEff.toFixed(3)}x`
     );
   }
 
-  return { ciHigh, ciHighEff, ciLow, ciLowEff, geoMean, key, mean, n, nEff, se };
+  return {
+    ciHigh,
+    ciHighEff,
+    ciLow,
+    ciLowEff,
+    geoMean,
+    key,
+    mean,
+    n,
+    nEff,
+    se,
+  };
 }
 
 // ── scaling sweep ────────────────────────────────────────────────────────
@@ -746,16 +808,22 @@ function logLogSlope(xs: number[], ys: number[]): number {
   return num / den;
 }
 
-function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10): void {
+function runScalingSweep(
+  key: string,
+  windowSizes: number[],
+  trialsPerSize = 10
+): void {
   const cfg = DATASETS[key];
   if (!cfg) {
-    throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`);
+    throw new Error(
+      `unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`
+    );
   }
 
   console.log(`\n=== SCALING SWEEP: ${cfg.name} ===`);
   console.log(`source: ${cfg.source}`);
   console.log(
-    "(measures real growth rate vs. window size -- validates the O(k) vs O(k^2)/O(k^3) claim on real data)",
+    "(measures real growth rate vs. window size -- validates the O(k) vs O(k^2)/O(k^3) claim on real data)"
   );
 
   const { points, logLines } = cfg.load();
@@ -770,7 +838,7 @@ function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10)
       "naive_ms".padStart(12) +
       "incr_ms".padStart(12) +
       "speedup".padStart(10) +
-      "reReduced%".padStart(12),
+      "reReduced%".padStart(12)
   );
 
   for (const windowSize of windowSizes) {
@@ -778,7 +846,7 @@ function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10)
     const chunkLen = Math.floor(points.length / trialsPerSize);
     if (chunkLen < warmup + 25) {
       console.log(
-        `${String(windowSize).padStart(10)}  skipped -- not enough real data for ${trialsPerSize} trials at this window size`,
+        `${String(windowSize).padStart(10)}  skipped -- not enough real data for ${trialsPerSize} trials at this window size`
       );
       continue;
     }
@@ -788,7 +856,7 @@ function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10)
     const timedSteps = Math.min(
       60,
       Math.max(25, Math.floor(2000 / windowSize)),
-      chunkLen - warmup - 5,
+      chunkLen - warmup - 5
     );
 
     let naiveTotal = 0;
@@ -796,14 +864,21 @@ function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10)
     let reReducedTotal = 0;
     for (let t = 0; t < trialsPerSize; t++) {
       const chunk = points.slice(t * chunkLen, t * chunkLen + chunkLen);
-      naiveTotal += benchNaive(chunk, cfg.dims, windowSize, cfg.maxDist, warmup, timedSteps);
+      naiveTotal += benchNaive(
+        chunk,
+        cfg.dims,
+        windowSize,
+        cfg.maxDist,
+        warmup,
+        timedSteps
+      );
       const { ms, reReducedFrac } = benchIncremental(
         chunk,
         cfg.dims,
         windowSize,
         cfg.maxDist,
         warmup,
-        timedSteps,
+        timedSteps
       );
       incrTotal += ms;
       reReducedTotal += reReducedFrac;
@@ -823,41 +898,47 @@ function runScalingSweep(key: string, windowSizes: number[], trialsPerSize = 10)
         naiveMs.toFixed(2).padStart(12) +
         incrMs.toFixed(2).padStart(12) +
         `${row.speedup.toFixed(2)}x`.padStart(10) +
-        `${(row.reReducedFrac * 100).toFixed(1)}%`.padStart(12),
+        `${(row.reReducedFrac * 100).toFixed(1)}%`.padStart(12)
     );
   }
 
   if (rows.length < 3) {
-    console.log("\nNot enough completed window sizes for a growth-rate fit (need >=3).");
+    console.log(
+      "\nNot enough completed window sizes for a growth-rate fit (need >=3)."
+    );
     return;
   }
 
   const naiveSlope = logLogSlope(
     rows.map((r) => r.windowSize),
-    rows.map((r) => r.naiveMs),
+    rows.map((r) => r.naiveMs)
   );
   const incrSlope = logLogSlope(
     rows.map((r) => r.windowSize),
-    rows.map((r) => r.incrMs),
+    rows.map((r) => r.incrMs)
   );
   const first = rows[0]!;
   const last = rows.at(-1)!;
 
   console.log();
-  console.log("empirical growth rate on real data (log-log slope, time ~ windowSize^p):");
-  console.log(`  naive (Phase A, full rebuild):     p=${naiveSlope.toFixed(2)}`);
+  console.log(
+    "empirical growth rate on real data (log-log slope, time ~ windowSize^p):"
+  );
+  console.log(
+    `  naive (Phase A, full rebuild):     p=${naiveSlope.toFixed(2)}`
+  );
   console.log(`  incremental (v3 IncrementalH1):    p=${incrSlope.toFixed(2)}`);
   console.log(
-    `speedup grows with window size: ${first.speedup.toFixed(2)}x at windowSize=${first.windowSize} -> ${last.speedup.toFixed(2)}x at windowSize=${last.windowSize}`,
+    `speedup grows with window size: ${first.speedup.toFixed(2)}x at windowSize=${first.windowSize} -> ${last.speedup.toFixed(2)}x at windowSize=${last.windowSize}`
   );
   console.log(
-    "NOTE: real windowed point clouds are not complete graphs, so these exponents will not exactly",
+    "NOTE: real windowed point clouds are not complete graphs, so these exponents will not exactly"
   );
   console.log(
-    "match the worst-case O(k^2)/O(k^3) bound -- this measures actual growth on real data, not the bound.",
+    "match the worst-case O(k^2)/O(k^3) bound -- this measures actual growth on real data, not the bound."
   );
   console.log(
-    "A widening speedup with window size (not a flat ratio) is the signal that the algorithmic change,",
+    "A widening speedup with window size (not a flat ratio) is the signal that the algorithmic change,"
   );
   console.log("not a constant-factor optimization, is what is being measured.");
 }
@@ -903,7 +984,9 @@ function measureHeapMBOnce(build: () => unknown): number {
  * actually used -- one instance per window, not reused across windows).
  */
 function measureHeapMBMedian(build: () => unknown, repeats = 7): number {
-  const samples = Array.from({ length: repeats }, () => measureHeapMBOnce(build));
+  const samples = Array.from({ length: repeats }, () =>
+    measureHeapMBOnce(build)
+  );
   samples.sort((a, b) => a - b);
   return samples[Math.floor(samples.length / 2)]!;
 }
@@ -911,14 +994,16 @@ function measureHeapMBMedian(build: () => unknown, repeats = 7): number {
 function runMemorySweep(key: string, windowSizes: number[]): void {
   const cfg = DATASETS[key];
   if (!cfg) {
-    throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`);
+    throw new Error(
+      `unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`
+    );
   }
 
   const hasGc = typeof (globalThis as { gc?: () => void }).gc === "function";
   console.log(`\n=== MEMORY SWEEP: ${cfg.name} ===`);
   console.log(`source: ${cfg.source}`);
   console.log(
-    `(process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; ${hasGc ? "manual GC forced before/after each build via --expose-gc" : "NO --expose-gc detected, run via `npm run bench` for a manual-GC measurement -- these numbers will be substantially noisier without it"})`,
+    `(process.memoryUsage().heapUsed deltas, median of 7 fresh builds per point -- noisy by nature even with GC forced, especially at small window sizes where the delta is a few hundred KB; ${hasGc ? "manual GC forced before/after each build via --expose-gc" : "NO --expose-gc detected, run via `npm run bench` for a manual-GC measurement -- these numbers will be substantially noisier without it"})`
   );
 
   const { points, logLines } = cfg.load();
@@ -931,14 +1016,14 @@ function runMemorySweep(key: string, windowSizes: number[]): void {
     "windowSize".padStart(10) +
       "naive_MB".padStart(12) +
       "incr_MB".padStart(12) +
-      "ratio(incr/naive)".padStart(20),
+      "ratio(incr/naive)".padStart(20)
   );
 
   for (const windowSize of windowSizes) {
     const warmup = windowSize + 5;
     if (points.length < warmup) {
       console.log(
-        `${String(windowSize).padStart(10)}  skipped -- not enough real data to fill this window`,
+        `${String(windowSize).padStart(10)}  skipped -- not enough real data to fill this window`
       );
       continue;
     }
@@ -955,7 +1040,11 @@ function runMemorySweep(key: string, windowSizes: number[]): void {
       return s;
     });
     const incrMB = measureHeapMBMedian(() => {
-      const s = new IncrementalH1({ dims: cfg.dims, maxDist: cfg.maxDist, windowSize });
+      const s = new IncrementalH1({
+        dims: cfg.dims,
+        maxDist: cfg.maxDist,
+        windowSize,
+      });
       for (let i = 0; i < warmup; i++) {
         s.push(points[i]!);
       }
@@ -966,24 +1055,24 @@ function runMemorySweep(key: string, windowSizes: number[]): void {
       String(windowSize).padStart(10) +
         naiveMB.toFixed(3).padStart(12) +
         incrMB.toFixed(3).padStart(12) +
-        (Number.isFinite(ratio) ? ratio.toFixed(2) : "n/a").padStart(20),
+        (Number.isFinite(ratio) ? ratio.toFixed(2) : "n/a").padStart(20)
     );
   }
   console.log();
   console.log(
-    "IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:",
+    "IncrementalH1 is expected to use MORE memory than StreamingHomology at a given window size:"
   );
   console.log(
-    "it keeps the previous push's full edge/triangle lists AND reduced-column state alive between",
+    "it keeps the previous push's full edge/triangle lists AND reduced-column state alive between"
   );
   console.log(
-    "pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of",
+    "pushes (to diff against), plus the neighborsOf adjacency map -- StreamingHomology holds none of"
   );
   console.log(
-    "that, it only keeps the raw window contents and discards all derived state after each push.",
+    "that, it only keeps the raw window contents and discards all derived state after each push."
   );
   console.log(
-    "This is the space side of the time/space trade-off the class docstring does not currently discuss.",
+    "This is the space side of the time/space trade-off the class docstring does not currently discuss."
   );
 }
 
@@ -1007,14 +1096,19 @@ interface RegimeRow {
   speedup: number;
 }
 
-function runRegimeSweep(keys: string[], windowSizeFilter?: number): RegimeRow[] {
+function runRegimeSweep(
+  keys: string[],
+  windowSizeFilter?: number
+): RegimeRow[] {
   const allRows: RegimeRow[] = [];
   const trialsPerPoint = 3;
 
   for (const key of keys) {
     const cfg = DATASETS[key];
     if (!cfg) {
-      throw new Error(`unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`);
+      throw new Error(
+        `unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`
+      );
     }
     console.log(`\n=== REGIME SWEEP: ${cfg.name} ===`);
     const { points } = cfg.load();
@@ -1028,14 +1122,20 @@ function runRegimeSweep(keys: string[], windowSizeFilter?: number): RegimeRow[] 
       const warmup = windowSize + 5;
       const chunkLen = Math.floor(points.length / trialsPerPoint);
       if (chunkLen < warmup + 20) {
-        console.log(`  windowSize=${windowSize}: skipped -- not enough real data`);
+        console.log(
+          `  windowSize=${windowSize}: skipped -- not enough real data`
+        );
         continue;
       }
       const timedSteps = Math.min(40, chunkLen - warmup - 5);
       const maxT = (windowSize * (windowSize - 1) * (windowSize - 2)) / 6;
 
       console.log(`  windowSize=${windowSize}:`);
-      console.log("    maxDist".padStart(11) + "triDensity%".padStart(14) + "speedup".padStart(10));
+      console.log(
+        "    maxDist".padStart(11) +
+          "triDensity%".padStart(14) +
+          "speedup".padStart(10)
+      );
 
       for (const maxDist of cfg.regimeMaxDists) {
         let naiveTotal = 0;
@@ -1049,7 +1149,7 @@ function runRegimeSweep(keys: string[], windowSizeFilter?: number): RegimeRow[] 
             windowSize,
             maxDist,
             warmup,
-            timedSteps,
+            timedSteps
           );
           naiveTotal += naiveMs;
           triSum += numTriangles;
@@ -1059,18 +1159,24 @@ function runRegimeSweep(keys: string[], windowSizeFilter?: number): RegimeRow[] 
             windowSize,
             maxDist,
             warmup,
-            timedSteps,
+            timedSteps
           ).ms;
         }
         const naiveMs = naiveTotal / trialsPerPoint;
         const incrMs = incrTotal / trialsPerPoint;
         const triDensityPct = (100 * (triSum / trialsPerPoint)) / maxT;
         const speedup = naiveMs / incrMs;
-        allRows.push({ dataset: key, maxDist, speedup, triDensityPct, windowSize });
+        allRows.push({
+          dataset: key,
+          maxDist,
+          speedup,
+          triDensityPct,
+          windowSize,
+        });
         console.log(
           `    ${maxDist.toFixed(2)}`.padStart(11) +
             `${triDensityPct.toFixed(2)}%`.padStart(14) +
-            `${speedup.toFixed(2)}x`.padStart(10),
+            `${speedup.toFixed(2)}x`.padStart(10)
         );
       }
     }
@@ -1082,15 +1188,19 @@ function summarizeRegime(rows: RegimeRow[]): void {
   if (rows.length === 0) {
     return;
   }
-  const sorted = [...rows].toSorted((a, b) => a.triDensityPct - b.triDensityPct);
+  const sorted = [...rows].toSorted(
+    (a, b) => a.triDensityPct - b.triDensityPct
+  );
 
-  console.log("\n=== REGIME MAP: density -> speedup, all datasets combined ===");
   console.log(
-    `${"triDensity%".padStart(14) + "speedup".padStart(10)}  dataset(windowSize, maxDist)`,
+    "\n=== REGIME MAP: density -> speedup, all datasets combined ==="
+  );
+  console.log(
+    `${"triDensity%".padStart(14) + "speedup".padStart(10)}  dataset(windowSize, maxDist)`
   );
   for (const r of sorted) {
     console.log(
-      `${`${r.triDensityPct.toFixed(2)}%`.padStart(14) + `${r.speedup.toFixed(2)}x`.padStart(10)}  ${r.dataset}(k=${r.windowSize}, maxDist=${r.maxDist})`,
+      `${`${r.triDensityPct.toFixed(2)}%`.padStart(14) + `${r.speedup.toFixed(2)}x`.padStart(10)}  ${r.dataset}(k=${r.windowSize}, maxDist=${r.maxDist})`
     );
   }
 
@@ -1102,30 +1212,34 @@ function summarizeRegime(rows: RegimeRow[]): void {
   console.log();
   if (below1.length === 0) {
     console.log(
-      "speedup stayed >= 1x across the ENTIRE density range swept -- no breakeven observed in this sweep.",
+      "speedup stayed >= 1x across the ENTIRE density range swept -- no breakeven observed in this sweep."
     );
   } else if (above1.length === 0) {
     console.log(
-      "speedup stayed < 1x across the ENTIRE density range swept -- v3 never won in this sweep.",
+      "speedup stayed < 1x across the ENTIRE density range swept -- v3 never won in this sweep."
     );
   } else {
     const lowestFailure = Math.min(...below1.map((r) => r.triDensityPct));
     const highestSuccess = Math.max(...above1.map((r) => r.triDensityPct));
-    console.log(`lowest density where speedup < 1x: ${lowestFailure.toFixed(2)}%`);
-    console.log(`highest density where speedup >= 1x: ${highestSuccess.toFixed(2)}%`);
+    console.log(
+      `lowest density where speedup < 1x: ${lowestFailure.toFixed(2)}%`
+    );
+    console.log(
+      `highest density where speedup >= 1x: ${highestSuccess.toFixed(2)}%`
+    );
     if (highestSuccess >= lowestFailure) {
       console.log(
-        `NOTE: these overlap (${highestSuccess.toFixed(2)}% >= ${lowestFailure.toFixed(2)}%) -- density alone does`,
+        `NOTE: these overlap (${highestSuccess.toFixed(2)}% >= ${lowestFailure.toFixed(2)}%) -- density alone does`
       );
       console.log(
-        "NOT cleanly predict speedup in this sweep; other factors (dataset, window size, noise) matter too.",
+        "NOT cleanly predict speedup in this sweep; other factors (dataset, window size, noise) matter too."
       );
       console.log(
-        "Reported honestly rather than forcing a single clean threshold that the data does not support.",
+        "Reported honestly rather than forcing a single clean threshold that the data does not support."
       );
     } else {
       console.log(
-        `breakeven brackets to roughly ${highestSuccess.toFixed(2)}%-${lowestFailure.toFixed(2)}% triangle density.`,
+        `breakeven brackets to roughly ${highestSuccess.toFixed(2)}%-${lowestFailure.toFixed(2)}% triangle density.`
       );
     }
   }
@@ -1149,10 +1263,18 @@ if (arg === "--scaling") {
   const [dsKey = "melbourne-temp", sizesArg, trialsArg] = argv;
   const cfg = DATASETS[dsKey];
   if (!cfg) {
-    throw new Error(`unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(", ")}`);
+    throw new Error(
+      `unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(", ")}`
+    );
   }
-  const windowSizes = sizesArg ? sizesArg.split(",").map(Number) : cfg.scalingWindowSizes;
-  runScalingSweep(dsKey, windowSizes, trialsArg ? Number(trialsArg) : (cfg.scalingTrials ?? 10));
+  const windowSizes = sizesArg
+    ? sizesArg.split(",").map(Number)
+    : cfg.scalingWindowSizes;
+  runScalingSweep(
+    dsKey,
+    windowSizes,
+    trialsArg ? Number(trialsArg) : (cfg.scalingTrials ?? 10)
+  );
   process.exit(0);
 }
 
@@ -1160,9 +1282,13 @@ if (arg === "--memory") {
   const [dsKey = "melbourne-temp", sizesArg] = argv;
   const cfg = DATASETS[dsKey];
   if (!cfg) {
-    throw new Error(`unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(", ")}`);
+    throw new Error(
+      `unknown dataset "${dsKey}". Known: ${Object.keys(DATASETS).join(", ")}`
+    );
   }
-  const windowSizes = sizesArg ? sizesArg.split(",").map(Number) : cfg.scalingWindowSizes;
+  const windowSizes = sizesArg
+    ? sizesArg.split(",").map(Number)
+    : cfg.scalingWindowSizes;
   runMemorySweep(dsKey, windowSizes);
   process.exit(0);
 }
@@ -1170,7 +1296,10 @@ if (arg === "--memory") {
 if (arg === "--regime") {
   const [dsArg, windowSizeArg] = argv;
   const keys = dsArg ? [dsArg] : Object.keys(DATASETS);
-  const rows = runRegimeSweep(keys, windowSizeArg ? Number(windowSizeArg) : undefined);
+  const rows = runRegimeSweep(
+    keys,
+    windowSizeArg ? Number(windowSizeArg) : undefined
+  );
   summarizeRegime(rows);
   process.exit(0);
 }
@@ -1182,7 +1311,7 @@ if (results.length > 1) {
   console.log("\n=== summary (all datasets) ===");
   for (const r of results) {
     console.log(
-      `${r.key.padEnd(16)} ${r.geoMean.toFixed(3)}x  (95% CI: ${r.ciLow.toFixed(3)}x .. ${r.ciHigh.toFixed(3)}x)`,
+      `${r.key.padEnd(16)} ${r.geoMean.toFixed(3)}x  (95% CI: ${r.ciLow.toFixed(3)}x .. ${r.ciHigh.toFixed(3)}x)`
     );
   }
 
@@ -1195,7 +1324,7 @@ if (results.length > 1) {
   // "all three significant" as a single combined claim.
   const m = results.length;
   console.log(
-    `\nBonferroni-corrected across ${m} simultaneous axes (family-wise alpha=0.05, per-axis alpha=${(0.05 / m).toFixed(4)}):`,
+    `\nBonferroni-corrected across ${m} simultaneous axes (family-wise alpha=0.05, per-axis alpha=${(0.05 / m).toFixed(4)}):`
   );
   for (const r of results) {
     const df = r.n - 1;
@@ -1204,7 +1333,7 @@ if (results.length > 1) {
     const ciHighBonf = Math.exp(r.mean + tCritBonf * r.se);
     const survives = ciLowBonf > 1 ? "still >1x" : "NO LONGER excludes 1x";
     console.log(
-      `${r.key.padEnd(16)} ${r.geoMean.toFixed(3)}x  (Bonferroni 95% CI: ${ciLowBonf.toFixed(3)}x .. ${ciHighBonf.toFixed(3)}x)  ${survives}`,
+      `${r.key.padEnd(16)} ${r.geoMean.toFixed(3)}x  (Bonferroni 95% CI: ${ciLowBonf.toFixed(3)}x .. ${ciHighBonf.toFixed(3)}x)  ${survives}`
     );
   }
 }

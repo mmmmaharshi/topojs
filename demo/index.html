@@ -116,7 +116,14 @@
           <option value="twocircles">Two Circles</option>
         </select>
         <label>ε (max distance):</label>
-        <input type="range" id="threshold" min="0.1" max="3.0" step="0.01" value="0.8" />
+        <input
+          type="range"
+          id="threshold"
+          min="0.1"
+          max="3.0"
+          step="0.01"
+          value="0.8"
+        />
         <span id="thresholdVal">0.80</span>
         <button id="runBtn">▶ Compute</button>
         <button id="clearBtn">✕ Clear</button>
@@ -151,7 +158,8 @@
       </div>
 
       <div class="info">
-        Click on the point cloud canvas to add points. Drag to move. Computational time:
+        Click on the point cloud canvas to add points. Drag to move.
+        Computational time:
         <span id="computeTime">—</span>
       </div>
     </div>
@@ -210,7 +218,10 @@
               [0, 1],
             ];
           case "random":
-            return Array.from({ length: 30 }, () => [Math.random() * 4 - 2, Math.random() * 4 - 2]);
+            return Array.from({ length: 30 }, () => [
+              Math.random() * 4 - 2,
+              Math.random() * 4 - 2,
+            ]);
           case "twocircles": {
             const c1 = circlePoints(8, 0.6).map(([x, y]) => [x - 1.2, y]);
             const c2 = circlePoints(8, 0.6).map(([x, y]) => [x + 1.2, y]);
@@ -371,7 +382,7 @@
         const barH = Math.min(10, plotH / filtered.length);
         const gap = Math.min(
           4,
-          (plotH - barH * filtered.length) / Math.max(filtered.length - 1, 1),
+          (plotH - barH * filtered.length) / Math.max(filtered.length - 1, 1)
         );
 
         for (let i = 0; i < filtered.length; i++) {
@@ -384,7 +395,7 @@
             x0 + (p.birth / maxX) * plotW,
             y,
             ((p.death - p.birth) / maxX) * plotW,
-            barH,
+            barH
           );
         }
 
@@ -418,7 +429,10 @@
         b1.textContent = h1p.length + h1e.length;
 
         drawPointCloud(points);
-        const maxV = Math.max(1, ...res.pairs.filter((p) => p.death > 0).map((p) => p.death));
+        const maxV = Math.max(
+          1,
+          ...res.pairs.filter((p) => p.death > 0).map((p) => p.death)
+        );
         drawDiagram(res.pairs, maxV);
         drawBarcode(res.pairs);
       }

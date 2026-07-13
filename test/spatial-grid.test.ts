@@ -1,9 +1,10 @@
 /* eslint-disable vitest/expect-expect */
 import { describe, it, expect } from "vitest";
-import { SpatialGrid } from "../src/core/spatial-grid.ts";
+
 import { buildRipsComplex } from "../src/core/complex.ts";
-import { mulberry32, generatePoints, circlePoints } from "./helpers.ts";
 import type { Points } from "../src/core/distance.ts";
+import { SpatialGrid } from "../src/core/spatial-grid.ts";
+import { mulberry32, generatePoints, circlePoints } from "./helpers.ts";
 
 /**
  * Independent brute-force reference for edge-finding, reimplemented here
@@ -15,7 +16,7 @@ function bruteForceEdges(
   points: Points,
   dims: number,
   n: number,
-  maxDist: number,
+  maxDist: number
 ): [number, number][] {
   const out: [number, number][] = [];
   for (let i = 0; i < n; i++) {
@@ -37,7 +38,7 @@ function gridCandidatePairs(
   points: Points,
   dims: number,
   n: number,
-  cellSize: number,
+  cellSize: number
 ): [number, number][] {
   const grid = new SpatialGrid(points, dims, n, cellSize);
   const out: [number, number][] = [];
@@ -67,16 +68,16 @@ describe(SpatialGrid, () => {
       const maxDist = 0.3 + rng() * 3;
 
       const trueEdges = new Set(
-        bruteForceEdges(pts, dims, n, maxDist).map(([a, b]) => `${a},${b}`),
+        bruteForceEdges(pts, dims, n, maxDist).map(([a, b]) => `${a},${b}`)
       );
       const candidates = new Set(
-        gridCandidatePairs(pts, dims, n, maxDist).map(([a, b]) => `${a},${b}`),
+        gridCandidatePairs(pts, dims, n, maxDist).map(([a, b]) => `${a},${b}`)
       );
 
       for (const key of trueEdges) {
         expect(
           candidates.has(key),
-          `trial ${trial}: true edge ${key} missing from grid candidates`,
+          `trial ${trial}: true edge ${key} missing from grid candidates`
         ).toBeTruthy();
       }
     }
@@ -117,9 +118,11 @@ describe(SpatialGrid, () => {
       [1.001, 1.001],
     ]);
     const n = 8;
-    const trueEdges = new Set(bruteForceEdges(pts, 2, n, cellSize).map(([a, b]) => `${a},${b}`));
+    const trueEdges = new Set(
+      bruteForceEdges(pts, 2, n, cellSize).map(([a, b]) => `${a},${b}`)
+    );
     const candidates = new Set(
-      gridCandidatePairs(pts, 2, n, cellSize).map(([a, b]) => `${a},${b}`),
+      gridCandidatePairs(pts, 2, n, cellSize).map(([a, b]) => `${a},${b}`)
     );
     for (const key of trueEdges) {
       expect(candidates.has(key)).toBeTruthy();
@@ -176,7 +179,11 @@ describe(SpatialGrid, () => {
 });
 
 describe("buildRipsComplex: grid-accelerated path matches brute force exactly", () => {
-  function bruteForceComplexEdges(points: Points, dims: number, maxDist: number) {
+  function bruteForceComplexEdges(
+    points: Points,
+    dims: number,
+    maxDist: number
+  ) {
     const n = points.length / dims;
     return bruteForceEdges(points, dims, n, maxDist).map(([u, v]) => {
       let sq = 0;
@@ -197,7 +204,7 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     pts: Points,
     dims: number,
     maxDist: number,
-    trialLabel: string,
+    trialLabel: string
   ): void {
     const complex = buildRipsComplex(pts, dims, maxDist, 2);
     const expected = bruteForceComplexEdges(pts, dims, maxDist);
@@ -207,7 +214,12 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     // the brute-force reference the identical way for a fair comparison
     // (origIdx = position among the SAME i's already-found edges, so
     // recompute it identically here rather than assuming array order).
-    const withOrigIdx: { u: number; v: number; val: number; origIdx: number }[] = [];
+    const withOrigIdx: {
+      u: number;
+      v: number;
+      val: number;
+      origIdx: number;
+    }[] = [];
     const perI: Record<number, number> = {};
     for (const e of expected) {
       const idx = perI[e.u] ?? 0;
@@ -217,9 +229,15 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     withOrigIdx.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
 
     for (let i = 0; i < complex.edges.length; i++) {
-      expect(complex.edges[i]!.u, `${trialLabel} edge ${i}`).toBe(withOrigIdx[i]!.u);
-      expect(complex.edges[i]!.v, `${trialLabel} edge ${i}`).toBe(withOrigIdx[i]!.v);
-      expect(complex.edges[i]!.val, `${trialLabel} edge ${i}`).toBe(withOrigIdx[i]!.val);
+      expect(complex.edges[i]!.u, `${trialLabel} edge ${i}`).toBe(
+        withOrigIdx[i]!.u
+      );
+      expect(complex.edges[i]!.v, `${trialLabel} edge ${i}`).toBe(
+        withOrigIdx[i]!.v
+      );
+      expect(complex.edges[i]!.val, `${trialLabel} edge ${i}`).toBe(
+        withOrigIdx[i]!.val
+      );
     }
   }
 
@@ -294,7 +312,7 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
         }
       }
       expect(vertSet.size).toBe(4);
-      const verts = Array.from(vertSet);
+      const verts = [...vertSet];
       let expected = 0;
       for (let a = 0; a < 4; a++) {
         for (let b = a + 1; b < 4; b++) {
@@ -331,12 +349,13 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     }
     const maxDist = 1.2;
     const complex = buildRipsComplex(pts, dims, maxDist, 3);
-    expect(complex.triangles.length, "sanity: this config must exercise triangles").toBeGreaterThan(
-      0,
-    );
+    expect(
+      complex.triangles.length,
+      "sanity: this config must exercise triangles"
+    ).toBeGreaterThan(0);
     expect(
       complex.tetrahedra.length,
-      "sanity: this config must exercise tetrahedra",
+      "sanity: this config must exercise tetrahedra"
     ).toBeGreaterThan(0);
 
     function dist(i: number, j: number): number {
@@ -361,7 +380,7 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
         }
       }
       expect(vertSet.size).toBe(4);
-      const verts = Array.from(vertSet);
+      const verts = [...vertSet];
       let expected = 0;
       for (let a = 0; a < 4; a++) {
         for (let b = a + 1; b < 4; b++) {
@@ -393,12 +412,13 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     }
     const maxDist = 1.2;
     const complex = buildRipsComplex(pts, dims, maxDist, 3);
-    expect(complex.triangles.length, "sanity: this config must exercise triangles").toBeGreaterThan(
-      0,
-    );
+    expect(
+      complex.triangles.length,
+      "sanity: this config must exercise triangles"
+    ).toBeGreaterThan(0);
     expect(
       complex.tetrahedra.length,
-      "sanity: this config must exercise tetrahedra",
+      "sanity: this config must exercise tetrahedra"
     ).toBeGreaterThan(0);
 
     function dist(i: number, j: number): number {
@@ -423,7 +443,7 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
         }
       }
       expect(vertSet.size).toBe(4);
-      const verts = Array.from(vertSet);
+      const verts = [...vertSet];
       let expected = 0;
       for (let a = 0; a < 4; a++) {
         for (let b = a + 1; b < 4; b++) {

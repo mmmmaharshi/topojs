@@ -8,18 +8,23 @@
  */
 
 import type { Points } from "./distance.ts";
+import { computePersistentHomologyCohomologyImplicit } from "./homology-cohom-implicit.ts";
+import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
+import { computePersistentHomologyFast } from "./homology-fast.ts";
 import type { HomologyResult } from "./homology.ts";
 import { computePersistentHomology as computeStandard } from "./homology.ts";
-import { computePersistentHomologyFast } from "./homology-fast.ts";
-import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
-import { computePersistentHomologyCohomologyImplicit } from "./homology-cohom-implicit.ts";
 
 export { computePersistentHomologyCohomologyFromComplex } from "./homology-cohom-implicit.ts";
 
 export type { HomologyResult } from "./homology.ts";
 
 /** Engine selection for `computePersistentHomology`. */
-export type HomologyEngine = "auto" | "standard" | "cohomology" | "implicit" | "fast";
+export type HomologyEngine =
+  | "auto"
+  | "standard"
+  | "cohomology"
+  | "implicit"
+  | "fast";
 
 export interface HomologyOptions {
   /** Maximum filtration distance (default Infinity). */
@@ -49,22 +54,24 @@ export function computePersistentHomology(
   points: Points,
   dims: number,
   maxDist?: number,
-  maxDim?: number,
+  maxDim?: number
 ): HomologyResult;
 export function computePersistentHomology(
   points: Points,
   dims: number,
-  options?: HomologyOptions,
+  options?: HomologyOptions
 ): HomologyResult;
 export function computePersistentHomology(
   points: Points,
   dims: number,
   arg3?: number | HomologyOptions,
-  arg4?: number,
+  arg4?: number
 ): HomologyResult {
   // Normalise to options object
   const opts: HomologyOptions =
-    arg3 === undefined || typeof arg3 === "number" ? { maxDim: arg4, maxDist: arg3 } : arg3;
+    arg3 === undefined || typeof arg3 === "number"
+      ? { maxDim: arg4, maxDist: arg3 }
+      : arg3;
 
   const { maxDist = Infinity, maxDim = 2, engine = "auto", epsilon } = opts;
 
@@ -79,7 +86,13 @@ export function computePersistentHomology(
       return computePersistentHomologyCohomology(points, dims, maxDist, maxDim);
     }
     case "implicit": {
-      return computePersistentHomologyCohomologyImplicit(points, dims, maxDist, maxDim, epsilon);
+      return computePersistentHomologyCohomologyImplicit(
+        points,
+        dims,
+        maxDist,
+        maxDim,
+        epsilon
+      );
     }
     case "standard": {
       return computeStandard(points, dims, maxDist, maxDim);

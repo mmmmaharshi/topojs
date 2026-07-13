@@ -1,7 +1,7 @@
 import type { Points } from "./distance.ts";
-import { SpatialGrid } from "./spatial-grid.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
+import { SpatialGrid } from "./spatial-grid.ts";
 
 function euclidean(points: Points, dims: number, i: number, j: number): number {
   const bi = i * dims;
@@ -195,7 +195,7 @@ export function buildRipsComplex(
   dims: number,
   maxDist: number,
   maxDim = 2,
-  epsilon?: number,
+  epsilon?: number
 ): RipsComplex {
   const n = points.length / dims;
 
@@ -264,7 +264,8 @@ export function buildRipsComplex(
   // this file's top docstring for the benchmark numbers behind the cutoff).
   // NOTE: when epsilon is provided (Sheehy sparse), skip the grid since the
   // active-point subset is typically small (the grid's overhead isn't worth it).
-  const useGrid = !epsilon && maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
+  const useGrid =
+    !epsilon && maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
   const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
 
   for (let i = 0; i < n; i++) {
@@ -296,7 +297,11 @@ export function buildRipsComplex(
 
   tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
 
-  const edges: EdgeEntry[] = tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val }));
+  const edges: EdgeEntry[] = tempEdges.map((e) => ({
+    u: e.u,
+    v: e.v,
+    val: e.val,
+  }));
 
   // Dense u*n+v keyspace -> flat Int32Array lookup when n is small (below
   // EDGE_INDEX_DENSE_MAX_N -- a separate constant from GRID_MIN_N above, see
@@ -316,7 +321,9 @@ export function buildRipsComplex(
   // rationale as the grid itself.
   const edgeIndexDense: Int32Array | null =
     n < EDGE_INDEX_DENSE_MAX_N ? new Int32Array(n * n).fill(-1) : null;
-  const edgeIndexSparse: Map<number, number> | null = edgeIndexDense ? null : new Map();
+  const edgeIndexSparse: Map<number, number> | null = edgeIndexDense
+    ? null
+    : new Map();
   const setEdgeIndex = (u: number, v: number, idx: number): void => {
     if (edgeIndexDense) {
       edgeIndexDense[u * n + v] = idx;
@@ -460,5 +467,13 @@ export function buildRipsComplex(
     tetrahedra.sort((a, b) => a.val - b.val);
   }
 
-  return { adjBits, edges, n, sheehy, tetrahedra, triMap: triMapExposed, triangles };
+  return {
+    adjBits,
+    edges,
+    n,
+    sheehy,
+    tetrahedra,
+    triMap: triMapExposed,
+    triangles,
+  };
 }

@@ -23,7 +23,11 @@ export interface DistanceMatrix {
  * @param dims Number of dimensions per point
  * @param n Number of points (= points.length / dims)
  */
-export function computePairwiseDistances(points: Points, dims: number, n: number): DistanceMatrix {
+export function computePairwiseDistances(
+  points: Points,
+  dims: number,
+  n: number
+): DistanceMatrix {
   const len = (n * (n - 1)) / 2;
   const data = new Float64Array(len);
   const rowStart = new Int32Array(n);

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+
 import * as topojs from "../src/index.ts";
 
 /**
@@ -25,7 +26,9 @@ import * as topojs from "../src/index.ts";
 describe("public API barrel (src/index.ts)", () => {
   it("exports every documented batch-homology function", () => {
     expect(topojs.computePersistentHomology).toBeTypeOf("function");
-    expect(topojs.computePersistentHomologyCohomologyFromComplex).toBeTypeOf("function");
+    expect(topojs.computePersistentHomologyCohomologyFromComplex).toBeTypeOf(
+      "function"
+    );
     expect(topojs.computeCubicalHomology).toBeTypeOf("function");
   });
 
@@ -77,8 +80,16 @@ describe("public API barrel (src/index.ts)", () => {
   });
 
   it("end-to-end: StreamingHomology + IncrementalH1 both work when instantiated through the barrel import", () => {
-    const naive = new topojs.StreamingHomology({ dims: 2, maxDist: 2, windowSize: 5 });
-    const incr = new topojs.IncrementalH1({ dims: 2, maxDist: 2, windowSize: 5 });
+    const naive = new topojs.StreamingHomology({
+      dims: 2,
+      maxDist: 2,
+      windowSize: 5,
+    });
+    const incr = new topojs.IncrementalH1({
+      dims: 2,
+      maxDist: 2,
+      windowSize: 5,
+    });
     const pts: [number, number][] = [
       [0, 0],
       [1, 0],

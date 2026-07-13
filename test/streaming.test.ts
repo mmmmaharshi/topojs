@@ -1,9 +1,10 @@
 /* eslint-disable unicorn/prefer-single-call */
 import { describe, it, expect } from "vitest";
+
+import { computePersistentHomology } from "../src/core/homology.ts";
 import { SlidingWindow } from "../src/streaming/sliding-window.ts";
 import { StreamingHomology } from "../src/streaming/streaming-homology.ts";
 import { summarizeForStreaming } from "../src/streaming/topological-summary.ts";
-import { computePersistentHomology } from "../src/core/homology.ts";
 import { mulberry32, circlePoints } from "./helpers.ts";
 
 describe(SlidingWindow, () => {
@@ -18,7 +19,7 @@ describe(SlidingWindow, () => {
     w.push([2, 2]);
     expect(w.size).toBe(2);
     expect(w.isFull).toBeFalsy();
-    expect(Array.from(w.toFlatArray())).toStrictEqual([1, 1, 2, 2]);
+    expect([...w.toFlatArray()]).toStrictEqual([1, 1, 2, 2]);
   });
 
   it("evicts oldest point once capacity is reached", () => {
@@ -27,12 +28,12 @@ describe(SlidingWindow, () => {
     w.push([2]);
     w.push([3]);
     expect(w.isFull).toBeTruthy();
-    expect(Array.from(w.toFlatArray())).toStrictEqual([1, 2, 3]);
+    expect([...w.toFlatArray()]).toStrictEqual([1, 2, 3]);
     w.push([4]); // evicts 1
     expect(w.size).toBe(3);
-    expect(Array.from(w.toFlatArray())).toStrictEqual([2, 3, 4]);
+    expect([...w.toFlatArray()]).toStrictEqual([2, 3, 4]);
     w.push([5]); // evicts 2
-    expect(Array.from(w.toFlatArray())).toStrictEqual([3, 4, 5]);
+    expect([...w.toFlatArray()]).toStrictEqual([3, 4, 5]);
   });
 
   it("rejects points of the wrong dimensionality", () => {
@@ -47,7 +48,7 @@ describe(SlidingWindow, () => {
     expect(w.isFull).toBeTruthy();
     w.push([2, 2]);
     expect(w.size).toBe(1);
-    expect(Array.from(w.toFlatArray())).toStrictEqual([2, 2]);
+    expect([...w.toFlatArray()]).toStrictEqual([2, 2]);
   });
 });
 
@@ -59,12 +60,21 @@ describe("StreamingHomology (Phase A / naive)", () => {
     // inheritance stays true if the delegation is ever refactored away
     // (a direct test here would catch that regression; the SlidingWindow
     // tests alone would not, since they test SlidingWindow in isolation).
-    expect(() => new StreamingHomology({ dims: 2, maxDist: 1, windowSize: 0 })).toThrow("capacity");
-    expect(() => new StreamingHomology({ dims: 0, maxDist: 1, windowSize: 10 })).toThrow("dims");
+    expect(
+      () => new StreamingHomology({ dims: 2, maxDist: 1, windowSize: 0 })
+    ).toThrow("capacity");
+    expect(
+      () => new StreamingHomology({ dims: 0, maxDist: 1, windowSize: 10 })
+    ).toThrow("dims");
   });
 
   it("returns null until minPointsToCompute is reached", () => {
-    const s = new StreamingHomology({ dims: 2, maxDist: 1, minPointsToCompute: 3, windowSize: 10 });
+    const s = new StreamingHomology({
+      dims: 2,
+      maxDist: 1,
+      minPointsToCompute: 3,
+      windowSize: 10,
+    });
     expect(s.push([0, 0])).toBeNull();
     expect(s.push([1, 0])).toBeNull();
     expect(s.push([0, 1])).not.toBeNull();
@@ -101,7 +111,9 @@ describe("StreamingHomology (Phase A / naive)", () => {
       const expected = computePersistentHomology(flat, dims, maxDist, 2);
 
       expect(update.windowSize).toBe(expectedWindow.length);
-      expect(JSON.stringify(update.result.pairs)).toBe(JSON.stringify(expected.pairs));
+      expect(JSON.stringify(update.result.pairs)).toBe(
+        JSON.stringify(expected.pairs)
+      );
       expect(update.result.complex).toStrictEqual(expected.complex);
     }
   });
@@ -129,7 +141,12 @@ describe("StreamingHomology (Phase A / naive)", () => {
     // real-time "shape change" using only client-executable computation.
     const rng = mulberry32(7);
     const windowSize = 12;
-    const s = new StreamingHomology({ dims: 2, maxDim: 2, maxDist: 0.6, windowSize });
+    const s = new StreamingHomology({
+      dims: 2,
+      maxDim: 2,
+      maxDist: 0.6,
+      windowSize,
+    });
 
     // Phase 1: fill with noise clustered near the origin (no loop possible).
     const SIGNIFICANCE = 0.05; // consistent threshold across both phases -- a real
@@ -139,7 +156,10 @@ describe("StreamingHomology (Phase A / naive)", () => {
       const pt = [rng() * 0.05, rng() * 0.05];
       const update = s.push(pt);
       if (update) {
-        lastSummaryNoise = summarizeForStreaming(update.result.pairs, SIGNIFICANCE);
+        lastSummaryNoise = summarizeForStreaming(
+          update.result.pairs,
+          SIGNIFICANCE
+        );
       }
     }
     expect(lastSummaryNoise.significantH1Count).toBe(0);
@@ -152,7 +172,10 @@ describe("StreamingHomology (Phase A / naive)", () => {
       const pt = [ring[i * 2]!, ring[i * 2 + 1]!];
       const update = s.push(pt);
       if (update) {
-        lastSummaryRing = summarizeForStreaming(update.result.pairs, SIGNIFICANCE);
+        lastSummaryRing = summarizeForStreaming(
+          update.result.pairs,
+          SIGNIFICANCE
+        );
       }
     }
     expect(s.isFull).toBeTruthy();
@@ -160,8 +183,10 @@ describe("StreamingHomology (Phase A / naive)", () => {
     // maxDist=0.6, never dies within this threshold -- so it shows up as
     // an ESSENTIAL H1 class (still open), not a finite one. A real-time
     // "does a loop exist right now" signal has to check both counts.
-    const noiseLoops = lastSummaryNoise.essentialH1Count + lastSummaryNoise.significantH1Count;
-    const ringLoops = lastSummaryRing.essentialH1Count + lastSummaryRing.significantH1Count;
+    const noiseLoops =
+      lastSummaryNoise.essentialH1Count + lastSummaryNoise.significantH1Count;
+    const ringLoops =
+      lastSummaryRing.essentialH1Count + lastSummaryRing.significantH1Count;
     expect(noiseLoops).toBe(0);
     expect(ringLoops).toBeGreaterThanOrEqual(1);
   });

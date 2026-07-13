@@ -1,8 +1,8 @@
+import { buildGeneralRipsComplex } from "./complex-general.ts";
+import type { GeneralSimplexEntry } from "./complex-general.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
-import { buildGeneralRipsComplex } from "./complex-general.ts";
-import type { GeneralSimplexEntry } from "./complex-general.ts";
 import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of {@link computePersistentHomologyGeneral}. */
@@ -68,7 +68,7 @@ export function computePersistentHomologyGeneral(
   points: Points,
   dims: number,
   maxDist: number,
-  maxHomologyDim: number,
+  maxHomologyDim: number
 ): HomologyResultGeneral {
   if (maxHomologyDim < 0) {
     throw new RangeError(`maxHomologyDim must be >= 0, got ${maxHomologyDim}`);
@@ -93,7 +93,9 @@ export function computePersistentHomologyGeneral(
       return edgeLevel.length;
     }
     const idx = dim - 2;
-    return idx >= 0 && idx < higherLevels.length ? higherLevels[idx]!.length : 0;
+    return idx >= 0 && idx < higherLevels.length
+      ? higherLevels[idx]!.length
+      : 0;
   }
   function levelVal(dim: number, i: number): number {
     if (dim === 1) {

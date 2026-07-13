@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+
+import type { PersistencePair } from "../src/core/h0.ts";
 import {
   toGudhi,
   toJSON,
@@ -7,7 +9,6 @@ import {
   summarize,
   splitByDimension,
 } from "../src/export/persistence-diagram.ts";
-import type { PersistencePair } from "../src/core/h0.ts";
 import { mulberry32 } from "./helpers.ts";
 
 const SAMPLE_PAIRS: PersistencePair[] = [
@@ -104,7 +105,9 @@ describe("export / serialization round-trips", () => {
     it("splitByDimension captures dim >= 3 pairs in `higher` instead of dropping them", () => {
       const split = splitByDimension(PAIRS_WITH_HIGHER_DIMS);
       expect(split.higher).toHaveLength(3);
-      expect(split.higher.map((p) => p.dim).toSorted()).toStrictEqual([3, 3, 5]);
+      expect(split.higher.map((p) => p.dim).toSorted()).toStrictEqual([
+        3, 3, 5,
+      ]);
     });
 
     it("no pair from the input is ever lost: sum of all buckets equals input length (regression test, specific case)", () => {
@@ -128,7 +131,11 @@ describe("export / serialization round-trips", () => {
           const dim = Math.floor(rng() * 8); // 0..7, deliberately reaching well past dim=2
           const birth = rng() * 10;
           const isEssential = rng() < 0.3;
-          pairs.push({ birth, death: isEssential ? -1 : birth + rng() * 10, dim });
+          pairs.push({
+            birth,
+            death: isEssential ? -1 : birth + rng() * 10,
+            dim,
+          });
         }
         const split = splitByDimension(pairs);
         const total =
@@ -158,7 +165,11 @@ describe("export / serialization round-trips", () => {
           const dim = Math.floor(rng() * 8);
           const birth = rng() * 10;
           const isEssential = rng() < 0.3;
-          pairs.push({ birth, death: isEssential ? -1 : birth + rng() * 10, dim });
+          pairs.push({
+            birth,
+            death: isEssential ? -1 : birth + rng() * 10,
+            dim,
+          });
         }
         const s = summarize(pairs);
         expect(s.total, `trial ${trial}`).toBe(s.h0 + s.h1 + s.h2 + s.higher);
@@ -176,10 +187,10 @@ describe("export / serialization round-trips", () => {
       expect(dataLines).toHaveLength(2);
       // toCSV/toJSON, by contrast, are dim-agnostic and DO preserve everything.
       expect(toCSV(PAIRS_WITH_HIGHER_DIMS).split("\n")).toHaveLength(
-        PAIRS_WITH_HIGHER_DIMS.length + 1,
+        PAIRS_WITH_HIGHER_DIMS.length + 1
       );
       expect(JSON.parse(toJSON(PAIRS_WITH_HIGHER_DIMS))).toHaveLength(
-        PAIRS_WITH_HIGHER_DIMS.length,
+        PAIRS_WITH_HIGHER_DIMS.length
       );
     });
   });

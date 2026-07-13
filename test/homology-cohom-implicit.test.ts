@@ -1,19 +1,22 @@
 /* eslint-disable vitest/expect-expect */
 import { describe, it, expect } from "vitest";
-import { computePersistentHomology } from "../src/core/homology.ts";
-import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
+
+import { buildRipsComplex } from "../src/core/complex.ts";
 import {
   computePersistentHomologyCohomologyFromComplex,
   computePersistentHomologyCohomologyImplicit,
 } from "../src/core/homology-cohom-implicit.ts";
-import { buildRipsComplex } from "../src/core/complex.ts";
+import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
 import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
 
 function canon(pairs: { dim: number; birth: number; death: number }[]): string {
   return JSON.stringify(
     pairs
       .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted((a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death),
+      .toSorted(
+        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
+      )
   );
 }
 
@@ -21,10 +24,15 @@ function checkMatchesExact(
   points: Float64Array,
   dims: number,
   maxDist: number,
-  maxDim: number,
+  maxDim: number
 ): void {
   const expected = computePersistentHomology(points, dims, maxDist, maxDim);
-  const actual = computePersistentHomologyCohomologyImplicit(points, dims, maxDist, maxDim);
+  const actual = computePersistentHomologyCohomologyImplicit(
+    points,
+    dims,
+    maxDist,
+    maxDim
+  );
   expect(canon(actual.pairs)).toBe(canon(expected.pairs));
 }
 
@@ -35,10 +43,20 @@ function checkMatchesImplicitVsExplicit(
   points: Float64Array,
   dims: number,
   maxDist: number,
-  maxDim: number,
+  maxDim: number
 ): void {
-  const explicit = computePersistentHomologyCohomology(points, dims, maxDist, maxDim);
-  const implicit = computePersistentHomologyCohomologyImplicit(points, dims, maxDist, maxDim);
+  const explicit = computePersistentHomologyCohomology(
+    points,
+    dims,
+    maxDist,
+    maxDim
+  );
+  const implicit = computePersistentHomologyCohomologyImplicit(
+    points,
+    dims,
+    maxDist,
+    maxDim
+  );
   expect(implicit.complex).toStrictEqual(explicit.complex);
   expect(canon(implicit.pairs)).toBe(canon(explicit.pairs));
 }
@@ -128,7 +146,9 @@ describe("computePersistentHomologyCohomologyImplicit (implicit matrix) vs. comp
   });
 
   it("produces ESSENTIAL H2 on hollow octahedron (regression test)", () => {
-    const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+    const pts = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
     for (const maxDist of [1.42, 1.5, 1.7, 1.9, 1.99]) {
       checkMatchesExact(pts, 3, maxDist, 3);
     }
@@ -208,7 +228,9 @@ describe("Implicit matrix matches explicit CSR cohomology engine exactly", () =>
   });
 
   it("matches on hollow octahedron (essential H2)", () => {
-    const pts = new Float64Array([1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1]);
+    const pts = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
     for (const maxDist of [1.42, 1.5, 1.7]) {
       checkMatchesImplicitVsExplicit(pts, 3, maxDist, 3);
     }
@@ -224,8 +246,16 @@ describe("computePersistentHomologyCohomologyFromComplex (with pre-built complex
     }
     const flat = generatePoints(pts);
     const complex = buildRipsComplex(flat, 2, 0.5, 3);
-    const fromComplex = computePersistentHomologyCohomologyFromComplex(complex, 3);
-    const implicit = computePersistentHomologyCohomologyImplicit(flat, 2, 0.5, 3);
+    const fromComplex = computePersistentHomologyCohomologyFromComplex(
+      complex,
+      3
+    );
+    const implicit = computePersistentHomologyCohomologyImplicit(
+      flat,
+      2,
+      0.5,
+      3
+    );
     expect(canon(fromComplex.pairs)).toBe(canon(implicit.pairs));
   });
 });
@@ -279,7 +309,10 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
 
       // Must not throw
       const sparseComplex = buildRipsComplex(flat, 2, maxDist, 2, epsilon);
-      const sparse = computePersistentHomologyCohomologyFromComplex(sparseComplex, 2);
+      const sparse = computePersistentHomologyCohomologyFromComplex(
+        sparseComplex,
+        2
+      );
 
       expect(sparse.pairs.length).toBeGreaterThan(0);
       // Sheehy metadata should be present
@@ -302,7 +335,10 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
     const exact = computePersistentHomology(flat, 2, maxDist, 2);
     const sparseComplex = buildRipsComplex(flat, 2, maxDist, 2, 1);
     expect(sparseComplex.sheehy!.activeCount).toBe(20);
-    const sparse = computePersistentHomologyCohomologyFromComplex(sparseComplex, 2);
+    const sparse = computePersistentHomologyCohomologyFromComplex(
+      sparseComplex,
+      2
+    );
     expect(canon(sparse.pairs)).toBe(canon(exact.pairs));
   });
 });

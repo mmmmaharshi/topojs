@@ -111,7 +111,11 @@ function costToDiagonal(p: [number, number]): number {
  * why it (unlike the previous single-sided version) is symmetric and
  * correct. D1/D2 order does not affect the result (verified in tests).
  */
-function matchesExist(D1: [number, number][], D2: [number, number][], eps: number): boolean {
+function matchesExist(
+  D1: [number, number][],
+  D2: [number, number][],
+  eps: number
+): boolean {
   const n = D1.length;
   const m = D2.length;
   const leftSize = n + m; // D1 (real) + virtualLeft (diagonal capacity for D2)
@@ -178,7 +182,7 @@ function finiteBottleneck(
   d1: [number, number][],
   d2: [number, number][],
   maxEps: number,
-  tol: number,
+  tol: number
 ): number {
   if (d1.length === 0 && d2.length === 0) {
     return 0;
@@ -243,7 +247,7 @@ export function bottleneckDistance(
   pairsB: PersistencePair[],
   dim = 0,
   maxEps = 1e6,
-  tol = 1e-6,
+  tol = 1e-6
 ): number {
   const finiteA = pairsA
     .filter((p) => p.dim === dim && p.death >= 0)
@@ -251,8 +255,12 @@ export function bottleneckDistance(
   const finiteB = pairsB
     .filter((p) => p.dim === dim && p.death >= 0)
     .map((p) => [p.birth, p.death] as [number, number]);
-  const essentialA = pairsA.filter((p) => p.dim === dim && p.death === -1).map((p) => p.birth);
-  const essentialB = pairsB.filter((p) => p.dim === dim && p.death === -1).map((p) => p.birth);
+  const essentialA = pairsA
+    .filter((p) => p.dim === dim && p.death === -1)
+    .map((p) => p.birth);
+  const essentialB = pairsB
+    .filter((p) => p.dim === dim && p.death === -1)
+    .map((p) => p.birth);
 
   // Different numbers of essential classes: no finite-cost matching can
   // exist (excess essential points have no legal partner -- they can't

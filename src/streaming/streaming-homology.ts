@@ -1,6 +1,6 @@
-import { SlidingWindow } from "./sliding-window.ts";
 import { computePersistentHomology } from "../core/homology.ts";
 import type { HomologyResult } from "../core/homology.ts";
+import { SlidingWindow } from "./sliding-window.ts";
 
 /** Configuration for {@link StreamingHomology}. */
 export interface StreamingHomologyOptions {
@@ -81,7 +81,12 @@ export class StreamingHomology {
       return null;
     }
     const flat = this.window.toFlatArray();
-    const result = computePersistentHomology(flat, this.dims, this.maxDist, this.maxDim);
+    const result = computePersistentHomology(
+      flat,
+      this.dims,
+      this.maxDist,
+      this.maxDim
+    );
     return { isFull: this.window.isFull, result, windowSize: this.window.size };
   }
 

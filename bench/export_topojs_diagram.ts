@@ -14,8 +14,9 @@
 // the plain engine's 16x-93x gap that acceleration actually closes, instead
 // of leaving that as an unmeasured docstring claim).
 import { readFileSync, writeFileSync } from "node:fs";
-import { computePersistentHomology } from "../src/index.ts";
+
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
+import { computePersistentHomology } from "../src/index.ts";
 
 const csvPath = process.argv[2]!;
 const dimsArg = process.argv[3]!;
@@ -38,7 +39,9 @@ lines.forEach((line, i) => {
 });
 
 const compute =
-  engine === "cohom" ? computePersistentHomologyCohomology : computePersistentHomology;
+  engine === "cohom"
+    ? computePersistentHomologyCohomology
+    : computePersistentHomology;
 const t0 = performance.now();
 const result = compute(flat, dims, maxDist, maxDim);
 const ms = performance.now() - t0;
@@ -60,11 +63,20 @@ for (const p of result.pairs) {
 writeFileSync(
   outPath!,
   JSON.stringify(
-    { byDim, dims, engine, maxDim, maxDist, ms, n: lines.length, pairs: result.pairs },
+    {
+      byDim,
+      dims,
+      engine,
+      maxDim,
+      maxDist,
+      ms,
+      n: lines.length,
+      pairs: result.pairs,
+    },
     null,
-    2,
-  ),
+    2
+  )
 );
 console.log(
-  `topojs[${engine}]: n=${lines.length} ms=${ms.toFixed(2)} byDim=${JSON.stringify(byDim)}`,
+  `topojs[${engine}]: n=${lines.length} ms=${ms.toFixed(2)} byDim=${JSON.stringify(byDim)}`
 );
