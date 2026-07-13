@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import * as topojs from '../src/index.ts';
+import { describe, it, expect } from "vitest";
+import * as topojs from "../src/index.ts";
 
 /**
  * Barrel smoke test — found and closed a real verification gap during a
@@ -22,62 +22,71 @@ import * as topojs from '../src/index.ts';
  * and can't be checked here -- `tsc --noEmit` against this file (which
  * imports the types too, see below) is what verifies those.
  */
-describe('public API barrel (src/index.ts)', () => {
-  it('exports every documented batch-homology function', () => {
-    expect(typeof topojs.computePersistentHomology).toBe('function');
-    expect(typeof topojs.computePersistentHomologyCohomologyFromComplex).toBe('function');
-    expect(typeof topojs.computeCubicalHomology).toBe('function');
+describe("public API barrel (src/index.ts)", () => {
+  it("exports every documented batch-homology function", () => {
+    expect(topojs.computePersistentHomology).toBeTypeOf("function");
+    expect(topojs.computePersistentHomologyCohomologyFromComplex).toBeTypeOf("function");
+    expect(topojs.computeCubicalHomology).toBeTypeOf("function");
   });
 
-  it('exports every documented arbitrary-dimension homology function', () => {
-    expect(typeof topojs.computePersistentHomologyGeneral).toBe('function');
-    expect(typeof topojs.buildGeneralRipsComplex).toBe('function');
+  it("exports every documented arbitrary-dimension homology function", () => {
+    expect(topojs.computePersistentHomologyGeneral).toBeTypeOf("function");
+    expect(topojs.buildGeneralRipsComplex).toBeTypeOf("function");
   });
 
-  it('exports every documented approximate/landmark-sampling function', () => {
-    expect(typeof topojs.computeSparseRipsHomology).toBe('function');
-    expect(typeof topojs.selectLandmarks).toBe('function');
+  it("exports every documented approximate/landmark-sampling function", () => {
+    expect(topojs.computeSparseRipsHomology).toBeTypeOf("function");
+    expect(topojs.selectLandmarks).toBeTypeOf("function");
   });
 
-  it('exports every documented distance/comparison function', () => {
-    expect(typeof topojs.computePairwiseDistances).toBe('function');
-    expect(typeof topojs.lookupDist).toBe('function');
-    expect(typeof topojs.bottleneckDistance).toBe('function');
+  it("exports every documented distance/comparison function", () => {
+    expect(topojs.computePairwiseDistances).toBeTypeOf("function");
+    expect(topojs.lookupDist).toBeTypeOf("function");
+    expect(topojs.bottleneckDistance).toBeTypeOf("function");
   });
 
-  it('exports every documented export/serialization function', () => {
-    expect(typeof topojs.toGudhi).toBe('function');
-    expect(typeof topojs.toJSON).toBe('function');
-    expect(typeof topojs.toCSV).toBe('function');
-    expect(typeof topojs.toDiagramCSV).toBe('function');
-    expect(typeof topojs.splitByDimension).toBe('function');
-    expect(typeof topojs.summarize).toBe('function');
+  /* eslint-disable vitest/max-expects */
+  it("exports every documented export/serialization function", () => {
+    expect(topojs.toGudhi).toBeTypeOf("function");
+    expect(topojs.toJSON).toBeTypeOf("function");
+    expect(topojs.toCSV).toBeTypeOf("function");
+    expect(topojs.toDiagramCSV).toBeTypeOf("function");
+    expect(topojs.splitByDimension).toBeTypeOf("function");
+    expect(topojs.summarize).toBeTypeOf("function");
+  });
+  /* eslint-enable vitest/max-expects */
+
+  it("exports every documented streaming/incremental class and helper", () => {
+    expect(topojs.SlidingWindow).toBeTypeOf("function"); // class
+    expect(topojs.StreamingHomology).toBeTypeOf("function"); // class
+    expect(topojs.IncrementalH1).toBeTypeOf("function"); // class
+    expect(topojs.summarizeForStreaming).toBeTypeOf("function");
   });
 
-  it('exports every documented streaming/incremental class and helper', () => {
-    expect(typeof topojs.SlidingWindow).toBe('function'); // class
-    expect(typeof topojs.StreamingHomology).toBe('function'); // class
-    expect(typeof topojs.IncrementalH1).toBe('function'); // class
-    expect(typeof topojs.summarizeForStreaming).toBe('function');
+  it("exports every documented example-dataset function", () => {
+    expect(topojs.loadMNISTDigits).toBeTypeOf("function");
+    expect(topojs.loadIrisDataset).toBeTypeOf("function");
+    expect(topojs.generateTerrain).toBeTypeOf("function");
   });
 
-  it('exports every documented example-dataset function', () => {
-    expect(typeof topojs.loadMNISTDigits).toBe('function');
-    expect(typeof topojs.loadIrisDataset).toBe('function');
-    expect(typeof topojs.generateTerrain).toBe('function');
-  });
-
-  it('end-to-end: computePersistentHomology works when called through the barrel import', () => {
+  it("end-to-end: computePersistentHomology works when called through the barrel import", () => {
     const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
-    const result = topojs.computePersistentHomology(points, 2, 1.0, 2);
+    const result = topojs.computePersistentHomology(points, 2, 1, 2);
     expect(result.pairs.length).toBeGreaterThan(0);
     expect(result.complex.numVertices).toBe(3);
   });
 
-  it('end-to-end: StreamingHomology + IncrementalH1 both work when instantiated through the barrel import', () => {
-    const naive = new topojs.StreamingHomology({ windowSize: 5, dims: 2, maxDist: 2.0 });
-    const incr = new topojs.IncrementalH1({ windowSize: 5, dims: 2, maxDist: 2.0 });
-    const pts: [number, number][] = [[0, 0], [1, 0], [0, 1], [1, 1], [0.5, 0.5], [2, 2]];
+  it("end-to-end: StreamingHomology + IncrementalH1 both work when instantiated through the barrel import", () => {
+    const naive = new topojs.StreamingHomology({ dims: 2, maxDist: 2, windowSize: 5 });
+    const incr = new topojs.IncrementalH1({ dims: 2, maxDist: 2, windowSize: 5 });
+    const pts: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [0.5, 0.5],
+      [2, 2],
+    ];
     for (const [x, y] of pts) {
       naive.push([x, y]);
       incr.push([x, y]);
@@ -86,10 +95,10 @@ describe('public API barrel (src/index.ts)', () => {
     expect(incr.size).toBe(5);
   });
 
-  it('end-to-end: export round-trip works when called through the barrel import', () => {
+  it("end-to-end: export round-trip works when called through the barrel import", () => {
     const pairs = [
-      { dim: 0, birth: 0, death: 0.5 },
-      { dim: 1, birth: 0.2, death: -1 },
+      { birth: 0, death: 0.5, dim: 0 },
+      { birth: 0.2, death: -1, dim: 1 },
     ];
     const split = topojs.splitByDimension(pairs);
     expect(split.h0).toHaveLength(1);
@@ -97,6 +106,6 @@ describe('public API barrel (src/index.ts)', () => {
     const s = topojs.summarize(pairs);
     expect(s.total).toBe(s.h0 + s.h1 + s.h2 + s.higher);
     const json = topojs.toJSON(pairs);
-    expect(JSON.parse(json)).toEqual(pairs);
+    expect(JSON.parse(json)).toStrictEqual(pairs);
   });
 });

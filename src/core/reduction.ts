@@ -15,6 +15,7 @@
 // ARE live (used by cubical.ts, homology.ts, homology-fast.ts,
 // homology-cohom.ts, incremental-h1.ts) and were untouched.
 
+/* eslint-disable max-classes-per-file */
 /**
  * XOR two sorted Int32Arrays (symmetric difference of sorted index lists).
  *
@@ -32,17 +33,26 @@ export function xorSparse(a: Int32Array, b: Int32Array): Int32Array {
     const va = a[i]!;
     const vb = b[j]!;
     if (va < vb) {
-      tmp.push(va); i++;
+      tmp.push(va);
+      i++;
     } else if (vb < va) {
-      tmp.push(vb); j++;
+      tmp.push(vb);
+      j++;
     } else {
-      i++; j++;
+      i++;
+      j++;
     }
   }
-  while (i < a.length) tmp.push(a[i++]!);
-  while (j < b.length) tmp.push(b[j++]!);
+  while (i < a.length) {
+    tmp.push(a[i++]!);
+  }
+  while (j < b.length) {
+    tmp.push(b[j++]!);
+  }
   const result = new Int32Array(tmp.length);
-  for (let k = 0; k < tmp.length; k++) result[k] = tmp[k]!;
+  for (let k = 0; k < tmp.length; k++) {
+    result[k] = tmp[k]!;
+  }
   return result;
 }
 
@@ -78,7 +88,9 @@ export class ColumnStore {
     this.ensureSpace(len);
     const block = this.blocks[this.blockIdx]!;
     const off = this.blockOff;
-    for (let i = 0; i < len; i++) block[off + i] = values[i]!;
+    for (let i = 0; i < len; i++) {
+      block[off + i] = values[i]!;
+    }
     this.starts[idx] = (this.blockIdx << ColumnStore.BLOCK_LOG2) | off;
     this.lengths[idx] = len;
     this.blockOff += len;
@@ -89,7 +101,9 @@ export class ColumnStore {
     this.ensureSpace(count);
     const block = this.blocks[this.blockIdx]!;
     const off = this.blockOff;
-    for (let i = 0; i < count; i++) block[off + i] = scratch[i]!;
+    for (let i = 0; i < count; i++) {
+      block[off + i] = scratch[i]!;
+    }
     this.starts[idx] = (this.blockIdx << ColumnStore.BLOCK_LOG2) | off;
     this.lengths[idx] = count;
     this.blockOff += count;
@@ -98,14 +112,18 @@ export class ColumnStore {
   /** Retrieve column at slot `idx`, or null if never stored. */
   get(idx: number): Int32Array | null {
     const packed = this.starts[idx]!;
-    if (packed < 0) return null;
+    if (packed < 0) {
+      return null;
+    }
     const bi = packed >>> ColumnStore.BLOCK_LOG2;
     const off = packed & ColumnStore.BLOCK_MASK;
     return this.blocks[bi]!.subarray(off, off + this.lengths[idx]!);
   }
 
   private ensureSpace(needed: number): void {
-    if (this.blockOff + needed <= ColumnStore.BLOCK_SIZE) return;
+    if (this.blockOff + needed <= ColumnStore.BLOCK_SIZE) {
+      return;
+    }
     this.blockIdx++;
     this.blockOff = 0;
     if (this.blockIdx >= this.blocks.length) {
@@ -181,23 +199,20 @@ export class DenseWorkingCol {
 
   loadFromArray(arr: Int32Array): void {
     this.bits.fill(0);
-    for (let i = 0; i < arr.length; i++) {
-      const e = arr[i]!;
+    for (const e of arr) {
       this.bits[e >>> 5]! |= 1 << (e & 31);
     }
   }
 
   loadFromNumbers(arr: number[]): void {
     this.bits.fill(0);
-    for (let i = 0; i < arr.length; i++) {
-      const e = arr[i]!;
+    for (const e of arr) {
       this.bits[e >>> 5]! |= 1 << (e & 31);
     }
   }
 
   xorSparse(col: Int32Array): void {
-    for (let i = 0; i < col.length; i++) {
-      const e = col[i]!;
+    for (const e of col) {
       this.bits[e >>> 5]! ^= 1 << (e & 31);
     }
   }
@@ -214,7 +229,7 @@ export class DenseWorkingCol {
 
   /** Populate scratch with extracted bits and return count. */
   private extractBits(): number {
-    const scratch = this.scratch;
+    const { scratch } = this;
     let count = 0;
     for (let w = 0; w < this.words; w++) {
       let word = this.bits[w]!;
@@ -240,4 +255,3 @@ export class DenseWorkingCol {
     return this.scratch.slice(0, count);
   }
 }
-

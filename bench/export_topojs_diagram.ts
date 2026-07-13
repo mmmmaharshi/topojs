@@ -13,39 +13,58 @@
 // src/index.ts -- added so the Ripser comparison can quantify how much of
 // the plain engine's 16x-93x gap that acceleration actually closes, instead
 // of leaving that as an unmeasured docstring claim).
-import { readFileSync, writeFileSync } from 'node:fs';
-import { computePersistentHomology } from '../src/index.ts';
-import { computePersistentHomologyCohomology } from '../src/core/homology-cohom.ts';
+import { readFileSync, writeFileSync } from "node:fs";
+import { computePersistentHomology } from "../src/index.ts";
+import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
 
-const [, , csvPath, dimsArg, maxDistArg, maxDimArg, outPath, engineArg] = process.argv;
+const csvPath = process.argv[2]!;
+const dimsArg = process.argv[3]!;
+const maxDistArg = process.argv[4]!;
+const maxDimArg = process.argv[5]!;
+const outPath = process.argv[6]!;
+const engineArg = process.argv[7]!;
 const dims = Number(dimsArg);
 const maxDist = Number(maxDistArg);
 const maxDim = Number(maxDimArg);
-const engine = engineArg === 'cohom' ? 'cohom' : 'plain';
+const engine = engineArg === "cohom" ? "cohom" : "plain";
 
-const lines = readFileSync(csvPath!, 'utf8').trim().split('\n');
+const lines = readFileSync(csvPath!, "utf-8").trim().split("\n");
 const flat = new Float64Array(lines.length * dims);
 lines.forEach((line, i) => {
-  const parts = line.trim().split(/\s+/).map(Number);
-  for (let d = 0; d < dims; d++) flat[i * dims + d] = parts[d]!;
+  const parts = line.trim().split(/\s+/u).map(Number);
+  for (let d = 0; d < dims; d++) {
+    flat[i * dims + d] = parts[d]!;
+  }
 });
 
-const compute = engine === 'cohom' ? computePersistentHomologyCohomology : computePersistentHomology;
+const compute =
+  engine === "cohom" ? computePersistentHomologyCohomology : computePersistentHomology;
 const t0 = performance.now();
 const result = compute(flat, dims, maxDist, maxDim);
 const ms = performance.now() - t0;
 
-const byDim: Record<number, { finite: number; essential: number }> = {};
-for (let d = 0; d <= maxDim; d++) byDim[d] = { finite: 0, essential: 0 };
+const byDim: Record<number, { essential: number; finite: number }> = {};
+for (let d = 0; d <= maxDim; d++) {
+  byDim[d] = { essential: 0, finite: 0 };
+}
 // PersistencePair convention (see src/core/h0.ts docstring): death === -1
 // marks an essential (infinite) class, not Infinity.
 for (const p of result.pairs) {
-  if (p.death === -1) byDim[p.dim]!.essential++;
-  else byDim[p.dim]!.finite++;
+  if (p.death === -1) {
+    byDim[p.dim]!.essential++;
+  } else {
+    byDim[p.dim]!.finite++;
+  }
 }
 
 writeFileSync(
   outPath!,
-  JSON.stringify({ n: lines.length, dims, maxDist, maxDim, engine, ms, byDim, pairs: result.pairs }, null, 2),
+  JSON.stringify(
+    { byDim, dims, engine, maxDim, maxDist, ms, n: lines.length, pairs: result.pairs },
+    null,
+    2,
+  ),
 );
-console.log(`topojs[${engine}]: n=${lines.length} ms=${ms.toFixed(2)} byDim=${JSON.stringify(byDim)}`);
+console.log(
+  `topojs[${engine}]: n=${lines.length} ms=${ms.toFixed(2)} byDim=${JSON.stringify(byDim)}`,
+);

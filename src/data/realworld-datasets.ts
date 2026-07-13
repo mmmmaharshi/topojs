@@ -17,11 +17,13 @@
 // ── Helper: simple seeded random ──
 let _seed = 42;
 function seededRandom(): number {
-  _seed = (_seed * 16807) % 2147483647;
-  return (_seed - 1) / 2147483646;
+  _seed = (_seed * 16_807) % 2_147_483_647;
+  return (_seed - 1) / 2_147_483_646;
 }
 
-function resetSeed(s: number = 42) { _seed = s; }
+function resetSeed(s = 42) {
+  _seed = s;
+}
 
 function gaussian(): number {
   const u1 = seededRandom();
@@ -48,13 +50,15 @@ const MNIST_RAW = `\
 
 /** A small bundled sample of MNIST handwritten-digit images (label 0-9 plus a 28x28, 0-255 grayscale pixel array per digit, row-major), for trying Rips/cubical persistence on real image data without an external download. */
 export function loadMNISTDigits(): { label: number; pixels: Float64Array }[] {
-  const lines = MNIST_RAW.split('\n').filter(l => l.length > 0);
+  const lines = MNIST_RAW.split("\n").filter((l) => l.length > 0);
   const digits: { label: number; pixels: Float64Array }[] = [];
   for (const line of lines) {
-    const parts = line.split(',').map(Number);
+    const parts = line.split(",").map(Number);
     const label = parts[0]!;
     const pixels = new Float64Array(784);
-    for (let i = 0; i < 784; i++) pixels[i] = parts[i + 1]!;
+    for (let i = 0; i < 784; i++) {
+      pixels[i] = parts[i + 1]!;
+    }
     digits.push({ label, pixels });
   }
   return digits;
@@ -219,10 +223,10 @@ const IRIS_RAW = `\
 
 /** The UCI Iris flower measurements (150 samples, 4 features each: sepal length/width, petal length/width), flattened row-major into a {@link Points}-shaped Float64Array -- a standard small real-world point cloud. */
 export function loadIrisDataset(): Float64Array {
-  const lines = IRIS_RAW.split('\n').filter(l => l.length > 0);
+  const lines = IRIS_RAW.split("\n").filter((l) => l.length > 0);
   const pts = new Float64Array(lines.length * 4);
   for (let i = 0; i < lines.length; i++) {
-    const parts = lines[i]!.split(',').map(Number);
+    const parts = lines[i]!.split(",").map(Number);
     pts[i * 4] = parts[0]!;
     pts[i * 4 + 1] = parts[1]!;
     pts[i * 4 + 2] = parts[2]!;
@@ -233,7 +237,7 @@ export function loadIrisDataset(): Float64Array {
 
 // ── 3. Terrain heightmap (fractal Brownian motion) ──
 /** Procedural fractal-Brownian-motion terrain heightmap, `size x size` values flattened row-major -- deterministic (seeded internally), for synthetic-but-structured cubical-complex examples. Higher `octaves` adds finer detail layers. */
-export function generateTerrain(size: number = 64, octaves: number = 6): Float64Array {
+export function generateTerrain(size = 64, octaves = 6): Float64Array {
   const data = new Float64Array(size * size);
 
   function noise2D(x: number, y: number): number {
@@ -253,21 +257,21 @@ export function generateTerrain(size: number = 64, octaves: number = 6): Float64
   }
 
   resetSeed(42);
-  let amplitude = 1.0;
-  let frequency = 4.0;
+  let amplitude = 1;
+  let frequency = 4;
   let maxVal = 0;
 
   for (let oct = 0; oct < octaves; oct++) {
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        const nx = x / size * frequency;
-        const ny = y / size * frequency;
+        const nx = (x / size) * frequency;
+        const ny = (y / size) * frequency;
         data[y * size + x] = (data[y * size + x] ?? 0) + noise2D(nx, ny) * amplitude;
       }
     }
     maxVal += amplitude;
     amplitude *= 0.5;
-    frequency *= 2.0;
+    frequency *= 2;
   }
 
   for (let i = 0; i < data.length; i++) {
@@ -278,12 +282,7 @@ export function generateTerrain(size: number = 64, octaves: number = 6): Float64
 }
 
 // ── 4. Torus point cloud (simulating a 3D scan) ──
-export function generateTorus3D(
-  n: number = 300,
-  R: number = 2.0,
-  r: number = 1.0,
-  noise: number = 0.05,
-): Float64Array {
+export function generateTorus3D(n = 300, R = 2, r = 1, noise = 0.05): Float64Array {
   const pts = new Float64Array(n * 3);
   resetSeed(99);
   for (let i = 0; i < n; i++) {
@@ -300,11 +299,7 @@ export function generateTorus3D(
 }
 
 // ── 5. Sphere point cloud (simulating a 3D scan) ──
-export function generateSphere3D(
-  n: number = 300,
-  radius: number = 1.0,
-  noise: number = 0.03,
-): Float64Array {
+export function generateSphere3D(n = 300, radius = 1, noise = 0.03): Float64Array {
   const pts = new Float64Array(n * 3);
   resetSeed(77);
   for (let i = 0; i < n; i++) {
@@ -321,7 +316,7 @@ export function generateSphere3D(
 }
 
 // ── 6. Natural image for cubical persistence ──
-export function generateNaturalImage(size: number = 64): Float64Array {
+export function generateNaturalImage(size = 64): Float64Array {
   const img = new Float64Array(size * size);
   resetSeed(123);
 
@@ -362,7 +357,7 @@ export function generateNaturalImage(size: number = 64): Float64Array {
 export function extractImagePatches(
   image: Float64Array,
   size: number,
-  threshold: number = 30,
+  threshold = 30,
 ): Float64Array {
   const patches: number[] = [];
   for (let y = 1; y < size - 1; y++) {
@@ -378,7 +373,9 @@ export function extractImagePatches(
         }
       }
       if (contrast >= threshold) {
-        for (const p of patch) patches.push(p);
+        for (const p of patch) {
+          patches.push(p);
+        }
       }
     }
   }
@@ -386,10 +383,11 @@ export function extractImagePatches(
 }
 
 // ── 8. Coastline / river meander (2D curve) ──
-export function generateCoastline(n: number = 200): Float64Array {
+export function generateCoastline(n = 200): Float64Array {
   const pts = new Float64Array(n * 2);
   resetSeed(55);
-  let x = 0, y = 0;
+  let x = 0,
+    y = 0;
   for (let i = 0; i < n; i++) {
     x += seededRandom() * 0.3 + 0.2;
     y += Math.sin(x * 2) * 0.3 + (seededRandom() - 0.5) * 0.2;

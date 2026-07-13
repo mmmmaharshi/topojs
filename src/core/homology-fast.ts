@@ -1,9 +1,9 @@
-import type { Points } from './distance.ts';
-import type { PersistencePair } from './h0.ts';
-import { computeH0Phase } from './h0.ts';
-import type { HomologyResult } from './homology.ts';
-import { buildRipsComplex } from './complex.ts';
-import { DenseWorkingCol } from './reduction.ts';
+import type { Points } from "./distance.ts";
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import type { HomologyResult } from "./homology.ts";
+import { buildRipsComplex } from "./complex.ts";
+import { DenseWorkingCol } from "./reduction.ts";
 
 /**
  * Persistent homology with an APPARENT PAIRS pre-pass for H1 -- a provably
@@ -86,8 +86,8 @@ export interface HomologyResultFast extends HomologyResult {
 export function computePersistentHomologyFast(
   points: Points,
   dims: number,
-  maxDist: number = Infinity,
-  maxDim: number = 2,
+  maxDist = Infinity,
+  maxDim = 2,
 ): HomologyResultFast {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim);
   const { edges, triangles, tetrahedra } = complex;
@@ -98,7 +98,9 @@ export function computePersistentHomologyFast(
 
   // ── Phase 2: H1 with apparent-pairs pre-pass ──
   const h1Pivots = new Int32Array(edges.length).fill(-1);
-  const h1reduced: (Int32Array | null)[] = new Array(triangles.length).fill(null);
+  const h1reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
+    length: triangles.length,
+  }).fill(null);
   const h1Pairs: PersistencePair[] = [];
 
   // Step A: for each triangle, how many of its 3 edges achieve its own max
@@ -113,17 +115,27 @@ export function computePersistentHomologyFast(
   const cofacetTriAtValue = new Int32Array(edges.length).fill(-1);
   for (let ci = 0; ci < triangles.length; ci++) {
     const tri = triangles[ci]!;
-    const e0 = tri.edges[0];
-    const e1 = tri.edges[1];
-    const e2 = tri.edges[2];
+    const [e0, e1, e2] = tri.edges;
     const v0 = edges[e0]!.val;
     const v1 = edges[e1]!.val;
     const v2 = edges[e2]!.val;
     const vmax = Math.max(v0, v1, v2);
     let tieCount = 0;
-    if (v0 === vmax) { tieCount++; cofacetCountAtValue[e0]!++; cofacetTriAtValue[e0] = ci; }
-    if (v1 === vmax) { tieCount++; cofacetCountAtValue[e1]!++; cofacetTriAtValue[e1] = ci; }
-    if (v2 === vmax) { tieCount++; cofacetCountAtValue[e2]!++; cofacetTriAtValue[e2] = ci; }
+    if (v0 === vmax) {
+      tieCount++;
+      cofacetCountAtValue[e0]!++;
+      cofacetTriAtValue[e0] = ci;
+    }
+    if (v1 === vmax) {
+      tieCount++;
+      cofacetCountAtValue[e1]!++;
+      cofacetTriAtValue[e1] = ci;
+    }
+    if (v2 === vmax) {
+      tieCount++;
+      cofacetCountAtValue[e2]!++;
+      cofacetTriAtValue[e2] = ci;
+    }
     tieCountForTri[ci] = tieCount;
   }
 
@@ -155,7 +167,9 @@ export function computePersistentHomologyFast(
   const w1 = new DenseWorkingCol(edges.length);
   let reReducedCount = 0;
   for (let ci = 0; ci < triangles.length; ci++) {
-    if (isApparentTri[ci]) continue;
+    if (isApparentTri[ci]) {
+      continue;
+    }
     reReducedCount++;
     const tri = triangles[ci]!;
     w1.loadFromNumbers(tri.edges);
@@ -175,7 +189,9 @@ export function computePersistentHomologyFast(
         break;
       }
       const prevCol = h1reduced[prev];
-      if (prevCol === null || prevCol === undefined) break;
+      if (prevCol === null || prevCol === undefined) {
+        break;
+      }
       w1.xorSparse(prevCol);
     }
   }
@@ -200,7 +216,9 @@ export function computePersistentHomologyFast(
     }
 
     const h2Pivots = new Int32Array(triangles.length).fill(-1);
-    const h2reduced: (Int32Array | null)[] = new Array(tetrahedra.length).fill(null);
+    const h2reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
+      length: tetrahedra.length,
+    }).fill(null);
     const w2 = new DenseWorkingCol(triangles.length);
 
     for (let ci = 0; ci < tetrahedra.length; ci++) {
@@ -208,7 +226,9 @@ export function computePersistentHomologyFast(
       w2.loadFromNumbers(tet.triangles);
       while (true) {
         const pivot = w2.pivot();
-        if (pivot < 0) break;
+        if (pivot < 0) {
+          break;
+        }
         const prev = h2Pivots[pivot]!;
         if (prev < 0) {
           h2Pivots[pivot] = ci;
@@ -219,14 +239,18 @@ export function computePersistentHomologyFast(
           break;
         }
         const prevCol = h2reduced[prev];
-        if (prevCol === null || prevCol === undefined) break;
+        if (prevCol === null || prevCol === undefined) {
+          break;
+        }
         w2.xorSparse(prevCol);
       }
     }
 
     const usedAsPivot = new Uint8Array(triangles.length);
     for (let ti = 0; ti < triangles.length; ti++) {
-      if (h2Pivots[ti]! >= 0) usedAsPivot[ti] = 1;
+      if (h2Pivots[ti]! >= 0) {
+        usedAsPivot[ti] = 1;
+      }
     }
     for (let ci = 0; ci < triangles.length; ci++) {
       if (nullspaceTrigs[ci] && !usedAsPivot[ci]) {
@@ -235,14 +259,13 @@ export function computePersistentHomologyFast(
     }
   }
   return {
-    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
     complex: {
-      numVertices: complex.n,
       numEdges: edges.length,
-      numTriangles: triangles.length,
       numTetrahedra: tetrahedra.length,
+      numTriangles: triangles.length,
+      numVertices: complex.n,
     },
     diagnostics: { reReducedTriangles: reReducedCount, totalTriangles: triangles.length },
+    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
   };
 }
-

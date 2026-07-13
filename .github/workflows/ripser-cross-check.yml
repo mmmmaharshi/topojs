@@ -18,7 +18,7 @@ on:
     # Weekly, Monday 06:00 UTC. Cheap enough to run more often, but this
     # check doesn't need to be fresher than that -- nothing in this repo's
     # own source changes on a schedule that would make daily runs useful.
-    - cron: '0 6 * * 1'
+    - cron: "0 6 * * 1"
   workflow_dispatch: {}
 
 jobs:
@@ -30,11 +30,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: "npm"
       - run: npm ci
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - run: pip install -r bench/requirements.txt
       - name: Run Ripser cross-check
         run: python3 bench/compare_ripser.py

@@ -1,4 +1,4 @@
-import type { PersistencePair } from '../core/h0.ts';
+import type { PersistencePair } from "../core/h0.ts";
 
 /**
  * Collapsed real-time signal derived from a full persistence barcode.
@@ -30,7 +30,7 @@ export interface TopologicalSummary {
  */
 export function summarizeForStreaming(
   pairs: PersistencePair[],
-  significanceThreshold: number = 0,
+  significanceThreshold = 0,
 ): TopologicalSummary {
   let totalPersistenceH1 = 0;
   let maxPersistenceH1 = 0;
@@ -38,16 +38,22 @@ export function summarizeForStreaming(
   let essentialH1Count = 0;
 
   for (const p of pairs) {
-    if (p.dim !== 1) continue;
+    if (p.dim !== 1) {
+      continue;
+    }
     if (p.death < 0) {
       essentialH1Count++;
       continue;
     }
     const persistence = p.death - p.birth;
     totalPersistenceH1 += persistence;
-    if (persistence > maxPersistenceH1) maxPersistenceH1 = persistence;
-    if (persistence > significanceThreshold) significantH1Count++;
+    if (persistence > maxPersistenceH1) {
+      maxPersistenceH1 = persistence;
+    }
+    if (persistence > significanceThreshold) {
+      significantH1Count++;
+    }
   }
 
-  return { totalPersistenceH1, maxPersistenceH1, significantH1Count, essentialH1Count };
+  return { essentialH1Count, maxPersistenceH1, significantH1Count, totalPersistenceH1 };
 }

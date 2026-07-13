@@ -1,10 +1,10 @@
-import type { Points } from './distance.ts';
-import type { EdgeEntry } from './h0.ts';
+import type { Points } from "./distance.ts";
+import type { EdgeEntry } from "./h0.ts";
 
 function euclidean(points: Points, dims: number, i: number, j: number): number {
   const bi = i * dims;
   const bj = j * dims;
-  let sq = 0.0;
+  let sq = 0;
   for (let d = 0; d < dims; d++) {
     const diff = points[bi + d]! - points[bj + d]!;
     sq += diff * diff;
@@ -95,8 +95,8 @@ export interface GeneralRipsComplex {
 function encodeKey(verts: Int32Array | number[], n: number): bigint {
   let key = 0n;
   const N = BigInt(n);
-  for (let i = 0; i < verts.length; i++) {
-    key = key * N + BigInt(verts[i]!);
+  for (const v of verts) {
+    key = key * N + BigInt(v);
   }
   return key;
 }
@@ -109,7 +109,9 @@ export function buildGeneralRipsComplex(
 ): GeneralRipsComplex {
   const n = points.length / dims;
 
-  if (maxSimplexDim < 1) throw new RangeError(`maxSimplexDim must be >= 1, got ${maxSimplexDim}`);
+  if (maxSimplexDim < 1) {
+    throw new RangeError(`maxSimplexDim must be >= 1, got ${maxSimplexDim}`);
+  }
 
   // ── Level 1: edges (brute force -- see this file's SCOPE note) ──
   const tempEdges: { u: number; v: number; val: number; origIdx: number }[] = [];
@@ -118,14 +120,14 @@ export function buildGeneralRipsComplex(
     for (let j = i + 1; j < n; j++) {
       const d = euclidean(points, dims, i, j);
       if (d <= maxDist) {
-        tempEdges.push({ u: i, v: j, val: d, origIdx: adj[i]!.length });
+        tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
       }
     }
   }
   tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
-  const edgeLevel: EdgeEntry[] = tempEdges.map(e => ({ u: e.u, v: e.v, val: e.val }));
+  const edgeLevel: EdgeEntry[] = tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val }));
 
   const edgeIndex = new Map<bigint, number>();
   for (let i = 0; i < edgeLevel.length; i++) {
@@ -133,17 +135,21 @@ export function buildGeneralRipsComplex(
     edgeIndex.set(encodeKey([e.u, e.v], n), i);
   }
 
-  for (let v = 0; v < n; v++) adj[v]!.sort((a, b) => a - b);
+  for (let v = 0; v < n; v++) {
+    adj[v]!.sort((a, b) => a - b);
+  }
   const words = Math.ceil(n / 32);
-  const adjBits: Uint32Array[] = new Array(n);
+  const adjBits: Uint32Array[] = Array.from({ length: n });
   for (let v = 0; v < n; v++) {
     const bits = new Uint32Array(words);
-    for (const nb of adj[v]!) bits[nb >>> 5]! |= 1 << (nb & 31);
+    for (const nb of adj[v]!) {
+      bits[nb >>> 5]! |= 1 << (nb & 31);
+    }
     adjBits[v] = bits;
   }
 
   if (maxSimplexDim === 1) {
-    return { n, edgeLevel, higherLevels: [] };
+    return { edgeLevel, higherLevels: [], n };
   }
 
   // ── Levels 2..maxSimplexDim, generalizing buildRipsComplex's
@@ -152,7 +158,10 @@ export function buildGeneralRipsComplex(
   // prevVerts/prevVal/prevBits track the previous level for extension;
   // prevIndex maps that level's vertex-tuple -> its own index (for the
   // level AFTER it to look up non-parent faces).
-  let prevLevel: { verts: Int32Array; val: number }[] = edgeLevel.map(e => ({ verts: Int32Array.from([e.u, e.v]), val: e.val }));
+  let prevLevel: { verts: Int32Array; val: number }[] = edgeLevel.map((e) => ({
+    val: e.val,
+    verts: Int32Array.from([e.u, e.v]),
+  }));
   let prevIndex = edgeIndex;
 
   for (let dim = 2; dim <= maxSimplexDim; dim++) {
@@ -162,16 +171,18 @@ export function buildGeneralRipsComplex(
     for (let si = 0; si < prevLevel.length; si++) {
       const parent = prevLevel[si]!;
       const pv = parent.verts;
-      const top = pv[pv.length - 1]!;
+      const top = pv.at(-1)!;
 
       // AND together every vertex's adjacency bitset to find common neighbors.
       let bits: Uint32Array | null = null;
-      for (let vi = 0; vi < pv.length; vi++) {
-        const b = adjBits[pv[vi]!]!;
+      for (const pvv of pv) {
+        const b = adjBits[pvv]!;
         if (bits === null) {
           bits = b.slice();
         } else {
-          for (let w = 0; w < words; w++) bits[w]! &= b[w]!;
+          for (let w = 0; w < words; w++) {
+            bits[w]! &= b[w]!;
+          }
         }
       }
       const startWord = (top + 1) >>> 5;
@@ -179,7 +190,9 @@ export function buildGeneralRipsComplex(
 
       for (let w = startWord; w < words; w++) {
         let word = bits![w]!;
-        if (w === startWord && startBit > 0) word &= ~((1 << startBit) - 1);
+        if (w === startWord && startBit > 0) {
+          word &= ~((1 << startBit) - 1);
+        }
         while (word) {
           const lsb = word & -word;
           const bit = Math.clz32(lsb) ^ 31;
@@ -192,10 +205,12 @@ export function buildGeneralRipsComplex(
 
           // New edges introduced by x: (verts[i], x) for every existing
           // vertex -- val is the max of the parent's own val and these.
-          let val = parent.val;
-          for (let vi = 0; vi < pv.length; vi++) {
-            const d = euclidean(points, dims, pv[vi]!, x);
-            if (d > val) val = d;
+          let { val } = parent;
+          for (const pvi of pv) {
+            const d = euclidean(points, dims, pvi, x);
+            if (d > val) {
+              val = d;
+            }
           }
 
           // Faces: omitting the LAST vertex (x) is the parent itself
@@ -204,7 +219,11 @@ export function buildGeneralRipsComplex(
           const faces = new Int32Array(numVerts);
           for (let omit = 0; omit < numVerts - 1; omit++) {
             const faceVerts: number[] = [];
-            for (let vi = 0; vi < numVerts; vi++) if (vi !== omit) faceVerts.push(newVerts[vi]!);
+            for (let vi = 0; vi < numVerts; vi++) {
+              if (vi !== omit) {
+                faceVerts.push(newVerts[vi]!);
+              }
+            }
             const key = encodeKey(faceVerts, n);
             const idx = prevIndex.get(key);
             // idx is always found: faceVerts is a sub-clique of the
@@ -215,7 +234,7 @@ export function buildGeneralRipsComplex(
           }
           faces[numVerts - 1] = si; // parent, the "omit x" face
 
-          thisLevel.push({ verts: newVerts, faces, val });
+          thisLevel.push({ faces, val, verts: newVerts });
         }
       }
     }
@@ -228,9 +247,9 @@ export function buildGeneralRipsComplex(
     for (let i = 0; i < thisLevel.length; i++) {
       nextIndex.set(encodeKey(thisLevel[i]!.verts, n), i);
     }
-    prevLevel = thisLevel.map(s => ({ verts: s.verts, val: s.val }));
+    prevLevel = thisLevel.map((s) => ({ val: s.val, verts: s.verts }));
     prevIndex = nextIndex;
   }
 
-  return { n, edgeLevel, higherLevels };
+  return { edgeLevel, higherLevels, n };
 }

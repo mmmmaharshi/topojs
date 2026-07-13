@@ -1,6 +1,6 @@
-import type { PersistencePair } from './h0.ts';
-import { computeH0Phase } from './h0.ts';
-import { DenseWorkingCol } from './reduction.ts';
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of cubical persistence homology on a 2D grayscale image. */
 export interface CubicalResult {
@@ -32,7 +32,7 @@ export function computeCubicalHomology(
   pixels: Float64Array,
   height: number,
   width: number,
-  maxDim: number = 1,
+  maxDim = 1,
 ): CubicalResult {
   const V = height * width;
   const HE = height * (width - 1);
@@ -43,7 +43,10 @@ export function computeCubicalHomology(
   // ── Build vertices sorted by value ──
   const vertOrder = new Int32Array(V);
   const vertVal = new Float64Array(V);
-  for (let i = 0; i < V; i++) { vertOrder[i] = i; vertVal[i] = pixels[i]!; }
+  for (let i = 0; i < V; i++) {
+    vertOrder[i] = i;
+    vertVal[i] = pixels[i]!;
+  }
   vertOrder.sort((a, b) => vertVal[a]! - vertVal[b]!);
 
   // ── Build edges with birth values ──
@@ -53,7 +56,12 @@ export function computeCubicalHomology(
   // recomputes for upperEdge/lowerEdge/leftEdge/rightEdge. It has to survive
   // the edges.sort() below, which is why it's captured here rather than
   // implied by array position (see origToSorted remap after the sort).
-  interface CubicalEdge { u: number; v: number; val: number; origIdx: number; }
+  interface CubicalEdge {
+    u: number;
+    v: number;
+    val: number;
+    origIdx: number;
+  }
   const edges: CubicalEdge[] = [];
 
   // Horizontal edges (i,j)-(i+1,j)
@@ -61,7 +69,12 @@ export function computeCubicalHomology(
     for (let j = 0; j < width - 1; j++) {
       const idx0 = i * width + j;
       const idx1 = i * width + j + 1;
-      edges.push({ u: idx0, v: idx1, val: Math.max(pixels[idx0]!, pixels[idx1]!), origIdx: edges.length });
+      edges.push({
+        origIdx: edges.length,
+        u: idx0,
+        v: idx1,
+        val: Math.max(pixels[idx0]!, pixels[idx1]!),
+      });
     }
   }
   // Vertical edges (i,j)-(i,j+1)
@@ -69,7 +82,12 @@ export function computeCubicalHomology(
     for (let j = 0; j < width; j++) {
       const idx0 = i * width + j;
       const idx1 = (i + 1) * width + j;
-      edges.push({ u: idx0, v: idx1, val: Math.max(pixels[idx0]!, pixels[idx1]!), origIdx: edges.length });
+      edges.push({
+        origIdx: edges.length,
+        u: idx0,
+        v: idx1,
+        val: Math.max(pixels[idx0]!, pixels[idx1]!),
+      });
     }
   }
 
@@ -89,10 +107,15 @@ export function computeCubicalHomology(
   // characteristic mismatch on a real counterexample (ring-around-a-peak
   // image) before this fix; see test/cubical.test.ts.
   const origToSorted = new Int32Array(numEdges);
-  for (let i = 0; i < edges.length; i++) origToSorted[edges[i]!.origIdx] = i;
+  for (let i = 0; i < edges.length; i++) {
+    origToSorted[edges[i]!.origIdx] = i;
+  }
 
   // ── Build squares ──
-  interface CubicalSquare { edges: [number, number, number, number]; val: number; }
+  interface CubicalSquare {
+    edges: [number, number, number, number];
+    val: number;
+  }
   const squares: CubicalSquare[] = [];
 
   for (let i = 0; i < height - 1; i++) {
@@ -127,7 +150,9 @@ export function computeCubicalHomology(
 
   if (maxDim >= 1 && numSquares > 0) {
     const h1Pivots = new Int32Array(numEdges).fill(-1);
-    const h1reduced: (Int32Array | null)[] = new Array(numSquares).fill(null);
+    const h1reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
+      length: numSquares,
+    }).fill(null);
     const w = new DenseWorkingCol(numEdges);
 
     for (let ci = 0; ci < numSquares; ci++) {
@@ -135,7 +160,9 @@ export function computeCubicalHomology(
       w.loadFromNumbers(sq.edges);
       while (true) {
         const pivot = w.pivot();
-        if (pivot < 0) break;
+        if (pivot < 0) {
+          break;
+        }
         const prev = h1Pivots[pivot]!;
         if (prev < 0) {
           h1Pivots[pivot] = ci;
@@ -154,7 +181,9 @@ export function computeCubicalHomology(
           break;
         }
         const prevCol = h1reduced[prev]!;
-        if (prevCol === null) break;
+        if (prevCol === null) {
+          break;
+        }
         w.xorSparse(prevCol);
       }
     }
@@ -167,7 +196,7 @@ export function computeCubicalHomology(
   }
 
   return {
-    pairs: [...h0Pairs, ...h1Pairs],
     dims: { height, width },
+    pairs: [...h0Pairs, ...h1Pairs],
   };
 }

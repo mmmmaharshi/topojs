@@ -1,335 +1,456 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TopoJS — Interactive Persistent Homology</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: system-ui, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
-.container { max-width: 1400px; margin: 0 auto; }
-h1 { font-size: 1.5em; margin-bottom: 8px; color: #58a6ff; }
-h2 { font-size: 1em; color: #8b949e; margin-bottom: 12px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
-.card h3 { font-size: 0.85em; color: #8b949e; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-.toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 16px; }
-.toolbar label { font-size: 0.85em; color: #8b949e; }
-.toolbar input[type="range"] { width: 160px; accent-color: #58a6ff; }
-.toolbar select, .toolbar button { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 12px; font-size: 0.85em; cursor: pointer; }
-.toolbar button:hover { background: #30363d; }
-canvas { width: 100%; height: 320px; display: block; background: #0d1117; border-radius: 4px; }
-.stats { display: flex; gap: 24px; font-size: 0.9em; }
-.stats span { color: #8b949e; }
-.stats strong { color: #c9d1d9; }
-.info { margin-top: 12px; font-size: 0.8em; color: #484f58; }
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>TopoJS</h1>
-  <h2>Interactive Persistent Homology in Pure JavaScript</h2>
-
-  <div class="toolbar">
-    <label>Preset:</label>
-    <select id="preset">
-      <option value="circle">Circle (12 pts)</option>
-      <option value="circle20">Circle (20 pts)</option>
-      <option value="square">Square</option>
-      <option value="random">Random (30 pts)</option>
-      <option value="twocircles">Two Circles</option>
-    </select>
-    <label>ε (max distance):</label>
-    <input type="range" id="threshold" min="0.1" max="3.0" step="0.01" value="0.8">
-    <span id="thresholdVal">0.80</span>
-    <button id="runBtn">▶ Compute</button>
-    <button id="clearBtn">✕ Clear</button>
-  </div>
-
-  <div class="grid">
-    <div class="card">
-      <h3>Point Cloud</h3>
-      <canvas id="pointCanvas" width="600" height="320"></canvas>
-      <div class="stats">
-        <span>Points: <strong id="ptCount">0</strong></span>
-        <span>Edges: <strong id="edgeCount">0</strong></span>
-        <span>Triangles: <strong id="triCount">0</strong></span>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Persistence Diagram</h3>
-      <canvas id="diagramCanvas" width="600" height="320"></canvas>
-      <div class="stats">
-        <span>β₀ = <strong id="b0">—</strong></span>
-        <span>β₁ = <strong id="b1">—</strong></span>
-        <span>H0 pairs: <strong id="h0count">0</strong></span>
-        <span>H1 pairs: <strong id="h1count">0</strong></span>
-      </div>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-      <h3>Persistence Barcode</h3>
-      <canvas id="barcodeCanvas" width="1200" height="160"></canvas>
-    </div>
-  </div>
-
-  <div class="info">
-    Click on the point cloud canvas to add points. Drag to move. Computational time: <span id="computeTime">—</span>
-  </div>
-</div>
-
-<script type="module">
-import { computePersistentHomology } from './topojs-bundle.mjs';
-
-// ── DOM refs ──
-const ptCanvas = document.getElementById('pointCanvas');
-const diagCanvas = document.getElementById('diagramCanvas');
-const barCanvas = document.getElementById('barcodeCanvas');
-const thresholdSlider = document.getElementById('threshold');
-const thresholdVal = document.getElementById('thresholdVal');
-const presetSelect = document.getElementById('preset');
-const runBtn = document.getElementById('runBtn');
-const clearBtn = document.getElementById('clearBtn');
-const ptCount = document.getElementById('ptCount');
-const edgeCount = document.getElementById('edgeCount');
-const triCount = document.getElementById('triCount');
-const b0 = document.getElementById('b0');
-const b1 = document.getElementById('b1');
-const h0count = document.getElementById('h0count');
-const h1count = document.getElementById('h1count');
-const computeTime = document.getElementById('computeTime');
-
-const pCtx = ptCanvas.getContext('2d');
-const dCtx = diagCanvas.getContext('2d');
-const bCtx = barCanvas.getContext('2d');
-
-// ── State ──
-let points = [];
-
-const COLORS = {
-  bg: '#0d1117',
-  grid: '#21262d',
-  point: '#58a6ff',
-  edge: '#30363d',
-  triangle: '#1a3a5c',
-  h0: '#58a6ff',
-  h1: '#f0883e',
-  diagonal: '#484f58',
-  text: '#8b949e',
-};
-
-function presets(name) {
-  switch (name) {
-    case 'circle': return circlePoints(12, 1.0);
-    case 'circle20': return circlePoints(20, 1.0);
-    case 'square': return [[0,0],[1,0],[1,1],[0,1]];
-    case 'random': return Array.from({ length: 30 }, () => [Math.random() * 4 - 2, Math.random() * 4 - 2]);
-    case 'twocircles': {
-      const c1 = circlePoints(8, 0.6).map(([x,y]) => [x-1.2, y]);
-      const c2 = circlePoints(8, 0.6).map(([x,y]) => [x+1.2, y]);
-      return [...c1, ...c2];
-    }
-    default: return [];
-  }
-}
-
-function circlePoints(n, r) {
-  return Array.from({ length: n }, (_, i) => {
-    const a = (2 * Math.PI * i) / n;
-    return [r * Math.cos(a), r * Math.sin(a)];
-  });
-}
-
-function toFlat(pts) {
-  const f = new Float64Array(pts.length * 2);
-  for (let i = 0; i < pts.length; i++) { f[i*2] = pts[i][0]; f[i*2+1] = pts[i][1]; }
-  return f;
-}
-
-function scalePoints(pts) {
-  if (pts.length === 0) return pts;
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const [x,y] of pts) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const s = Math.max(maxX - minX, maxY - minY, 0.001);
-  return pts.map(([x,y]) => [(x - cx) / s * 2, (y - cy) / s * 2]);
-}
-
-// ── Drawing ──
-function drawPointCloud(pts) {
-  const w = ptCanvas.width, h = ptCanvas.height;
-  pCtx.fillStyle = COLORS.bg;
-  pCtx.fillRect(0, 0, w, h);
-
-  const px = (x) => (x / 3 + 0.5) * w;
-  const py = (y) => (0.5 - y / 3) * h;
-
-  // Edges
-  const eps = parseFloat(thresholdSlider.value);
-  pCtx.strokeStyle = COLORS.edge;
-  pCtx.lineWidth = 1;
-  for (let i = 0; i < pts.length; i++) {
-    for (let j = i + 1; j < pts.length; j++) {
-      const d = Math.hypot(pts[i][0]-pts[j][0], pts[i][1]-pts[j][1]);
-      if (d <= eps) {
-        pCtx.beginPath();
-        pCtx.moveTo(px(pts[i][0]), py(pts[i][1]));
-        pCtx.lineTo(px(pts[j][0]), py(pts[j][1]));
-        pCtx.stroke();
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TopoJS — Interactive Persistent Homology</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
-    }
-  }
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0d1117;
+        color: #c9d1d9;
+        padding: 20px;
+      }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.5em;
+        margin-bottom: 8px;
+        color: #58a6ff;
+      }
+      h2 {
+        font-size: 1em;
+        color: #8b949e;
+        margin-bottom: 12px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .card h3 {
+        font-size: 0.85em;
+        color: #8b949e;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .toolbar label {
+        font-size: 0.85em;
+        color: #8b949e;
+      }
+      .toolbar input[type="range"] {
+        width: 160px;
+        accent-color: #58a6ff;
+      }
+      .toolbar select,
+      .toolbar button {
+        background: #21262d;
+        color: #c9d1d9;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 0.85em;
+        cursor: pointer;
+      }
+      .toolbar button:hover {
+        background: #30363d;
+      }
+      canvas {
+        width: 100%;
+        height: 320px;
+        display: block;
+        background: #0d1117;
+        border-radius: 4px;
+      }
+      .stats {
+        display: flex;
+        gap: 24px;
+        font-size: 0.9em;
+      }
+      .stats span {
+        color: #8b949e;
+      }
+      .stats strong {
+        color: #c9d1d9;
+      }
+      .info {
+        margin-top: 12px;
+        font-size: 0.8em;
+        color: #484f58;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>TopoJS</h1>
+      <h2>Interactive Persistent Homology in Pure JavaScript</h2>
 
-  // Points
-  for (const [x,y] of pts) {
-    pCtx.beginPath();
-    pCtx.arc(px(x), py(y), 4, 0, Math.PI * 2);
-    pCtx.fillStyle = COLORS.point;
-    pCtx.fill();
-    pCtx.strokeStyle = '#fff';
-    pCtx.lineWidth = 1;
-    pCtx.stroke();
-  }
-}
+      <div class="toolbar">
+        <label>Preset:</label>
+        <select id="preset">
+          <option value="circle">Circle (12 pts)</option>
+          <option value="circle20">Circle (20 pts)</option>
+          <option value="square">Square</option>
+          <option value="random">Random (30 pts)</option>
+          <option value="twocircles">Two Circles</option>
+        </select>
+        <label>ε (max distance):</label>
+        <input type="range" id="threshold" min="0.1" max="3.0" step="0.01" value="0.8" />
+        <span id="thresholdVal">0.80</span>
+        <button id="runBtn">▶ Compute</button>
+        <button id="clearBtn">✕ Clear</button>
+      </div>
 
-function drawDiagram(pairs, maxVal) {
-  const w = diagCanvas.width, h = diagCanvas.height;
-  dCtx.fillStyle = COLORS.bg;
-  dCtx.fillRect(0, 0, w, h);
+      <div class="grid">
+        <div class="card">
+          <h3>Point Cloud</h3>
+          <canvas id="pointCanvas" width="600" height="320"></canvas>
+          <div class="stats">
+            <span>Points: <strong id="ptCount">0</strong></span>
+            <span>Edges: <strong id="edgeCount">0</strong></span>
+            <span>Triangles: <strong id="triCount">0</strong></span>
+          </div>
+        </div>
 
-  const pad = 40;
-  const plotW = w - pad * 2;
-  const plotH = h - pad * 2;
-  const m = maxVal || 1;
+        <div class="card">
+          <h3>Persistence Diagram</h3>
+          <canvas id="diagramCanvas" width="600" height="320"></canvas>
+          <div class="stats">
+            <span>β₀ = <strong id="b0">—</strong></span>
+            <span>β₁ = <strong id="b1">—</strong></span>
+            <span>H0 pairs: <strong id="h0count">0</strong></span>
+            <span>H1 pairs: <strong id="h1count">0</strong></span>
+          </div>
+        </div>
 
-  const sx = (v) => pad + (v / m) * plotW;
-  const sy = (v) => pad + plotH - (v / m) * plotH;
+        <div class="card" style="grid-column: 1 / -1">
+          <h3>Persistence Barcode</h3>
+          <canvas id="barcodeCanvas" width="1200" height="160"></canvas>
+        </div>
+      </div>
 
-  // Diagonal
-  dCtx.strokeStyle = COLORS.diagonal;
-  dCtx.lineWidth = 1;
-  dCtx.setLineDash([4, 4]);
-  dCtx.beginPath();
-  dCtx.moveTo(sx(0), sy(0));
-  dCtx.lineTo(sx(m), sy(m));
-  dCtx.stroke();
-  dCtx.setLineDash([]);
+      <div class="info">
+        Click on the point cloud canvas to add points. Drag to move. Computational time:
+        <span id="computeTime">—</span>
+      </div>
+    </div>
 
-  // Pairs
-  for (const p of pairs) {
-    if (p.death < 0) continue;
-    const x = sx(p.birth), y = sy(p.death);
-    dCtx.beginPath();
-    dCtx.arc(x, y, 5, 0, Math.PI * 2);
-    dCtx.fillStyle = p.dim === 0 ? COLORS.h0 : COLORS.h1;
-    dCtx.fill();
-  }
+    <script type="module">
+      import { computePersistentHomology } from "./topojs-bundle.mjs";
 
-  // Axes
-  dCtx.strokeStyle = COLORS.text;
-  dCtx.lineWidth = 1;
-  dCtx.beginPath();
-  dCtx.moveTo(pad, pad); dCtx.lineTo(pad, pad + plotH); dCtx.lineTo(pad + plotW, pad + plotH);
-  dCtx.stroke();
-  dCtx.fillStyle = COLORS.text;
-  dCtx.font = '12px system-ui';
-  dCtx.fillText('Birth', pad + plotW / 2 - 16, h - 8);
-  dCtx.save(); dCtx.translate(12, pad + plotH / 2); dCtx.rotate(-Math.PI / 2); dCtx.fillText('Death', -20, 0); dCtx.restore();
-  dCtx.fillText(m.toFixed(1), pad + plotW - 20, pad + plotH + 16);
-  dCtx.fillText(m.toFixed(1), pad - 30, pad + 4);
-}
+      // ── DOM refs ──
+      const ptCanvas = document.getElementById("pointCanvas");
+      const diagCanvas = document.getElementById("diagramCanvas");
+      const barCanvas = document.getElementById("barcodeCanvas");
+      const thresholdSlider = document.getElementById("threshold");
+      const thresholdVal = document.getElementById("thresholdVal");
+      const presetSelect = document.getElementById("preset");
+      const runBtn = document.getElementById("runBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const ptCount = document.getElementById("ptCount");
+      const edgeCount = document.getElementById("edgeCount");
+      const triCount = document.getElementById("triCount");
+      const b0 = document.getElementById("b0");
+      const b1 = document.getElementById("b1");
+      const h0count = document.getElementById("h0count");
+      const h1count = document.getElementById("h1count");
+      const computeTime = document.getElementById("computeTime");
 
-function drawBarcode(pairs) {
-  const w = barCanvas.width, h = barCanvas.height;
-  bCtx.fillStyle = COLORS.bg;
-  bCtx.fillRect(0, 0, w, h);
+      const pCtx = ptCanvas.getContext("2d");
+      const dCtx = diagCanvas.getContext("2d");
+      const bCtx = barCanvas.getContext("2d");
 
-  const filtered = pairs.filter(p => p.death >= 0).sort((a, b) => b.death - b.birth - (a.death - a.birth));
-  if (filtered.length === 0) return;
+      // ── State ──
+      let points = [];
 
-  const pad = 60;
-  const plotW = w - pad * 2;
-  const plotH = h - 20;
+      const COLORS = {
+        bg: "#0d1117",
+        grid: "#21262d",
+        point: "#58a6ff",
+        edge: "#30363d",
+        triangle: "#1a3a5c",
+        h0: "#58a6ff",
+        h1: "#f0883e",
+        diagonal: "#484f58",
+        text: "#8b949e",
+      };
 
-  let maxX = 1;
-  for (const p of filtered) { if (p.death > maxX) maxX = p.death; }
+      function presets(name) {
+        switch (name) {
+          case "circle":
+            return circlePoints(12, 1.0);
+          case "circle20":
+            return circlePoints(20, 1.0);
+          case "square":
+            return [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+            ];
+          case "random":
+            return Array.from({ length: 30 }, () => [Math.random() * 4 - 2, Math.random() * 4 - 2]);
+          case "twocircles": {
+            const c1 = circlePoints(8, 0.6).map(([x, y]) => [x - 1.2, y]);
+            const c2 = circlePoints(8, 0.6).map(([x, y]) => [x + 1.2, y]);
+            return [...c1, ...c2];
+          }
+          default:
+            return [];
+        }
+      }
 
-  const barH = Math.min(10, plotH / filtered.length);
-  const gap = Math.min(4, (plotH - barH * filtered.length) / Math.max(filtered.length - 1, 1));
+      function circlePoints(n, r) {
+        return Array.from({ length: n }, (_, i) => {
+          const a = (2 * Math.PI * i) / n;
+          return [r * Math.cos(a), r * Math.sin(a)];
+        });
+      }
 
-  for (let i = 0; i < filtered.length; i++) {
-    const p = filtered[i];
-    const y = 10 + i * (barH + gap);
-    const x0 = pad;
-    const x1 = pad + (p.death / maxX) * plotW;
-    bCtx.fillStyle = p.dim === 0 ? COLORS.h0 : COLORS.h1;
-    bCtx.fillRect(x0 + (p.birth / maxX) * plotW, y, (p.death - p.birth) / maxX * plotW, barH);
-  }
+      function toFlat(pts) {
+        const f = new Float64Array(pts.length * 2);
+        for (let i = 0; i < pts.length; i++) {
+          f[i * 2] = pts[i][0];
+          f[i * 2 + 1] = pts[i][1];
+        }
+        return f;
+      }
 
-  bCtx.fillStyle = COLORS.text;
-  bCtx.font = '12px system-ui';
-  bCtx.fillText('0', pad - 10, h - 5);
-  bCtx.fillText(maxX.toFixed(1), pad + plotW - 20, h - 5);
-  bCtx.fillText('Filtration (ε)', pad + plotW / 2 - 30, h - 5);
-}
+      function scalePoints(pts) {
+        if (pts.length === 0) return pts;
+        let minX = Infinity,
+          maxX = -Infinity,
+          minY = Infinity,
+          maxY = -Infinity;
+        for (const [x, y] of pts) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+        const cx = (minX + maxX) / 2,
+          cy = (minY + maxY) / 2;
+        const s = Math.max(maxX - minX, maxY - minY, 0.001);
+        return pts.map(([x, y]) => [((x - cx) / s) * 2, ((y - cy) / s) * 2]);
+      }
 
-// ── Compute ──
-function compute() {
-  const eps = parseFloat(thresholdSlider.value);
-  const flat = toFlat(scalePoints(points));
+      // ── Drawing ──
+      function drawPointCloud(pts) {
+        const w = ptCanvas.width,
+          h = ptCanvas.height;
+        pCtx.fillStyle = COLORS.bg;
+        pCtx.fillRect(0, 0, w, h);
 
-  const t0 = performance.now();
-  const res = computePersistentHomology(flat, 2, eps);
-  const dt = performance.now() - t0;
+        const px = (x) => (x / 3 + 0.5) * w;
+        const py = (y) => (0.5 - y / 3) * h;
 
-  computeTime.textContent = `${dt.toFixed(1)}ms`;
-  ptCount.textContent = points.length;
-  edgeCount.textContent = res.complex.numEdges;
-  triCount.textContent = res.complex.numTriangles;
+        // Edges
+        const eps = parseFloat(thresholdSlider.value);
+        pCtx.strokeStyle = COLORS.edge;
+        pCtx.lineWidth = 1;
+        for (let i = 0; i < pts.length; i++) {
+          for (let j = i + 1; j < pts.length; j++) {
+            const d = Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]);
+            if (d <= eps) {
+              pCtx.beginPath();
+              pCtx.moveTo(px(pts[i][0]), py(pts[i][1]));
+              pCtx.lineTo(px(pts[j][0]), py(pts[j][1]));
+              pCtx.stroke();
+            }
+          }
+        }
 
-  const h0p = res.pairs.filter(p => p.dim === 0);
-  const h1p = res.pairs.filter(p => p.dim === 1 && p.death >= 0);
-  const h1e = res.pairs.filter(p => p.dim === 1 && p.death < 0);
-  h0count.textContent = h0p.length;
-  h1count.textContent = h1p.length + h1e.length;
-  b0.textContent = points.length - h0p.length;
-  b1.textContent = h1p.length + h1e.length;
+        // Points
+        for (const [x, y] of pts) {
+          pCtx.beginPath();
+          pCtx.arc(px(x), py(y), 4, 0, Math.PI * 2);
+          pCtx.fillStyle = COLORS.point;
+          pCtx.fill();
+          pCtx.strokeStyle = "#fff";
+          pCtx.lineWidth = 1;
+          pCtx.stroke();
+        }
+      }
 
-  drawPointCloud(points);
-  const maxV = Math.max(1, ...res.pairs.filter(p => p.death > 0).map(p => p.death));
-  drawDiagram(res.pairs, maxV);
-  drawBarcode(res.pairs);
-}
+      function drawDiagram(pairs, maxVal) {
+        const w = diagCanvas.width,
+          h = diagCanvas.height;
+        dCtx.fillStyle = COLORS.bg;
+        dCtx.fillRect(0, 0, w, h);
 
-// ── Events ──
-thresholdSlider.addEventListener('input', () => {
-  thresholdVal.textContent = parseFloat(thresholdSlider.value).toFixed(2);
-});
+        const pad = 40;
+        const plotW = w - pad * 2;
+        const plotH = h - pad * 2;
+        const m = maxVal || 1;
 
-runBtn.addEventListener('click', compute);
+        const sx = (v) => pad + (v / m) * plotW;
+        const sy = (v) => pad + plotH - (v / m) * plotH;
 
-clearBtn.addEventListener('click', () => {
-  points = [];
-  compute();
-});
+        // Diagonal
+        dCtx.strokeStyle = COLORS.diagonal;
+        dCtx.lineWidth = 1;
+        dCtx.setLineDash([4, 4]);
+        dCtx.beginPath();
+        dCtx.moveTo(sx(0), sy(0));
+        dCtx.lineTo(sx(m), sy(m));
+        dCtx.stroke();
+        dCtx.setLineDash([]);
 
-presetSelect.addEventListener('change', () => {
-  points = presets(presetSelect.value);
-  compute();
-});
+        // Pairs
+        for (const p of pairs) {
+          if (p.death < 0) continue;
+          const x = sx(p.birth),
+            y = sy(p.death);
+          dCtx.beginPath();
+          dCtx.arc(x, y, 5, 0, Math.PI * 2);
+          dCtx.fillStyle = p.dim === 0 ? COLORS.h0 : COLORS.h1;
+          dCtx.fill();
+        }
 
-ptCanvas.addEventListener('click', (e) => {
-  const rect = ptCanvas.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
-  const y = 3 - ((e.clientY - rect.top) / rect.height) * 6;
-  points.push([x, y]);
-  compute();
-});
+        // Axes
+        dCtx.strokeStyle = COLORS.text;
+        dCtx.lineWidth = 1;
+        dCtx.beginPath();
+        dCtx.moveTo(pad, pad);
+        dCtx.lineTo(pad, pad + plotH);
+        dCtx.lineTo(pad + plotW, pad + plotH);
+        dCtx.stroke();
+        dCtx.fillStyle = COLORS.text;
+        dCtx.font = "12px system-ui";
+        dCtx.fillText("Birth", pad + plotW / 2 - 16, h - 8);
+        dCtx.save();
+        dCtx.translate(12, pad + plotH / 2);
+        dCtx.rotate(-Math.PI / 2);
+        dCtx.fillText("Death", -20, 0);
+        dCtx.restore();
+        dCtx.fillText(m.toFixed(1), pad + plotW - 20, pad + plotH + 16);
+        dCtx.fillText(m.toFixed(1), pad - 30, pad + 4);
+      }
 
-// ── Init ──
-points = presets('circle');
-compute();
-</script>
-</body>
+      function drawBarcode(pairs) {
+        const w = barCanvas.width,
+          h = barCanvas.height;
+        bCtx.fillStyle = COLORS.bg;
+        bCtx.fillRect(0, 0, w, h);
+
+        const filtered = pairs
+          .filter((p) => p.death >= 0)
+          .sort((a, b) => b.death - b.birth - (a.death - a.birth));
+        if (filtered.length === 0) return;
+
+        const pad = 60;
+        const plotW = w - pad * 2;
+        const plotH = h - 20;
+
+        let maxX = 1;
+        for (const p of filtered) {
+          if (p.death > maxX) maxX = p.death;
+        }
+
+        const barH = Math.min(10, plotH / filtered.length);
+        const gap = Math.min(
+          4,
+          (plotH - barH * filtered.length) / Math.max(filtered.length - 1, 1),
+        );
+
+        for (let i = 0; i < filtered.length; i++) {
+          const p = filtered[i];
+          const y = 10 + i * (barH + gap);
+          const x0 = pad;
+          const x1 = pad + (p.death / maxX) * plotW;
+          bCtx.fillStyle = p.dim === 0 ? COLORS.h0 : COLORS.h1;
+          bCtx.fillRect(
+            x0 + (p.birth / maxX) * plotW,
+            y,
+            ((p.death - p.birth) / maxX) * plotW,
+            barH,
+          );
+        }
+
+        bCtx.fillStyle = COLORS.text;
+        bCtx.font = "12px system-ui";
+        bCtx.fillText("0", pad - 10, h - 5);
+        bCtx.fillText(maxX.toFixed(1), pad + plotW - 20, h - 5);
+        bCtx.fillText("Filtration (ε)", pad + plotW / 2 - 30, h - 5);
+      }
+
+      // ── Compute ──
+      function compute() {
+        const eps = parseFloat(thresholdSlider.value);
+        const flat = toFlat(scalePoints(points));
+
+        const t0 = performance.now();
+        const res = computePersistentHomology(flat, 2, eps);
+        const dt = performance.now() - t0;
+
+        computeTime.textContent = `${dt.toFixed(1)}ms`;
+        ptCount.textContent = points.length;
+        edgeCount.textContent = res.complex.numEdges;
+        triCount.textContent = res.complex.numTriangles;
+
+        const h0p = res.pairs.filter((p) => p.dim === 0);
+        const h1p = res.pairs.filter((p) => p.dim === 1 && p.death >= 0);
+        const h1e = res.pairs.filter((p) => p.dim === 1 && p.death < 0);
+        h0count.textContent = h0p.length;
+        h1count.textContent = h1p.length + h1e.length;
+        b0.textContent = points.length - h0p.length;
+        b1.textContent = h1p.length + h1e.length;
+
+        drawPointCloud(points);
+        const maxV = Math.max(1, ...res.pairs.filter((p) => p.death > 0).map((p) => p.death));
+        drawDiagram(res.pairs, maxV);
+        drawBarcode(res.pairs);
+      }
+
+      // ── Events ──
+      thresholdSlider.addEventListener("input", () => {
+        thresholdVal.textContent = parseFloat(thresholdSlider.value).toFixed(2);
+      });
+
+      runBtn.addEventListener("click", compute);
+
+      clearBtn.addEventListener("click", () => {
+        points = [];
+        compute();
+      });
+
+      presetSelect.addEventListener("change", () => {
+        points = presets(presetSelect.value);
+        compute();
+      });
+
+      ptCanvas.addEventListener("click", (e) => {
+        const rect = ptCanvas.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 6 - 3;
+        const y = 3 - ((e.clientY - rect.top) / rect.height) * 6;
+        points.push([x, y]);
+        compute();
+      });
+
+      // ── Init ──
+      points = presets("circle");
+      compute();
+    </script>
+  </body>
 </html>

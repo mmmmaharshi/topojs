@@ -1,4 +1,4 @@
-import type { Points } from './distance.ts';
+import type { Points } from "./distance.ts";
 
 /**
  * Uniform spatial grid ("bucket grid") for fixed-radius near-neighbor
@@ -42,7 +42,7 @@ import type { Points } from './distance.ts';
 export class SpatialGrid {
   private readonly cellSize: number;
   private readonly dims: number;
-  private readonly buckets: Map<bigint, number[]> = new Map();
+  private readonly buckets = new Map<bigint, number[]>();
 
   // Cell coordinates are biased by this constant, then packed 32 bits per
   // dimension into a single BigInt key (key = biased[0] | biased[1]<<32 |
@@ -67,7 +67,7 @@ export class SpatialGrid {
 
   constructor(points: Points, dims: number, n: number, cellSize: number) {
     if (!(cellSize > 0) || !Number.isFinite(cellSize)) {
-      throw new Error('SpatialGrid: cellSize must be a finite positive number');
+      throw new Error("SpatialGrid: cellSize must be a finite positive number");
     }
     this.cellSize = cellSize;
     this.dims = dims;
@@ -111,12 +111,14 @@ export class SpatialGrid {
    */
   candidatesAfter(points: Points, i: number): number[] {
     const base = i * this.dims;
-    const centerCoords = new Array<number>(this.dims);
-    for (let d = 0; d < this.dims; d++) centerCoords[d] = this.cellCoord(points[base + d]!);
+    const centerCoords = Array.from<number>({ length: this.dims });
+    for (let d = 0; d < this.dims; d++) {
+      centerCoords[d] = this.cellCoord(points[base + d]!);
+    }
 
     const result: number[] = [];
     const offsets = [-1, 0, 1];
-    const totalNeighborCells = Math.pow(3, this.dims);
+    const totalNeighborCells = 3 ** this.dims;
     for (let combo = 0; combo < totalNeighborCells; combo++) {
       let key = 0n;
       let rem = combo;
@@ -127,9 +129,13 @@ export class SpatialGrid {
         key = (key << 32n) | BigInt(biased);
       }
       const bucket = this.buckets.get(key);
-      if (!bucket) continue;
+      if (!bucket) {
+        continue;
+      }
       for (const j of bucket) {
-        if (j > i) result.push(j);
+        if (j > i) {
+          result.push(j);
+        }
       }
     }
     result.sort((a, b) => a - b);

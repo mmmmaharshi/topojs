@@ -11,3 +11,6 @@ bench/_tmp_*
 # physically deleted (sandbox restriction on unlink), so they're emptied
 # and ignored here instead of showing up as untracked clutter.
 docs/
+.agents/
+github-research-output/
+oxlint.config.ts

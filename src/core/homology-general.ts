@@ -1,9 +1,9 @@
-import type { Points } from './distance.ts';
-import type { PersistencePair } from './h0.ts';
-import { computeH0Phase } from './h0.ts';
-import { buildGeneralRipsComplex } from './complex-general.ts';
-import type { GeneralSimplexEntry } from './complex-general.ts';
-import { DenseWorkingCol } from './reduction.ts';
+import type { Points } from "./distance.ts";
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import { buildGeneralRipsComplex } from "./complex-general.ts";
+import type { GeneralSimplexEntry } from "./complex-general.ts";
+import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of {@link computePersistentHomologyGeneral}. */
 export interface HomologyResultGeneral {
@@ -70,7 +70,9 @@ export function computePersistentHomologyGeneral(
   maxDist: number,
   maxHomologyDim: number,
 ): HomologyResultGeneral {
-  if (maxHomologyDim < 0) throw new RangeError(`maxHomologyDim must be >= 0, got ${maxHomologyDim}`);
+  if (maxHomologyDim < 0) {
+    throw new RangeError(`maxHomologyDim must be >= 0, got ${maxHomologyDim}`);
+  }
   const n = points.length / dims;
 
   const maxSimplexDim = Math.max(1, maxHomologyDim + 1);
@@ -81,16 +83,22 @@ export function computePersistentHomologyGeneral(
   const allPairs: PersistencePair[] = [...h0Pairs];
 
   const simplexCounts: number[] = [n, edgeLevel.length];
-  for (const lvl of higherLevels) simplexCounts.push(lvl.length);
+  for (const lvl of higherLevels) {
+    simplexCounts.push(lvl.length);
+  }
 
   // level accessors: dimension 1 = edgeLevel, dimension d>=2 = higherLevels[d-2].
   function levelLength(dim: number): number {
-    if (dim === 1) return edgeLevel.length;
+    if (dim === 1) {
+      return edgeLevel.length;
+    }
     const idx = dim - 2;
     return idx >= 0 && idx < higherLevels.length ? higherLevels[idx]!.length : 0;
   }
   function levelVal(dim: number, i: number): number {
-    if (dim === 1) return edgeLevel[i]!.val;
+    if (dim === 1) {
+      return edgeLevel[i]!.val;
+    }
     return higherLevels[dim - 2]![i]!.val;
   }
   function levelColumns(dim: number): GeneralSimplexEntry[] {
@@ -106,7 +114,9 @@ export function computePersistentHomologyGeneral(
     const columns = levelColumns(j + 1);
 
     const pivots = new Int32Array(pivotLen).fill(-1);
-    const reduced: (Int32Array | null)[] = new Array(columns.length).fill(null);
+    const reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
+      length: columns.length,
+    }).fill(null);
     const nextNullspace = new Uint8Array(columns.length);
     const w = new DenseWorkingCol(pivotLen);
 
@@ -131,7 +141,9 @@ export function computePersistentHomologyGeneral(
           break;
         }
         const prevCol = reduced[prev];
-        if (prevCol === null || prevCol === undefined) break;
+        if (prevCol === null || prevCol === undefined) {
+          break;
+        }
         w.xorSparse(prevCol);
       }
     }

@@ -1,4 +1,4 @@
-import type { PersistencePair } from './h0.ts';
+import type { PersistencePair } from "./h0.ts";
 
 /**
  * Compute the L∞ bottleneck distance between two persistence diagrams.
@@ -111,11 +111,7 @@ function costToDiagonal(p: [number, number]): number {
  * why it (unlike the previous single-sided version) is symmetric and
  * correct. D1/D2 order does not affect the result (verified in tests).
  */
-function matchesExist(
-  D1: [number, number][],
-  D2: [number, number][],
-  eps: number,
-): boolean {
+function matchesExist(D1: [number, number][], D2: [number, number][], eps: number): boolean {
   const n = D1.length;
   const m = D2.length;
   const leftSize = n + m; // D1 (real) + virtualLeft (diagonal capacity for D2)
@@ -125,30 +121,40 @@ function matchesExist(
 
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < m; j++) {
-      if (cost(D1[i]!, D2[j]!) <= eps) adj[i]!.push(j);
+      if (cost(D1[i]!, D2[j]!) <= eps) {
+        adj[i]!.push(j);
+      }
     }
     if (costToDiagonal(D1[i]!) <= eps) {
       // D1[i] can use ANY of the n virtualRight slots -- they're
       // interchangeable (all represent "the diagonal", which has no
       // capacity limit in reality; n copies is just enough to correctly
       // cap the perfect-matching accounting, see the docstring above).
-      for (let vr = 0; vr < n; vr++) adj[i]!.push(m + vr);
+      for (let vr = 0; vr < n; vr++) {
+        adj[i]!.push(m + vr);
+      }
     }
   }
   for (let vl = 0; vl < m; vl++) {
     const leftIdx = n + vl;
     for (let j = 0; j < m; j++) {
-      if (costToDiagonal(D2[j]!) <= eps) adj[leftIdx]!.push(j);
+      if (costToDiagonal(D2[j]!) <= eps) {
+        adj[leftIdx]!.push(j);
+      }
     }
     // Diagonal-to-diagonal is always trivially satisfiable.
-    for (let vr = 0; vr < n; vr++) adj[leftIdx]!.push(m + vr);
+    for (let vr = 0; vr < n; vr++) {
+      adj[leftIdx]!.push(m + vr);
+    }
   }
 
   const matchRight = new Int32Array(rightSize).fill(-1);
 
   function tryAugment(u: number, seen: Uint8Array): boolean {
     for (const v of adj[u]!) {
-      if (seen[v]) continue;
+      if (seen[v]) {
+        continue;
+      }
       seen[v] = 1;
       if (matchRight[v]! < 0 || tryAugment(matchRight[v]!, seen)) {
         matchRight[v] = u;
@@ -160,7 +166,9 @@ function matchesExist(
 
   for (let u = 0; u < leftSize; u++) {
     const seen = new Uint8Array(rightSize);
-    if (!tryAugment(u, seen)) return false; // early exit: perfect matching impossible
+    if (!tryAugment(u, seen)) {
+      return false;
+    } // early exit: perfect matching impossible
   }
   return true;
 }
@@ -172,13 +180,19 @@ function finiteBottleneck(
   maxEps: number,
   tol: number,
 ): number {
-  if (d1.length === 0 && d2.length === 0) return 0;
+  if (d1.length === 0 && d2.length === 0) {
+    return 0;
+  }
 
   let lo = 0;
   let hi = maxEps;
 
-  if (!matchesExist(d1, d2, hi)) return Infinity;
-  if (matchesExist(d1, d2, lo)) return 0;
+  if (!matchesExist(d1, d2, hi)) {
+    return Infinity;
+  }
+  if (matchesExist(d1, d2, lo)) {
+    return 0;
+  }
 
   while (hi - lo > tol) {
     const mid = (lo + hi) / 2;
@@ -198,13 +212,17 @@ function finiteBottleneck(
  * sides, see the top docstring). Caller guarantees essA.length === essB.length.
  */
 function essentialBottleneck(essA: number[], essB: number[]): number {
-  if (essA.length === 0) return 0;
-  const a = [...essA].sort((x, y) => x - y);
-  const b = [...essB].sort((x, y) => x - y);
+  if (essA.length === 0) {
+    return 0;
+  }
+  const a = [...essA].toSorted((x, y) => x - y);
+  const b = [...essB].toSorted((x, y) => x - y);
   let maxDiff = 0;
   for (let i = 0; i < a.length; i++) {
     const diff = Math.abs(a[i]! - b[i]!);
-    if (diff > maxDiff) maxDiff = diff;
+    if (diff > maxDiff) {
+      maxDiff = diff;
+    }
   }
   return maxDiff;
 }
@@ -223,27 +241,25 @@ function essentialBottleneck(essA: number[], essB: number[]): number {
 export function bottleneckDistance(
   pairsA: PersistencePair[],
   pairsB: PersistencePair[],
-  dim: number = 0,
-  maxEps: number = 1e6,
-  tol: number = 1e-6,
+  dim = 0,
+  maxEps = 1e6,
+  tol = 1e-6,
 ): number {
   const finiteA = pairsA
-    .filter(p => p.dim === dim && p.death >= 0)
-    .map(p => [p.birth, p.death] as [number, number]);
+    .filter((p) => p.dim === dim && p.death >= 0)
+    .map((p) => [p.birth, p.death] as [number, number]);
   const finiteB = pairsB
-    .filter(p => p.dim === dim && p.death >= 0)
-    .map(p => [p.birth, p.death] as [number, number]);
-  const essentialA = pairsA
-    .filter(p => p.dim === dim && p.death === -1)
-    .map(p => p.birth);
-  const essentialB = pairsB
-    .filter(p => p.dim === dim && p.death === -1)
-    .map(p => p.birth);
+    .filter((p) => p.dim === dim && p.death >= 0)
+    .map((p) => [p.birth, p.death] as [number, number]);
+  const essentialA = pairsA.filter((p) => p.dim === dim && p.death === -1).map((p) => p.birth);
+  const essentialB = pairsB.filter((p) => p.dim === dim && p.death === -1).map((p) => p.birth);
 
   // Different numbers of essential classes: no finite-cost matching can
   // exist (excess essential points have no legal partner -- they can't
   // reach the diagonal, and there's no essential point left to pair with).
-  if (essentialA.length !== essentialB.length) return Infinity;
+  if (essentialA.length !== essentialB.length) {
+    return Infinity;
+  }
 
   const essentialCost = essentialBottleneck(essentialA, essentialB);
   const finiteCost = finiteBottleneck(finiteA, finiteB, maxEps, tol);

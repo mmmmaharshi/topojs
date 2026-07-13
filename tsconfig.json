@@ -12,5 +12,6 @@
     "outDir": "dist",
     "rootDir": ".",
     "skipLibCheck": true
-  }
+  },
+  "exclude": ["oxlint.config.ts"]
 }

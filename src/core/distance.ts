@@ -31,7 +31,7 @@ export function computePairwiseDistances(points: Points, dims: number, n: number
   for (let i = 0; i < n; i++) {
     rowStart[i] = idx;
     for (let j = i + 1; j < n; j++) {
-      let sq = 0.0;
+      let sq = 0;
       const baseI = i * dims;
       const baseJ = j * dims;
       for (let d = 0; d < dims; d++) {
@@ -46,7 +46,9 @@ export function computePairwiseDistances(points: Points, dims: number, n: number
 
 /** O(1) lookup of the distance between points i and j from a matrix returned by {@link computePairwiseDistances}, without recomputing it. Returns 0 when i === j. */
 export function lookupDist(dist: DistanceMatrix, i: number, j: number): number {
-  if (i === j) return 0.0;
+  if (i === j) {
+    return 0;
+  }
   const u = i < j ? i : j;
   const v = i < j ? j : i;
   return dist.data[dist.rowStart[u]! + (v - u - 1)]!;

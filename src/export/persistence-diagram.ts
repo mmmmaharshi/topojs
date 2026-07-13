@@ -1,4 +1,4 @@
-import type { PersistencePair } from '../core/h0.ts';
+import type { PersistencePair } from "../core/h0.ts";
 
 /**
  * Persistence pairs grouped by dimension and finiteness.
@@ -48,47 +48,51 @@ export function splitByDimension(pairs: PersistencePair[]): PerDimensionPairs {
     if (p.dim === 0) {
       h0.push(p);
     } else if (p.dim === 1) {
-      if (p.death < 0) h1essential.push(p);
-      else h1finite.push(p);
+      if (p.death < 0) {
+        h1essential.push(p);
+      } else {
+        h1finite.push(p);
+      }
     } else if (p.dim === 2) {
-      if (p.death < 0) h2essential.push(p);
-      else h2finite.push(p);
+      if (p.death < 0) {
+        h2essential.push(p);
+      } else {
+        h2finite.push(p);
+      }
     } else {
       higher.push(p);
     }
   }
 
-  return { h0, h1finite, h1essential, h2finite, h2essential, higher };
+  return { h0, h1essential, h1finite, h2essential, h2finite, higher };
 }
 
 /** Serialize persistence pairs to Gudhi's plain-text format: one `dim birth death` line per pair (`death` is the literal string `inf` for essential pairs), preceded by a `#`-commented header. Dimension-agnostic -- every pair is included regardless of dim. */
 export function toGudhi(pairs: PersistencePair[]): string {
-  const lines: string[] = [];
-  lines.push('# persistence pairs: dim birth death');
-  lines.push(`# total pairs: ${pairs.length}`);
+  const lines: string[] = [
+    "# persistence pairs: dim birth death",
+    `# total pairs: ${pairs.length}`,
+  ];
   for (const p of pairs) {
-    const death = p.death < 0 ? 'inf' : p.death.toFixed(6);
+    const death = p.death < 0 ? "inf" : p.death.toFixed(6);
     lines.push(`${p.dim} ${p.birth.toFixed(6)} ${death}`);
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /** Serialize persistence pairs to JSON via `JSON.stringify` (2-space indent when `pretty` is true, compact otherwise). Every field of every {@link PersistencePair} is preserved as-is, including `death < 0` for essential pairs. */
-export function toJSON(
-  pairs: PersistencePair[],
-  pretty: boolean = false,
-): string {
+export function toJSON(pairs: PersistencePair[], pretty = false): string {
   const space = pretty ? 2 : 0;
   return JSON.stringify(pairs, null, space);
 }
 
 /** Serialize persistence pairs to CSV with a `dim,birth,death` header. Essential pairs (`death < 0`) are written with `death` normalized to `-1`, regardless of the original negative sentinel value. Dimension-agnostic -- every pair is included regardless of dim. */
 export function toCSV(pairs: PersistencePair[]): string {
-  const lines: string[] = ['dim,birth,death'];
+  const lines: string[] = ["dim,birth,death"];
   for (const p of pairs) {
     lines.push(`${p.dim},${p.birth},${p.death < 0 ? -1 : p.death}`);
   }
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -100,12 +104,10 @@ export function toCSV(pairs: PersistencePair[]): string {
  * preserve everything). Use toCSV or toJSON instead if the input may
  * contain dim >= 3 pairs and losing them is not acceptable.
  */
-export function toDiagramCSV(
-  pairs: PersistencePair[],
-): string {
+export function toDiagramCSV(pairs: PersistencePair[]): string {
   const grouped = splitByDimension(pairs);
   const lines: string[] = [
-    'h0_birth,h0_death,h1finite_birth,h1finite_death,h1essential_birth,h2finite_birth,h2finite_death,h2essential_birth',
+    "h0_birth,h0_death,h1finite_birth,h1finite_death,h1essential_birth,h2finite_birth,h2finite_death,h2essential_birth",
   ];
 
   const maxLen = Math.max(
@@ -117,18 +119,18 @@ export function toDiagramCSV(
   );
 
   for (let i = 0; i < maxLen; i++) {
-    const h0b = grouped.h0[i]?.birth ?? '';
-    const h0d = grouped.h0[i]?.death ?? '';
-    const h1fb = grouped.h1finite[i]?.birth ?? '';
-    const h1fd = grouped.h1finite[i]?.death ?? '';
-    const h1eb = grouped.h1essential[i]?.birth ?? '';
-    const h2fb = grouped.h2finite[i]?.birth ?? '';
-    const h2fd = grouped.h2finite[i]?.death ?? '';
-    const h2eb = grouped.h2essential[i]?.birth ?? '';
+    const h0b = grouped.h0[i]?.birth ?? "";
+    const h0d = grouped.h0[i]?.death ?? "";
+    const h1fb = grouped.h1finite[i]?.birth ?? "";
+    const h1fd = grouped.h1finite[i]?.death ?? "";
+    const h1eb = grouped.h1essential[i]?.birth ?? "";
+    const h2fb = grouped.h2finite[i]?.birth ?? "";
+    const h2fd = grouped.h2finite[i]?.death ?? "";
+    const h2eb = grouped.h2essential[i]?.birth ?? "";
     lines.push(`${h0b},${h0d},${h1fb},${h1fd},${h1eb},${h2fb},${h2fd},${h2eb}`);
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /** Summary statistics for a persistence diagram, returned by {@link summarize}. */
@@ -162,21 +164,25 @@ export function summarize(pairs: PersistencePair[]): DiagramStats {
   let minBirth = Infinity;
 
   for (const p of pairs) {
-    if (p.birth < minBirth) minBirth = p.birth;
-    if (p.death > maxDeath && p.death >= 0) maxDeath = p.death;
+    if (p.birth < minBirth) {
+      minBirth = p.birth;
+    }
+    if (p.death > maxDeath && p.death >= 0) {
+      maxDeath = p.death;
+    }
   }
 
   return {
-    total: pairs.length,
     h0: byDim.h0.length,
     h1: byDim.h1finite.length + byDim.h1essential.length,
-    h1finite: byDim.h1finite.length,
     h1essential: byDim.h1essential.length,
+    h1finite: byDim.h1finite.length,
     h2: byDim.h2finite.length + byDim.h2essential.length,
-    h2finite: byDim.h2finite.length,
     h2essential: byDim.h2essential.length,
+    h2finite: byDim.h2finite.length,
     higher: byDim.higher.length,
     maxDeath,
     minBirth: minBirth === Infinity ? 0 : minBirth,
+    total: pairs.length,
   };
 }

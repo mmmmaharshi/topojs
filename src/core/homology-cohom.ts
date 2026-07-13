@@ -1,9 +1,9 @@
-import type { Points } from './distance.ts';
-import type { PersistencePair } from './h0.ts';
-import { computeH0Phase } from './h0.ts';
-import type { HomologyResult } from './homology.ts';
-import { buildRipsComplex } from './complex.ts';
-import { DenseWorkingCol, ColumnStore } from './reduction.ts';
+import type { Points } from "./distance.ts";
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import type { HomologyResult } from "./homology.ts";
+import { buildRipsComplex } from "./complex.ts";
+import { DenseWorkingCol, ColumnStore } from "./reduction.ts";
 
 /**
  * Persistent homology of H1 computed via PERSISTENT COHOMOLOGY (reduction in
@@ -101,8 +101,8 @@ import { DenseWorkingCol, ColumnStore } from './reduction.ts';
 export function computePersistentHomologyCohomology(
   points: Points,
   dims: number,
-  maxDist: number = Infinity,
-  maxDim: number = 2,
+  maxDist = Infinity,
+  maxDim = 2,
 ): HomologyResult {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim);
   const { edges, triangles, tetrahedra } = complex;
@@ -141,8 +141,8 @@ export function computePersistentHomologyCohomology(
   const flip = (ci: number): number => nt - 1 - ci;
 
   const edgeTriCount = new Int32Array(edges.length);
-  for (let ci = 0; ci < triangles.length; ci++) {
-    const te = triangles[ci]!.edges;
+  for (const tri of triangles) {
+    const te = tri.edges;
     edgeTriCount[te[0]]!++;
     edgeTriCount[te[1]]!++;
     edgeTriCount[te[2]]!++;
@@ -183,7 +183,9 @@ export function computePersistentHomologyCohomology(
   const w = new DenseWorkingCol(triangles.length);
 
   for (let ei = edges.length - 1; ei >= 0; ei--) {
-    if (!cycleEdges[ei]) continue;
+    if (!cycleEdges[ei]) {
+      continue;
+    }
     const start = edgeTriStart[ei]!;
     const end = edgeTriStart[ei + 1]!;
     w.loadFromArray(edgeTriListFlipped.subarray(start, end));
@@ -205,7 +207,9 @@ export function computePersistentHomologyCohomology(
         break;
       }
       const prevCol = edgeReducedCol.get(owner);
-      if (prevCol === null) break;
+      if (prevCol === null) {
+        break;
+      }
       w.xorSparse(prevCol);
     }
   }
@@ -234,8 +238,8 @@ export function computePersistentHomologyCohomology(
     const flip2 = (ci: number): number => nt2 - 1 - ci;
 
     const triTetCount = new Int32Array(triangles.length);
-    for (let ci = 0; ci < tetrahedra.length; ci++) {
-      const tt = tetrahedra[ci]!.triangles;
+    for (const tet of tetrahedra) {
+      const tt = tet.triangles;
       triTetCount[tt[0]]!++;
       triTetCount[tt[1]]!++;
       triTetCount[tt[2]]!++;
@@ -269,7 +273,9 @@ export function computePersistentHomologyCohomology(
     const w2 = new DenseWorkingCol(tetrahedra.length);
 
     for (let ci = triangles.length - 1; ci >= 0; ci--) {
-      if (triPivotOwner[ci]! >= 0) continue; // cleared: already an H1 pivot
+      if (triPivotOwner[ci]! >= 0) {
+        continue;
+      } // cleared: already an H1 pivot
       const start = triTetStart[ci]!;
       const end = triTetStart[ci + 1]!;
       if (start === end) {
@@ -296,19 +302,21 @@ export function computePersistentHomologyCohomology(
           break;
         }
         const prevCol = triReducedCol.get(owner);
-        if (prevCol === null) break;
+        if (prevCol === null) {
+          break;
+        }
         w2.xorSparse(prevCol);
       }
     }
   }
 
   return {
-    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
     complex: {
-      numVertices: complex.n,
       numEdges: edges.length,
-      numTriangles: triangles.length,
       numTetrahedra: tetrahedra.length,
+      numTriangles: triangles.length,
+      numVertices: complex.n,
     },
+    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
   };
 }

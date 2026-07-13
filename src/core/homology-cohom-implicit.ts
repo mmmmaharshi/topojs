@@ -1,9 +1,10 @@
-import type { Points } from './distance.ts';
-import type { PersistencePair } from './h0.ts';
-import { computeH0Phase } from './h0.ts';
-import type { HomologyResult } from './homology.ts';
-import { buildRipsComplex, type RipsComplex } from './complex.ts';
-import { DenseWorkingCol, ColumnStore } from './reduction.ts';
+import type { Points } from "./distance.ts";
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import type { HomologyResult } from "./homology.ts";
+import { buildRipsComplex } from "./complex.ts";
+import type { RipsComplex } from "./complex.ts";
+import { DenseWorkingCol, ColumnStore } from "./reduction.ts";
 
 function packedKey(a: number, b: number, c: number, n: number): number {
   return (a * n + b) * n + c;
@@ -51,14 +52,21 @@ function loadEdgeCoboundary(
       const bit = Math.clz32(lsb) ^ 31;
       const k = (wd << 5) + bit;
       bits ^= lsb;
-      if (k === v || k === u) continue;
+      if (k === v || k === u) {
+        continue;
+      }
       // Pack (sorted) vertices: min(u,v), max(u,v), k — the triangle
       // building in complex.ts uses u<v<k, but the triMap was populated
       // with vertices in their ORIGINAL sorted order from complex.ts:
       // [min(u,v), max(u,v), k]  sorted as (smallest, middle, largest).
       // Since u < v (guaranteed by edge construction in complex.ts),
       // and k can be any vertex, we need the sorted triple.
-      const sorted = u < k ? (v < k ? [u, v, k] : [u, k, v]) : [k, u, v];
+      let sorted: [number, number, number];
+      if (u < k) {
+        sorted = v < k ? [u, v, k] : [u, k, v];
+      } else {
+        sorted = [k, u, v];
+      }
       const ci = triMap.get(packedKey(sorted[0]!, sorted[1]!, sorted[2]!, n))!;
       if (ci !== undefined) {
         tmp.push(flip(ci));
@@ -104,15 +112,15 @@ function loadEdgeCoboundary(
  */
 export function computePersistentHomologyCohomologyFromComplex(
   complex: RipsComplex,
-  maxDim: number = 2,
+  maxDim = 2,
 ): HomologyResult {
   const { edges, triangles, tetrahedra, adjBits, triMap } = complex;
-  const n = complex.n;
+  const { n } = complex;
 
   if (!adjBits || !triMap) {
     throw new Error(
-      'computePersistentHomologyCohomologyFromComplex requires adjBits and triMap ' +
-        'on the RipsComplex. Use buildRipsComplex() to create the complex.',
+      "computePersistentHomologyCohomologyFromComplex requires adjBits and triMap " +
+        "on the RipsComplex. Use buildRipsComplex() to create the complex.",
     );
   }
 
@@ -130,7 +138,9 @@ export function computePersistentHomologyCohomologyFromComplex(
   const w = new DenseWorkingCol(triangles.length);
 
   for (let ei = edges.length - 1; ei >= 0; ei--) {
-    if (!cycleEdges[ei]) continue;
+    if (!cycleEdges[ei]) {
+      continue;
+    }
     loadEdgeCoboundary(w, edges, ei, adjBits, triMap, n, nt);
 
     while (true) {
@@ -150,7 +160,9 @@ export function computePersistentHomologyCohomologyFromComplex(
         break;
       }
       const prevCol = edgeReducedCol.get(owner);
-      if (prevCol === null) break;
+      if (prevCol === null) {
+        break;
+      }
       w.xorSparse(prevCol);
     }
   }
@@ -170,8 +182,7 @@ export function computePersistentHomologyCohomologyFromComplex(
     // few enough that the CSR is negligible, and there's no bit-vector
     // for tetrahedra anyway).
     const triTetCount = new Int32Array(triangles.length);
-    for (let ci = 0; ci < tetrahedra.length; ci++) {
-      const tt = tetrahedra[ci]!.triangles;
+    for (const tt of tetrahedra.map((t) => t!.triangles)) {
       triTetCount[tt[0]]!++;
       triTetCount[tt[1]]!++;
       triTetCount[tt[2]]!++;
@@ -204,7 +215,9 @@ export function computePersistentHomologyCohomologyFromComplex(
     const w2 = new DenseWorkingCol(tetrahedra.length);
 
     for (let ci = triangles.length - 1; ci >= 0; ci--) {
-      if (triPivotOwner[ci]! >= 0) continue;
+      if (triPivotOwner[ci]! >= 0) {
+        continue;
+      }
       const start = triTetStart[ci]!;
       const end = triTetStart[ci + 1]!;
       if (start === end) {
@@ -230,20 +243,22 @@ export function computePersistentHomologyCohomologyFromComplex(
           break;
         }
         const prevCol = triReducedCol.get(owner);
-        if (prevCol === null) break;
+        if (prevCol === null) {
+          break;
+        }
         w2.xorSparse(prevCol);
       }
     }
   }
 
   return {
-    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
     complex: {
-      numVertices: complex.n,
       numEdges: edges.length,
-      numTriangles: triangles.length,
       numTetrahedra: tetrahedra.length,
+      numTriangles: triangles.length,
+      numVertices: complex.n,
     },
+    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
   };
 }
 
@@ -255,8 +270,8 @@ export function computePersistentHomologyCohomologyFromComplex(
 export function computePersistentHomologyCohomologyImplicit(
   points: Points,
   dims: number,
-  maxDist: number = Infinity,
-  maxDim: number = 2,
+  maxDist = Infinity,
+  maxDim = 2,
   epsilon?: number,
 ): HomologyResult {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim, epsilon);

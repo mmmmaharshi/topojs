@@ -10,12 +10,16 @@ export class SlidingWindow {
   private readonly capacity: number;
   private readonly dims: number;
   private readonly buffer: Float64Array;
-  private writeIndex: number = 0;
-  private count: number = 0;
+  private writeIndex = 0;
+  private count = 0;
 
   constructor(capacity: number, dims: number) {
-    if (capacity < 1) throw new Error('SlidingWindow: capacity must be >= 1');
-    if (dims < 1) throw new Error('SlidingWindow: dims must be >= 1');
+    if (capacity < 1) {
+      throw new Error("SlidingWindow: capacity must be >= 1");
+    }
+    if (dims < 1) {
+      throw new Error("SlidingWindow: dims must be >= 1");
+    }
     this.capacity = capacity;
     this.dims = dims;
     this.buffer = new Float64Array(capacity * dims);
@@ -41,7 +45,9 @@ export class SlidingWindow {
       this.buffer[base + d] = point[d]!;
     }
     this.writeIndex = (this.writeIndex + 1) % this.capacity;
-    if (this.count < this.capacity) this.count++;
+    if (this.count < this.capacity) {
+      this.count++;
+    }
   }
 
   /**

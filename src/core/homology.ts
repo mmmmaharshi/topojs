@@ -1,8 +1,8 @@
-import type { Points } from './distance.ts';
-import type { PersistencePair } from './h0.ts';
-import { computeH0Phase } from './h0.ts';
-import { buildRipsComplex } from './complex.ts';
-import { DenseWorkingCol } from './reduction.ts';
+import type { Points } from "./distance.ts";
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import { buildRipsComplex } from "./complex.ts";
+import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of persistent homology computation. */
 export interface HomologyResult {
@@ -42,8 +42,8 @@ export interface HomologyResult {
 export function computePersistentHomology(
   points: Points,
   dims: number,
-  maxDist: number = Infinity,
-  maxDim: number = 2,
+  maxDist = Infinity,
+  maxDim = 2,
 ): HomologyResult {
   const complex = buildRipsComplex(points, dims, maxDist, maxDim);
   const { edges, triangles, tetrahedra } = complex;
@@ -59,7 +59,9 @@ export function computePersistentHomology(
 
   // ── Phase 2: H1 reduction ──
   const h1Pivots = new Int32Array(edges.length).fill(-1);
-  const h1reduced: (Int32Array | null)[] = new Array(triangles.length).fill(null);
+  const h1reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
+    length: triangles.length,
+  }).fill(null);
   const h1Pairs: PersistencePair[] = [];
   const w1 = new DenseWorkingCol(edges.length);
 
@@ -82,7 +84,9 @@ export function computePersistentHomology(
         break;
       }
       const prevCol = h1reduced[prev]!;
-      if (prevCol === null) break;
+      if (prevCol === null) {
+        break;
+      }
       w1.xorSparse(prevCol);
     }
   }
@@ -112,7 +116,9 @@ export function computePersistentHomology(
 
     // H2 pivot table: which triangle pivot is paired with which tetrahedron
     const h2Pivots = new Int32Array(triangles.length).fill(-1);
-    const h2reduced: (Int32Array | null)[] = new Array(tetrahedra.length).fill(null);
+    const h2reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
+      length: tetrahedra.length,
+    }).fill(null);
     const w2 = new DenseWorkingCol(triangles.length);
 
     // Reduce tetrahedron columns (∂₃: C₃ → C₂)
@@ -121,7 +127,9 @@ export function computePersistentHomology(
       w2.loadFromNumbers(tet.triangles);
       while (true) {
         const pivot = w2.pivot();
-        if (pivot < 0) break;
+        if (pivot < 0) {
+          break;
+        }
         const prev = h2Pivots[pivot]!;
         if (prev < 0) {
           h2Pivots[pivot] = ci;
@@ -132,7 +140,9 @@ export function computePersistentHomology(
           break;
         }
         const prevCol = h2reduced[prev]!;
-        if (prevCol === null) break;
+        if (prevCol === null) {
+          break;
+        }
         w2.xorSparse(prevCol);
       }
     }
@@ -140,7 +150,9 @@ export function computePersistentHomology(
     // Essential H2: nullspace triangles NOT killed by any tetrahedron
     const usedAsPivot = new Uint8Array(triangles.length);
     for (let ti = 0; ti < triangles.length; ti++) {
-      if (h2Pivots[ti]! >= 0) usedAsPivot[ti] = 1;
+      if (h2Pivots[ti]! >= 0) {
+        usedAsPivot[ti] = 1;
+      }
     }
     for (let ci = 0; ci < triangles.length; ci++) {
       if (nullspaceTrigs[ci] && !usedAsPivot[ci]) {
@@ -150,15 +162,15 @@ export function computePersistentHomology(
   }
 
   return {
-    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
     complex: {
-      numVertices: complex.n,
       numEdges: edges.length,
-      numTriangles: triangles.length,
       numTetrahedra: tetrahedra.length,
+      numTriangles: triangles.length,
+      numVertices: complex.n,
     },
+    pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
   };
 }
 
-export { bottleneckDistance } from './bottleneck.ts';
-export { computePairwiseDistances } from './distance.ts';
+export { bottleneckDistance } from "./bottleneck.ts";
+export { computePairwiseDistances } from "./distance.ts";

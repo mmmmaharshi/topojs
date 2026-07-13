@@ -1,53 +1,64 @@
-import { describe, it, expect } from 'vitest';
-import { selectLandmarks } from '../src/core/landmarks.ts';
-import { computeSparseRipsHomology } from '../src/core/sparse-rips.ts';
-import { computePersistentHomology } from '../src/core/homology.ts';
-import { bottleneckDistance } from '../src/core/bottleneck.ts';
-import { loadIrisDataset } from '../src/data/realworld-datasets.ts';
-import { mulberry32 } from './helpers.ts';
-import type { Points } from '../src/core/distance.ts';
+/* eslint-disable vitest/no-conditional-expect */
+import { describe, it, expect } from "vitest";
+import { selectLandmarks } from "../src/core/landmarks.ts";
+import { computeSparseRipsHomology } from "../src/core/sparse-rips.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
+import { bottleneckDistance } from "../src/core/bottleneck.ts";
+import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
+import { mulberry32 } from "./helpers.ts";
+import type { Points } from "../src/core/distance.ts";
 
 function randomPoints(rng: () => number, n: number, dims: number, scale = 1): Points {
   const pts = new Float64Array(n * dims);
-  for (let i = 0; i < pts.length; i++) pts[i] = rng() * scale;
+  for (let i = 0; i < pts.length; i++) {
+    pts[i] = rng() * scale;
+  }
   return pts;
 }
 
 // Independent, deliberately-not-shared-code brute-force reference for the
 // covering radius, so a bug in selectLandmarks' incremental bookkeeping
 // can't also be baked into the check.
-function bruteForceCoveringRadius(points: Points, dims: number, n: number, landmarkIndices: Int32Array): number {
+function bruteForceCoveringRadius(
+  points: Points,
+  dims: number,
+  n: number,
+  landmarkIndices: Int32Array,
+): number {
   let maxMin = 0;
   for (let i = 0; i < n; i++) {
     let minD = Infinity;
-    for (let li = 0; li < landmarkIndices.length; li++) {
-      const l = landmarkIndices[li]!;
+    for (const l of landmarkIndices) {
       let sq = 0;
       for (let d = 0; d < dims; d++) {
         const diff = points[i * dims + d]! - points[l * dims + d]!;
         sq += diff * diff;
       }
       const dist = Math.sqrt(sq);
-      if (dist < minD) minD = dist;
+      if (dist < minD) {
+        minD = dist;
+      }
     }
-    if (minD > maxMin) maxMin = minD;
+    if (minD > maxMin) {
+      maxMin = minD;
+    }
   }
   return maxMin;
 }
 
-describe('selectLandmarks', () => {
-  it('first landmark is always startIndex', () => {
+describe(selectLandmarks, () => {
+  it("first landmark is always startIndex", () => {
     const rng = mulberry32(1);
     const pts = randomPoints(rng, 30, 2);
     const { landmarkIndices } = selectLandmarks(pts, 2, 30, 10, 7);
     expect(landmarkIndices[0]).toBe(7);
   });
 
-  it('returns exactly numLandmarks distinct indices, all in range', () => {
+  it("returns exactly numLandmarks distinct indices, all in range", () => {
     const rng = mulberry32(2);
     const pts = randomPoints(rng, 40, 3);
     const { landmarkIndices } = selectLandmarks(pts, 3, 40, 12);
-    expect(landmarkIndices.length).toBe(12);
+    expect(landmarkIndices).toHaveLength(12);
     const seen = new Set(landmarkIndices);
     expect(seen.size).toBe(12);
     for (const idx of landmarkIndices) {
@@ -56,7 +67,7 @@ describe('selectLandmarks', () => {
     }
   });
 
-  it('coveringRadius matches an independent brute-force computation', () => {
+  it("coveringRadius matches an independent brute-force computation", () => {
     const rng = mulberry32(3);
     for (let trial = 0; trial < 40; trial++) {
       const n = 10 + Math.floor(rng() * 40);
@@ -69,7 +80,7 @@ describe('selectLandmarks', () => {
     }
   });
 
-  it('insertionRadii is non-increasing from index 1 onward (standard farthest-point-sampling property)', () => {
+  it("insertionRadii is non-increasing from index 1 onward (standard farthest-point-sampling property)", () => {
     const rng = mulberry32(4);
     const pts = randomPoints(rng, 50, 2);
     const { insertionRadii } = selectLandmarks(pts, 2, 50, 20);
@@ -79,37 +90,37 @@ describe('selectLandmarks', () => {
     }
   });
 
-  it('numLandmarks >= n clamps to n landmarks with coveringRadius exactly 0', () => {
+  it("numLandmarks >= n clamps to n landmarks with coveringRadius exactly 0", () => {
     const rng = mulberry32(5);
     const pts = randomPoints(rng, 15, 2);
     const { landmarkIndices, coveringRadius } = selectLandmarks(pts, 2, 15, 100);
-    expect(landmarkIndices.length).toBe(15);
+    expect(landmarkIndices).toHaveLength(15);
     expect(coveringRadius).toBe(0);
   });
 
-  it('numLandmarks = 1 selects exactly startIndex', () => {
+  it("numLandmarks = 1 selects exactly startIndex", () => {
     const rng = mulberry32(6);
     const pts = randomPoints(rng, 20, 2);
     const { landmarkIndices } = selectLandmarks(pts, 2, 20, 1, 3);
-    expect(Array.from(landmarkIndices)).toEqual([3]);
+    expect(Array.from(landmarkIndices)).toStrictEqual([3]);
   });
 
-  it('throws on out-of-range startIndex', () => {
+  it("throws on out-of-range startIndex", () => {
     const rng = mulberry32(7);
     const pts = randomPoints(rng, 10, 2);
     expect(() => selectLandmarks(pts, 2, 10, 5, -1)).toThrow(RangeError);
     expect(() => selectLandmarks(pts, 2, 10, 5, 10)).toThrow(RangeError);
   });
 
-  it('n = 0 returns an empty result without throwing', () => {
+  it("n = 0 returns an empty result without throwing", () => {
     const result = selectLandmarks(new Float64Array(0), 2, 0, 5);
-    expect(result.landmarkIndices.length).toBe(0);
+    expect(result.landmarkIndices).toHaveLength(0);
     expect(result.coveringRadius).toBe(0);
   });
 });
 
-describe('computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadius)', () => {
-  it('holds across many random 2D/3D configs, dim 0 and 1 (maxDim=2)', () => {
+describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadius)", () => {
+  it("holds across many random 2D/3D configs, dim 0 and 1 (maxDim=2)", () => {
     const rng = mulberry32(100);
     let checked = 0;
     for (let trial = 0; trial < 150; trial++) {
@@ -137,7 +148,7 @@ describe('computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     expect(checked).toBeGreaterThan(200); // sanity: the loop actually exercised real (non-Infinity) comparisons
   });
 
-  it('holds across a smaller sweep including H2 (maxDim=3)', () => {
+  it("holds across a smaller sweep including H2 (maxDim=3)", () => {
     const rng = mulberry32(200);
     let checked = 0;
     for (let trial = 0; trial < 30; trial++) {
@@ -161,7 +172,7 @@ describe('computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     expect(checked).toBeGreaterThan(30);
   });
 
-  it('holds on real data (UCI Iris, 150 points, R^4)', () => {
+  it("holds on real data (UCI Iris, 150 points, R^4)", () => {
     const flat = loadIrisDataset();
     const dims = 4;
     const n = flat.length / dims;
@@ -173,8 +184,12 @@ describe('computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     for (let i = 0; i < n; i++) {
       for (let d = 0; d < dims; d++) {
         const v = flat[i * dims + d]!;
-        if (v < colMin[d]!) colMin[d] = v;
-        if (v > colMax[d]!) colMax[d] = v;
+        if (v < colMin[d]!) {
+          colMin[d] = v;
+        }
+        if (v > colMax[d]!) {
+          colMax[d] = v;
+        }
       }
     }
     const norm = new Float64Array(n * dims);
@@ -196,7 +211,7 @@ describe('computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     }
   });
 
-  it('numLandmarks = n reproduces the exact diagram exactly (bound = 0)', () => {
+  it("numLandmarks = n reproduces the exact diagram exactly (bound = 0)", () => {
     const rng = mulberry32(300);
     const n = 20;
     const dims = 2;
@@ -213,12 +228,12 @@ describe('computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     }
   });
 
-  it('landmarkIndices are returned and index into the original point cloud', () => {
+  it("landmarkIndices are returned and index into the original point cloud", () => {
     const rng = mulberry32(400);
     const n = 25;
     const pts = randomPoints(rng, n, 2);
     const approx = computeSparseRipsHomology(pts, 2, n, 10, 0.5, 2);
-    expect(approx.landmarkIndices.length).toBe(10);
+    expect(approx.landmarkIndices).toHaveLength(10);
     for (const idx of approx.landmarkIndices) {
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(idx).toBeLessThan(n);

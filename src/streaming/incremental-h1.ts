@@ -1,6 +1,6 @@
-import type { PersistencePair } from '../core/h0.ts';
-import { computeH0PhaseFromArrays } from '../core/h0.ts';
-import { DenseWorkingCol } from '../core/reduction.ts';
+import type { PersistencePair } from "../core/h0.ts";
+import { computeH0PhaseFromArrays } from "../core/h0.ts";
+import { DenseWorkingCol } from "../core/reduction.ts";
 
 /**
  * Streaming persistent homology — Phase B: prefix-stable incremental H1.
@@ -192,15 +192,25 @@ interface TriRec {
 }
 
 function cmpEdge(x: EdgeRec, y: EdgeRec): number {
-  if (x.val !== y.val) return x.val - y.val;
-  if (x.idA !== y.idA) return x.idA - y.idA;
+  if (x.val !== y.val) {
+    return x.val - y.val;
+  }
+  if (x.idA !== y.idA) {
+    return x.idA - y.idA;
+  }
   return x.idB - y.idB;
 }
 
 function cmpTri(x: TriRec, y: TriRec): number {
-  if (x.val !== y.val) return x.val - y.val;
-  if (x.idA !== y.idA) return x.idA - y.idA;
-  if (x.idB !== y.idB) return x.idB - y.idB;
+  if (x.val !== y.val) {
+    return x.val - y.val;
+  }
+  if (x.idA !== y.idA) {
+    return x.idA - y.idA;
+  }
+  if (x.idB !== y.idB) {
+    return x.idB - y.idB;
+  }
   return x.idC - y.idC;
 }
 
@@ -221,7 +231,7 @@ export class IncrementalH1 {
 
   private pointOrder: number[] = []; // FIFO of stable ids, oldest first
   private flatPtCoords: Float64Array; // k*dims flat array
-  private ptCount = 0;                // = pointOrder.length
+  private ptCount = 0; // = pointOrder.length
   private nextId = 0;
 
   // cached filtration state from the previous push
@@ -349,14 +359,16 @@ export class IncrementalH1 {
     // leading to confusing behavior on push() (or none at all) rather than
     // a clear error at construction time.
     if (!Number.isInteger(opts.windowSize) || opts.windowSize < 2) {
-      throw new Error('IncrementalH1: windowSize must be an integer >= 2 (push() returns null below 2 points)');
+      throw new Error(
+        "IncrementalH1: windowSize must be an integer >= 2 (push() returns null below 2 points)",
+      );
     }
     if (!Number.isInteger(opts.dims) || opts.dims < 1) {
-      throw new Error('IncrementalH1: dims must be an integer >= 1');
+      throw new Error("IncrementalH1: dims must be an integer >= 1");
     }
     if (!(opts.maxDist >= 0)) {
       // catches negative AND NaN (NaN >= 0 is false)
-      throw new Error('IncrementalH1: maxDist must be a non-negative number');
+      throw new Error("IncrementalH1: maxDist must be a non-negative number");
     }
     this.windowSize = opts.windowSize;
     this.dims = opts.dims;
@@ -395,7 +407,9 @@ export class IncrementalH1 {
     }
     const k = this.ptCount;
 
-    if (k < 2) return null;
+    if (k < 2) {
+      return null;
+    }
 
     // --- INCREMENTAL geometry update (see v3 docstring note above) --------
 
@@ -408,7 +422,9 @@ export class IncrementalH1 {
     const survivingEdgeOrigIdx: number[] = [];
     for (let i = 0; i < this.edgeOrder.length; i++) {
       const e = this.edgeOrder[i]!;
-      if (evictedId !== null && (e.idA === evictedId || e.idB === evictedId)) continue;
+      if (evictedId !== null && (e.idA === evictedId || e.idB === evictedId)) {
+        continue;
+      }
       survivingEdges.push(e);
       survivingEdgeOrigIdx.push(i);
     }
@@ -421,10 +437,18 @@ export class IncrementalH1 {
     const triCount = this.triIdA.length;
     const survivingTriOrigIdx: number[] = [];
     if (evictedId === null) {
-      for (let i = 0; i < triCount; i++) survivingTriOrigIdx.push(i);
+      for (let i = 0; i < triCount; i++) {
+        survivingTriOrigIdx.push(i);
+      }
     } else {
       for (let i = 0; i < triCount; i++) {
-        if (this.triIdA[i] === evictedId || this.triIdB[i] === evictedId || this.triIdC[i] === evictedId) continue;
+        if (
+          this.triIdA[i] === evictedId ||
+          this.triIdB[i] === evictedId ||
+          this.triIdC[i] === evictedId
+        ) {
+          continue;
+        }
         survivingTriOrigIdx.push(i);
       }
     }
@@ -444,7 +468,11 @@ export class IncrementalH1 {
       const v = Math.sqrt(s);
       if (v <= this.maxDist) {
         newNeighbors.add(otherId);
-        newEdgeCandidates.push({ idA: Math.min(newId, otherId), idB: Math.max(newId, otherId), val: v });
+        newEdgeCandidates.push({
+          idA: Math.min(newId, otherId),
+          idB: Math.max(newId, otherId),
+          val: v,
+        });
       }
     }
     newEdgeCandidates.sort(cmpEdge);
@@ -462,18 +490,26 @@ export class IncrementalH1 {
     //     (replaces a previous Map-of-Map that created O(deg(new)) Map
     //     objects per push — fix #4).
     const relevantIdx = new Map<number, number>();
-    for (const id of newNeighbors) relevantIdx.set(id, relevantIdx.size);
+    for (const id of newNeighbors) {
+      relevantIdx.set(id, relevantIdx.size);
+    }
     relevantIdx.set(newId, relevantIdx.size);
     const r = relevantIdx.size;
     const pairIdxFlat = new Int32Array(r * r).fill(-1);
     const recordPair = (e: EdgeRec, idx: number): void => {
       const pi = relevantIdx.get(e.idA);
-      if (pi === undefined) return;
+      if (pi === undefined) {
+        return;
+      }
       const pj = relevantIdx.get(e.idB);
-      if (pj === undefined) return;
+      if (pj === undefined) {
+        return;
+      }
       pairIdxFlat[pi * r + pj] = idx;
     };
-    const newEdges: EdgeRec[] = new Array(survivingEdges.length + newEdgeCandidates.length);
+    const newEdges: EdgeRec[] = Array.from<EdgeRec>({
+      length: survivingEdges.length + newEdgeCandidates.length,
+    });
     // Indexed by ORIGINAL position in this.edgeOrder (pre-filter) — that is
     // the index space survivingTrisUnfiltered's e1/e2/e3 were written in.
     {
@@ -522,9 +558,13 @@ export class IncrementalH1 {
       const lo = Math.min(x, y);
       const hi = Math.max(x, y);
       const pi = relevantIdx.get(lo);
-      if (pi === undefined) return -1;
+      if (pi === undefined) {
+        return -1;
+      }
       const pj = relevantIdx.get(hi);
-      if (pj === undefined) return -1;
+      if (pj === undefined) {
+        return -1;
+      }
       return pairIdxFlat[pi * r + pj]!;
     };
 
@@ -561,18 +601,32 @@ export class IncrementalH1 {
       const p = newNeighborsArr[a]!;
       for (let b = a + 1; b < newNeighborsArr.length; b++) {
         const q = newNeighborsArr[b]!;
-        if (getEdgeIdx(p, q) < 0) continue;
+        if (getEdgeIdx(p, q) < 0) {
+          continue;
+        }
         let idA = newId;
         let idB = p;
         let idC = q;
-        if (idA > idB) { const t = idA; idA = idB; idB = t; }
-        if (idB > idC) { const t = idB; idB = idC; idC = t; }
-        if (idA > idB) { const t = idA; idA = idB; idB = t; }
+        if (idA > idB) {
+          const t = idA;
+          idA = idB;
+          idB = t;
+        }
+        if (idB > idC) {
+          const t = idB;
+          idB = idC;
+          idC = t;
+        }
+        if (idA > idB) {
+          const t = idA;
+          idA = idB;
+          idB = t;
+        }
         const e1 = getEdgeIdx(idA, idB);
         const e2 = getEdgeIdx(idA, idC);
         const e3 = getEdgeIdx(idB, idC);
         const val = Math.max(newEdges[e1]!.val, newEdges[e2]!.val, newEdges[e3]!.val);
-        newTriCandidates.push({ idA, idB, idC, val, e1, e2, e3 });
+        newTriCandidates.push({ e1, e2, e3, idA, idB, idC, val });
       }
     }
     newTriCandidates.sort(cmpTri);
@@ -595,30 +649,58 @@ export class IncrementalH1 {
       while (i < survCount && j < newTriCandidates.length) {
         const n = newTriCandidates[j]!;
         let d = sVal[i]! - n.val;
-        if (d === 0) d = sIdA[i]! - n.idA;
-        if (d === 0) d = sIdB[i]! - n.idB;
-        if (d === 0) d = sIdC[i]! - n.idC;
+        if (d === 0) {
+          d = sIdA[i]! - n.idA;
+        }
+        if (d === 0) {
+          d = sIdB[i]! - n.idB;
+        }
+        if (d === 0) {
+          d = sIdC[i]! - n.idC;
+        }
         if (d <= 0) {
-          mIdA[w] = sIdA[i]!; mIdB[w] = sIdB[i]!; mIdC[w] = sIdC[i]!;
-          mVal[w] = sVal[i]!; mE1[w] = sE1[i]!; mE2[w] = sE2[i]!; mE3[w] = sE3[i]!;
+          mIdA[w] = sIdA[i]!;
+          mIdB[w] = sIdB[i]!;
+          mIdC[w] = sIdC[i]!;
+          mVal[w] = sVal[i]!;
+          mE1[w] = sE1[i]!;
+          mE2[w] = sE2[i]!;
+          mE3[w] = sE3[i]!;
           i++;
         } else {
-          mIdA[w] = n.idA; mIdB[w] = n.idB; mIdC[w] = n.idC;
-          mVal[w] = n.val; mE1[w] = n.e1; mE2[w] = n.e2; mE3[w] = n.e3;
+          mIdA[w] = n.idA;
+          mIdB[w] = n.idB;
+          mIdC[w] = n.idC;
+          mVal[w] = n.val;
+          mE1[w] = n.e1;
+          mE2[w] = n.e2;
+          mE3[w] = n.e3;
           j++;
         }
         w++;
       }
       while (i < survCount) {
-        mIdA[w] = sIdA[i]!; mIdB[w] = sIdB[i]!; mIdC[w] = sIdC[i]!;
-        mVal[w] = sVal[i]!; mE1[w] = sE1[i]!; mE2[w] = sE2[i]!; mE3[w] = sE3[i]!;
-        i++; w++;
+        mIdA[w] = sIdA[i]!;
+        mIdB[w] = sIdB[i]!;
+        mIdC[w] = sIdC[i]!;
+        mVal[w] = sVal[i]!;
+        mE1[w] = sE1[i]!;
+        mE2[w] = sE2[i]!;
+        mE3[w] = sE3[i]!;
+        i++;
+        w++;
       }
       while (j < newTriCandidates.length) {
         const n = newTriCandidates[j]!;
-        mIdA[w] = n.idA; mIdB[w] = n.idB; mIdC[w] = n.idC;
-        mVal[w] = n.val; mE1[w] = n.e1; mE2[w] = n.e2; mE3[w] = n.e3;
-        j++; w++;
+        mIdA[w] = n.idA;
+        mIdB[w] = n.idB;
+        mIdC[w] = n.idC;
+        mVal[w] = n.val;
+        mE1[w] = n.e1;
+        mE2[w] = n.e2;
+        mE3[w] = n.e3;
+        j++;
+        w++;
       }
     }
     // --- end incremental geometry update; everything below is unchanged ---
@@ -652,13 +734,23 @@ export class IncrementalH1 {
     // chain). e1/e2/e3 already point into the CURRENT (new) edgeOrder.
     let triSafeCount = 0;
     for (; triSafeCount < triSafeCountRaw; triSafeCount++) {
-      if (mE1[triSafeCount]! >= edgeSafeCount || mE2[triSafeCount]! >= edgeSafeCount || mE3[triSafeCount]! >= edgeSafeCount) break;
+      if (
+        mE1[triSafeCount]! >= edgeSafeCount ||
+        mE2[triSafeCount]! >= edgeSafeCount ||
+        mE3[triSafeCount]! >= edgeSafeCount
+      ) {
+        break;
+      }
     }
 
     // --- carry forward the safe prefix, re-reduce the rest ---
     const newPivotOfEdgeIdx = new Int32Array(newEdges.length).fill(-1);
-    const newReducedCols: (Int32Array | null)[] = new Array(newTrisCount).fill(null);
-    const newTriPair: (PersistencePair | null)[] = new Array(newTrisCount).fill(null);
+    const newReducedCols: (Int32Array | null)[] = Array.from<Int32Array | null>({
+      length: newTrisCount,
+    }).fill(null);
+    const newTriPair: (PersistencePair | null)[] = Array.from<PersistencePair | null>({
+      length: newTrisCount,
+    }).fill(null);
 
     for (let i = 0; i < edgeSafeCount; i++) {
       const prevPivot = this.pivotOfEdgeIdx[i]!;
@@ -682,7 +774,7 @@ export class IncrementalH1 {
     }
 
     this.working.ensureCapacity(newEdges.length);
-    const working = this.working;
+    const { working } = this;
     for (let ci = triSafeCount; ci < newTrisCount; ci++) {
       this.boundaryScratch[0] = mE1[ci]!;
       this.boundaryScratch[1] = mE2[ci]!;
@@ -704,7 +796,9 @@ export class IncrementalH1 {
           break;
         }
         const prevCol = newReducedCols[prev];
-        if (prevCol === null || prevCol === undefined) break;
+        if (prevCol === null || prevCol === undefined) {
+          break;
+        }
         working.xorSparse(prevCol);
       }
     }
@@ -722,7 +816,9 @@ export class IncrementalH1 {
     const valArr = new Float64Array(newEdges.length);
     {
       const localIndexById = new Map<number, number>();
-      for (let i = 0; i < k; i++) localIndexById.set(ids[i]!, i);
+      for (let i = 0; i < k; i++) {
+        localIndexById.set(ids[i]!, i);
+      }
       for (let ei = 0; ei < newEdges.length; ei++) {
         const e = newEdges[ei]!;
         uArr[ei] = localIndexById.get(e.idA)!;
@@ -730,11 +826,19 @@ export class IncrementalH1 {
         valArr[ei] = e.val;
       }
     }
-    const { h0Pairs, cycleEdges: cycleEdge } = computeH0PhaseFromArrays(k, uArr, vArr, valArr, newEdges.length);
+    const { h0Pairs, cycleEdges: cycleEdge } = computeH0PhaseFromArrays(
+      k,
+      uArr,
+      vArr,
+      valArr,
+      newEdges.length,
+    );
 
     const h1Pairs: PersistencePair[] = [];
     for (let ci = 0; ci < newTrisCount; ci++) {
-      if (newTriPair[ci]) h1Pairs.push(newTriPair[ci]!);
+      if (newTriPair[ci]) {
+        h1Pairs.push(newTriPair[ci]!);
+      }
     }
     for (let ei = 0; ei < newEdges.length; ei++) {
       if (cycleEdge[ei] && newPivotOfEdgeIdx[ei]! < 0) {
@@ -762,11 +866,11 @@ export class IncrementalH1 {
     this.packTriPair(newTriPair);
 
     return {
-      windowSize: k,
+      complex: { numEdges: newEdges.length, numTriangles: newTrisCount, numVertices: k },
       isFull: this.isFull,
       pairs: [...h0Pairs, ...h1Pairs],
-      complex: { numVertices: k, numEdges: newEdges.length, numTriangles: newTrisCount },
       stats: { reReducedTriangles: newTrisCount - triSafeCount, totalTriangles: newTrisCount },
+      windowSize: k,
     };
   }
 }

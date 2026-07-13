@@ -1,4 +1,4 @@
-import type { Points } from './distance.ts';
+import type { Points } from "./distance.ts";
 
 /**
  * Farthest-point (max-min / "Gonzalez") landmark sampling, deterministic
@@ -55,10 +55,14 @@ export function selectLandmarks(
   dims: number,
   n: number,
   numLandmarks: number,
-  startIndex: number = 0,
+  startIndex = 0,
 ): LandmarkResult {
   if (n <= 0) {
-    return { landmarkIndices: new Int32Array(0), coveringRadius: 0, insertionRadii: new Float64Array(0) };
+    return {
+      coveringRadius: 0,
+      insertionRadii: new Float64Array(0),
+      landmarkIndices: new Int32Array(0),
+    };
   }
   const k = Math.min(Math.max(1, numLandmarks), n);
   if (startIndex < 0 || startIndex >= n) {
@@ -88,7 +92,9 @@ export function selectLandmarks(
 
   // Seed nearestLandmarkDist with distances to the first landmark.
   for (let i = 0; i < n; i++) {
-    if (i === startIndex) continue;
+    if (i === startIndex) {
+      continue;
+    }
     nearestLandmarkDist[i] = dist(i, startIndex);
   }
 
@@ -110,16 +116,22 @@ export function selectLandmarks(
     insertionRadii[picked] = bestDist;
     nearestLandmarkDist[bestIdx] = 0;
     for (let i = 0; i < n; i++) {
-      if (nearestLandmarkDist[i] === 0) continue; // already a landmark
+      if (nearestLandmarkDist[i] === 0) {
+        continue;
+      } // already a landmark
       const d = dist(i, bestIdx);
-      if (d < nearestLandmarkDist[i]!) nearestLandmarkDist[i] = d;
+      if (d < nearestLandmarkDist[i]!) {
+        nearestLandmarkDist[i] = d;
+      }
     }
   }
 
   let coveringRadius = 0;
   for (let i = 0; i < n; i++) {
-    if (nearestLandmarkDist[i]! > coveringRadius) coveringRadius = nearestLandmarkDist[i]!;
+    if (nearestLandmarkDist[i]! > coveringRadius) {
+      coveringRadius = nearestLandmarkDist[i]!;
+    }
   }
 
-  return { landmarkIndices, coveringRadius, insertionRadii };
+  return { coveringRadius, insertionRadii, landmarkIndices };
 }

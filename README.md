@@ -5,12 +5,12 @@ TopoJS computes persistent homology for point clouds (Vietoris–Rips, H₀–H�
 ## Quick Start
 
 ```js
-import { computePersistentHomology, computeCubicalHomology } from 'topojs';
+import { computePersistentHomology, computeCubicalHomology } from "topojs";
 
 // Rips persistence on 2D points
-const points = new Float64Array([0, 0,  1, 0,  0.5, 0.866]);
+const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
 const result = computePersistentHomology(points, 2, 1.0, 2);
-console.log(result.pairs);  // [{birth, death, dim}, ...]
+console.log(result.pairs); // [{birth, death, dim}, ...]
 
 // Cubical persistence on a grayscale image
 const img = new Float64Array([0.1, 0.5, 0.9, 0.3, 0.2, 0.8, 0.7, 0.4, 0.6]);
@@ -33,75 +33,75 @@ console.log(cubical.pairs);
 
 ### Batch homology
 
-| Function | Description |
-|----------|-------------|
-| `computePersistentHomology(points, dims, maxDist?, maxDim?)` | Vietoris–Rips H₀+H₁+H₂ with automatic best-engine selection. For extra control pass an options object (`engine`, `epsilon`). |
-| `computePersistentHomologyCohomologyFromComplex(complex, maxDim?)` | Cohomology on a pre-built `RipsComplex` (e.g. from `buildRipsComplex`), for callers who already have one. |
-| `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images (parameter order is `height, width`) |
+| Function                                                           | Description                                                                                                                  |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `computePersistentHomology(points, dims, maxDist?, maxDim?)`       | Vietoris–Rips H₀+H₁+H₂ with automatic best-engine selection. For extra control pass an options object (`engine`, `epsilon`). |
+| `computePersistentHomologyCohomologyFromComplex(complex, maxDim?)` | Cohomology on a pre-built `RipsComplex` (e.g. from `buildRipsComplex`), for callers who already have one.                    |
+| `computeCubicalHomology(image, height, width, maxDim)`             | Cubical H₀+H₁ for 2D images (parameter order is `height, width`)                                                             |
 
 ### Arbitrary-dimension homology
 
-| Function | Description |
-|----------|-------------|
+| Function                                                                  | Description                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `computePersistentHomologyGeneral(points, dims, maxDist, maxHomologyDim)` | Vietoris–Rips H₀..H_k for any k. Correctness-first, not performance-tuned; intended for small-to-moderate n and dimension. Validated by differential testing against `computePersistentHomology` (exact match for maxHomologyDim≤2) plus the closed-form S³ ground truth. |
-| `buildGeneralRipsComplex(points, dims, maxDist, maxSimplexDim)` | Complex-construction half of the above, for callers who just want simplex levels (counts, boundary structure) without running the reduction. |
+| `buildGeneralRipsComplex(points, dims, maxDist, maxSimplexDim)`           | Complex-construction half of the above, for callers who just want simplex levels (counts, boundary structure) without running the reduction.                                                                                                                              |
 
 ### Approximate homology (landmark subsampling)
 
-| Function | Description |
-|----------|-------------|
+| Function                                                                                 | Description                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `computeSparseRipsHomology(points, dims, n, numLandmarks, maxDist, maxDim, startIndex?)` | Runs `computePersistentHomology` on a farthest-point-sampled landmark subset, with a proven bottleneck-distance bound (`result.bottleneckBound`, = 2× the landmark covering radius) via Lipschitz stability under Hausdorff perturbation. Validated across 180+ random configs plus real Iris data. |
-| `selectLandmarks(points, dims, n, numLandmarks, startIndex?)` | Farthest-point landmark sampling, O(numLandmarks·n) time, O(n) space. Returns landmark indices and the achieved covering radius. |
+| `selectLandmarks(points, dims, n, numLandmarks, startIndex?)`                            | Farthest-point landmark sampling, O(numLandmarks·n) time, O(n) space. Returns landmark indices and the achieved covering radius.                                                                                                                                                                    |
 
 ### Distances & comparison
 
-| Function | Description |
-|----------|-------------|
-| `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix |
-| `lookupDist(matrix, i, j)` | O(1) lookup of one pairwise distance |
+| Function                                            | Description                                                                                                                                                                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `computePairwiseDistances(points, dims, n)`         | Euclidean distance matrix                                                                                                                                                                                                 |
+| `lookupDist(matrix, i, j)`                          | O(1) lookup of one pairwise distance                                                                                                                                                                                      |
 | `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams, one dimension at a time. Matches finite pairs to each other or the diagonal; matches essential pairs by birth value. Symmetric, cross-validated against a brute-force reference. |
 
 ### Export / serialization
 
-| Function | Description |
-|----------|-------------|
-| `toGudhi(pairs)` | Export to Gudhi text format |
-| `toJSON(pairs, pretty?)` | Export to JSON |
-| `toCSV(pairs)` | Export to CSV |
-| `toDiagramCSV(pairs)` | Fixed 8-column per-dimension CSV (H₀/H₁/H₂ side by side). Does not represent dim≥3 pairs — use `toCSV`/`toJSON` for those. |
-| `summarize(pairs)` | Statistics (counts, max death, min birth). `total` always equals `h0+h1+h2+higher`. |
-| `splitByDimension(pairs)` | Separates H₀/H₁/H₂ (finite and essential) plus a `higher` bucket for dim≥3 — no pair is ever dropped. |
+| Function                  | Description                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `toGudhi(pairs)`          | Export to Gudhi text format                                                                                                |
+| `toJSON(pairs, pretty?)`  | Export to JSON                                                                                                             |
+| `toCSV(pairs)`            | Export to CSV                                                                                                              |
+| `toDiagramCSV(pairs)`     | Fixed 8-column per-dimension CSV (H₀/H₁/H₂ side by side). Does not represent dim≥3 pairs — use `toCSV`/`toJSON` for those. |
+| `summarize(pairs)`        | Statistics (counts, max death, min birth). `total` always equals `h0+h1+h2+higher`.                                        |
+| `splitByDimension(pairs)` | Separates H₀/H₁/H₂ (finite and essential) plus a `higher` bucket for dim≥3 — no pair is ever dropped.                      |
 
 ### Streaming / incremental homology
 
-| Function / Class | Description |
-|----------|-------------|
-| `SlidingWindow` | Fixed-capacity ring buffer of the most recent points, feeding both engines below |
-| `StreamingHomology` | Naive baseline — full recompute on every `push()`. Every incremental engine is differential-tested against this. |
-| `IncrementalH1` | Prefix-stable incremental engine — updates H₀+H₁ without a full recompute (H₂ out of scope). Validated across many seeds/regimes against full recompute. See Benchmarks for the speed-to-memory trade-off. |
-| `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result, for either streaming engine |
+| Function / Class                | Description                                                                                                                                                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SlidingWindow`                 | Fixed-capacity ring buffer of the most recent points, feeding both engines below                                                                                                                           |
+| `StreamingHomology`             | Naive baseline — full recompute on every `push()`. Every incremental engine is differential-tested against this.                                                                                           |
+| `IncrementalH1`                 | Prefix-stable incremental engine — updates H₀+H₁ without a full recompute (H₂ out of scope). Validated across many seeds/regimes against full recompute. See Benchmarks for the speed-to-memory trade-off. |
+| `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result, for either streaming engine                                                                                                                             |
 
 ### Example datasets
 
-| Function | Description |
-|----------|-------------|
-| `loadMNISTDigits()` | A small bundled sample of MNIST handwritten-digit images |
-| `loadIrisDataset()` | The UCI Iris flower measurements (150 samples) |
+| Function                         | Description                                                    |
+| -------------------------------- | -------------------------------------------------------------- |
+| `loadMNISTDigits()`              | A small bundled sample of MNIST handwritten-digit images       |
+| `loadIrisDataset()`              | The UCI Iris flower measurements (150 samples)                 |
 | `generateTerrain(size, octaves)` | Procedural fractal-Brownian-motion terrain heightmap generator |
 
 ## Benchmarks
 
 The streaming engine (`IncrementalH1`) is 1.7×–3.4× faster than a full recompute on every push across seven real datasets — but it's a real win in the mid-size window regime (≤80), not a dominant replacement at all scales.
 
-| Dataset | Source | Dimensionality | Geometric mean speedup |
-|---------|--------|---------------|------------------------|
-| Monthly sunspot counts (1749–1983) | SIDC/WDC-SILSO | 2D (delay embed) | 1.90× (95% CI 1.68×–2.14×) |
-| UCI Iris measurements (150 samples) | archive.ics.uci.edu | 4D | 3.09× (95% CI 2.82×–3.39×) |
-| Melbourne daily min. temperatures (1981–1990) | Australian BOM | 2D (delay embed) | 2.09× (95% CI 1.66×–2.63×) |
-| UCI Wine chemical analysis (178 samples) | archive.ics.uci.edu (id=109) | 13D | 1.99× (95% CI 1.69×–2.34×) |
-| UCI Wheat seed kernel measurements (210 samples) | archive.ics.uci.edu (id=236) | 7D | 2.99× (95% CI 2.91×–3.08×) |
-| UCI Sonar returns classification (208 samples) | archive.ics.uci.edu (id=151) | 60D | 3.19× (95% CI 2.88×–3.54×) |
-| Jazz musicians collaboration network (198 nodes) | Gleiser & Danon 2003, KONECT | 3D (graph Lap.) | 2.48× (95% CI 1.82×–3.38×) |
+| Dataset                                          | Source                       | Dimensionality   | Geometric mean speedup     |
+| ------------------------------------------------ | ---------------------------- | ---------------- | -------------------------- |
+| Monthly sunspot counts (1749–1983)               | SIDC/WDC-SILSO               | 2D (delay embed) | 1.90× (95% CI 1.68×–2.14×) |
+| UCI Iris measurements (150 samples)              | archive.ics.uci.edu          | 4D               | 3.09× (95% CI 2.82×–3.39×) |
+| Melbourne daily min. temperatures (1981–1990)    | Australian BOM               | 2D (delay embed) | 2.09× (95% CI 1.66×–2.63×) |
+| UCI Wine chemical analysis (178 samples)         | archive.ics.uci.edu (id=109) | 13D              | 1.99× (95% CI 1.69×–2.34×) |
+| UCI Wheat seed kernel measurements (210 samples) | archive.ics.uci.edu (id=236) | 7D               | 2.99× (95% CI 2.91×–3.08×) |
+| UCI Sonar returns classification (208 samples)   | archive.ics.uci.edu (id=151) | 60D              | 3.19× (95% CI 2.88×–3.54×) |
+| Jazz musicians collaboration network (198 nodes) | Gleiser & Danon 2003, KONECT | 3D (graph Lap.)  | 2.48× (95% CI 1.82×–3.38×) |
 
 All seven are statistically significant (paired t-test on log-speedup, p<0.05 per axis; all seven survive Bonferroni correction for 7 simultaneous axes). The suite spans time series (2×), biological features (4D), chemical analysis (13D), image-derived kernel measurements (7D), high-dimensional sonar frequency readings (60D), and network/graph-derived embeddings (3D) — covering every domain gap identified in the original 3-dataset analysis. Sonar (60D) shows the strongest speedup (3.2×) and lowest re-reduced fraction (50%), indicating the prefix-caching mechanism becomes more effective in high-dimensional regimes. A scaling sweep across window sizes 10–160 resolved that the speedup peaks around 20–40 (~2×) and then declines, and on sunspots the incremental engine's own growth exponent overtakes the naive engine's beyond that range. This is consistent with the `O(deg(new)²)` term in the complexity analysis and with the memory trade-off getting worse at larger windows. Reproduce with `npm run bench`.
 

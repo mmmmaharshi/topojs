@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { computePersistentHomology } from '../src/core/homology.ts';
-import { computePersistentHomologyCohomology } from '../src/core/homology-cohom.ts';
-import { mulberry32, circlePoints, generatePoints } from './helpers.ts';
+/* eslint-disable vitest/expect-expect */
+import { describe, it, expect } from "vitest";
+import { computePersistentHomology } from "../src/core/homology.ts";
+import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
+import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
 
 /**
  * Canonicalize pairs before comparing: computePersistentHomologyCohomology
@@ -14,20 +15,20 @@ import { mulberry32, circlePoints, generatePoints } from './helpers.ts';
 function canon(pairs: { dim: number; birth: number; death: number }[]): string {
   return JSON.stringify(
     pairs
-      .map((p) => ({ dim: p.dim, birth: p.birth, death: p.death }))
-      .sort((a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death),
+      .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
+      .toSorted((a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death),
   );
 }
 
 function checkMatches(points: Float64Array, dims: number, maxDist: number, maxDim: number): void {
   const expected = computePersistentHomology(points, dims, maxDist, maxDim);
   const actual = computePersistentHomologyCohomology(points, dims, maxDist, maxDim);
-  expect(actual.complex).toEqual(expected.complex);
+  expect(actual.complex).toStrictEqual(expected.complex);
   expect(canon(actual.pairs)).toBe(canon(expected.pairs));
 }
 
-describe('computePersistentHomologyCohomology (cohomology direction) vs. computePersistentHomology (ground truth)', () => {
-  it('matches on random point clouds across many seeds and densities', () => {
+describe("computePersistentHomologyCohomology (cohomology direction) vs. computePersistentHomology (ground truth)", () => {
+  it("matches on random point clouds across many seeds and densities", () => {
     // Bumped from 10 to 40 seeds -- see the identical note in
     // test/homology-fast.test.ts. src/index.ts's docstring for THIS engine
     // separately claims "13,800 configs for H1... 399-config sweep for H2,
@@ -36,7 +37,9 @@ describe('computePersistentHomologyCohomology (cohomology direction) vs. compute
       const rng = mulberry32(seed);
       const n = 20 + (seed % 5) * 5;
       const pts: [number, number][] = [];
-      for (let i = 0; i < n; i++) pts.push([rng(), rng()]);
+      for (let i = 0; i < n; i++) {
+        pts.push([rng(), rng()]);
+      }
       const flat = generatePoints(pts);
       for (const maxDist of [0.2, 0.35, 0.5, 1.5]) {
         checkMatches(flat, 2, maxDist, 2);
@@ -44,57 +47,67 @@ describe('computePersistentHomologyCohomology (cohomology direction) vs. compute
     }
   });
 
-  it('matches on a circle (many triangles, structured geometry)', () => {
+  it("matches on a circle (many triangles, structured geometry)", () => {
     for (const n of [8, 12, 16, 24]) {
-      const pts = circlePoints(n, 1.0);
+      const pts = circlePoints(n, 1);
       checkMatches(pts, 2, 0.9, 2);
     }
   });
 
-  it('matches on tie-heavy grid point clouds -- exercises heavy pivot-cascade sharing', () => {
+  it("matches on tie-heavy grid point clouds -- exercises heavy pivot-cascade sharing", () => {
     for (const size of [3, 4, 5]) {
       const pts: [number, number][] = [];
       for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) pts.push([i, j]);
+        for (let j = 0; j < size; j++) {
+          pts.push([i, j]);
+        }
       }
       const flat = generatePoints(pts);
-      for (const maxDist of [1.0, 1.5, Math.SQRT2 + 0.01, 2.5]) {
+      for (const maxDist of [1, 1.5, Math.SQRT2 + 0.01, 2.5]) {
         checkMatches(flat, 2, maxDist, 2);
       }
     }
   });
 
-  it('matches on a 1D lattice (extreme tie density)', () => {
+  it("matches on a 1D lattice (extreme tie density)", () => {
     const pts: [number, number][] = [];
-    for (let i = 0; i < 15; i++) pts.push([i, 0]);
+    for (let i = 0; i < 15; i++) {
+      pts.push([i, 0]);
+    }
     const flat = generatePoints(pts);
-    for (const maxDist of [1.0, 2.0, 3.0, 5.0]) {
+    for (const maxDist of [1, 2, 3, 5]) {
       checkMatches(flat, 2, maxDist, 2);
     }
   });
 
-  it('matches in 3D', () => {
+  it("matches in 3D", () => {
     const rng = mulberry32(42);
     for (const n of [15, 25]) {
       const pts: number[] = [];
-      for (let i = 0; i < n * 3; i++) pts.push(rng());
+      for (let i = 0; i < n * 3; i++) {
+        pts.push(rng());
+      }
       checkMatches(new Float64Array(pts), 3, 0.6, 2);
     }
   });
 
-  it('matches with maxDim=3 (H2 cohomology-accelerated path, random cloud)', () => {
+  it("matches with maxDim=3 (H2 cohomology-accelerated path, random cloud)", () => {
     const rng = mulberry32(99);
     const pts: number[] = [];
-    for (let i = 0; i < 12 * 3; i++) pts.push(rng());
+    for (let i = 0; i < 12 * 3; i++) {
+      pts.push(rng());
+    }
     checkMatches(new Float64Array(pts), 3, 0.8, 3);
   });
 
-  it('matches with maxDim=3 across many seeds/densities in 2D and 3D (H2 stress)', () => {
+  it("matches with maxDim=3 across many seeds/densities in 2D and 3D (H2 stress)", () => {
     for (let seed = 1; seed <= 12; seed++) {
       const rng = mulberry32(seed);
       const n = 10 + (seed % 6) * 3;
       const pts2d: [number, number][] = [];
-      for (let i = 0; i < n; i++) pts2d.push([rng(), rng()]);
+      for (let i = 0; i < n; i++) {
+        pts2d.push([rng(), rng()]);
+      }
       const flat2d = generatePoints(pts2d);
       for (const maxDist of [0.4, 0.8, 1.5]) {
         checkMatches(flat2d, 2, maxDist, 3);
@@ -104,26 +117,32 @@ describe('computePersistentHomologyCohomology (cohomology direction) vs. compute
       const rng = mulberry32(seed * 7 + 1);
       const n = 10 + (seed % 5) * 2;
       const pts: number[] = [];
-      for (let i = 0; i < n * 3; i++) pts.push(rng());
-      for (const maxDist of [0.6, 1.0, 1.4]) {
+      for (let i = 0; i < n * 3; i++) {
+        pts.push(rng());
+      }
+      for (const maxDist of [0.6, 1, 1.4]) {
         checkMatches(new Float64Array(pts), 3, maxDist, 3);
       }
     }
   });
 
-  it('matches on tie-heavy 3D grids at maxDim=3 (many tetrahedra, heavy clearing)', () => {
+  it("matches on tie-heavy 3D grids at maxDim=3 (many tetrahedra, heavy clearing)", () => {
     for (const size of [3, 4]) {
       const pts: number[] = [];
-      for (let i = 0; i < size; i++)
-        for (let j = 0; j < size; j++)
-          for (let k = 0; k < 2; k++) pts.push(i, j, k);
-      for (const maxDist of [1.0, 1.5, 2.0, 2.5]) {
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          for (let k = 0; k < 2; k++) {
+            pts.push(i, j, k);
+          }
+        }
+      }
+      for (const maxDist of [1, 1.5, 2, 2.5]) {
         checkMatches(new Float64Array(pts), 3, maxDist, 3);
       }
     }
   });
 
-  it('produces a genuine ESSENTIAL H2 class on a hollow octahedron (regression test)', () => {
+  it("produces a genuine ESSENTIAL H2 class on a hollow octahedron (regression test)", () => {
     // Octahedron vertices: (+-1,0,0),(0,+-1,0),(0,0,+-1). At maxDist between
     // sqrt(2) (adjacent-vertex distance) and 2 (antipodal-vertex distance),
     // the Rips complex is exactly the octahedron's 1-skeleton/2-skeleton --
@@ -150,25 +169,29 @@ describe('computePersistentHomologyCohomology (cohomology direction) vs. compute
     }
   });
 
-  it('matches on sparse/disconnected configurations', () => {
+  it("matches on sparse/disconnected configurations", () => {
     const rng = mulberry32(77);
     const pts: [number, number][] = [];
-    for (let i = 0; i < 30; i++) pts.push([rng(), rng()]);
+    for (let i = 0; i < 30; i++) {
+      pts.push([rng(), rng()]);
+    }
     const flat = generatePoints(pts);
     checkMatches(flat, 2, 0.1, 2);
   });
 
-  it('matches on synthetic loop geometry (essential H1 class present)', () => {
+  it("matches on synthetic loop geometry (essential H1 class present)", () => {
     // A clean ring should produce a surviving (essential, death=-1) H1 bar.
-    const pts = circlePoints(20, 1.0);
+    const pts = circlePoints(20, 1);
     checkMatches(pts, 2, 0.35, 2);
   });
 
-  it('matches on a larger dense cloud (the actual profiled bottleneck regime)', () => {
+  it("matches on a larger dense cloud (the actual profiled bottleneck regime)", () => {
     const rng = mulberry32(4242);
     const n = 80;
     const pts: [number, number][] = [];
-    for (let i = 0; i < n; i++) pts.push([rng(), rng()]);
+    for (let i = 0; i < n; i++) {
+      pts.push([rng(), rng()]);
+    }
     const flat = generatePoints(pts);
     checkMatches(flat, 2, 0.3, 2);
   });

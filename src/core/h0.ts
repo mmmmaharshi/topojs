@@ -1,4 +1,4 @@
-import { UnionFind } from './unionfind.ts';
+import { UnionFind } from "./unionfind.ts";
 
 /**
  * A single persistence pair: a homological feature that is born at
@@ -44,11 +44,11 @@ function computeH0PhaseImpl(
   for (let ei = 0; ei < edgeCount; ei++) {
     const u = getU(ei);
     const v = getV(ei);
-    if (uf.find(u) !== uf.find(v)) {
+    if (uf.find(u) === uf.find(v)) {
+      cycleEdges[ei] = 1;
+    } else {
       h0Pairs.push({ birth: 0, death: getVal(ei), dim: 0 });
       uf.union(u, v);
-    } else {
-      cycleEdges[ei] = 1;
     }
   }
 
@@ -61,7 +61,7 @@ function computeH0PhaseImpl(
     }
   }
 
-  return { h0Pairs, cycleEdges };
+  return { cycleEdges, h0Pairs };
 }
 
 /**
@@ -108,9 +108,9 @@ export function computeH0Phase(
   return computeH0PhaseImpl(
     nVertices,
     edges.length,
-    i => edges[i]!.u,
-    i => edges[i]!.v,
-    i => edges[i]!.val,
+    (i) => edges[i]!.u,
+    (i) => edges[i]!.v,
+    (i) => edges[i]!.val,
   );
 }
 
@@ -140,9 +140,9 @@ export function computeH0PhaseFromArrays(
   return computeH0PhaseImpl(
     nVertices,
     length,
-    i => uArr[i]!,
-    i => vArr[i]!,
-    i => valArr[i]!,
+    (i) => uArr[i]!,
+    (i) => vArr[i]!,
+    (i) => valArr[i]!,
   );
 }
 

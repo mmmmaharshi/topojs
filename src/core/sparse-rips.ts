@@ -1,7 +1,7 @@
-import type { Points } from './distance.ts';
-import type { HomologyResult } from './homology.ts';
-import { computePersistentHomology } from './homology.ts';
-import { selectLandmarks } from './landmarks.ts';
+import type { Points } from "./distance.ts";
+import type { HomologyResult } from "./homology.ts";
+import { computePersistentHomology } from "./homology.ts";
+import { selectLandmarks } from "./landmarks.ts";
 
 /**
  * Approximate Vietoris–Rips persistent homology via landmark subsampling --
@@ -70,26 +70,34 @@ export function computeSparseRipsHomology(
   dims: number,
   n: number,
   numLandmarks: number,
-  maxDist: number = Infinity,
-  maxDim: number = 2,
-  startIndex: number = 0,
+  maxDist = Infinity,
+  maxDim = 2,
+  startIndex = 0,
 ): SparseRipsResult {
-  const { landmarkIndices, coveringRadius } = selectLandmarks(points, dims, n, numLandmarks, startIndex);
+  const { landmarkIndices, coveringRadius } = selectLandmarks(
+    points,
+    dims,
+    n,
+    numLandmarks,
+    startIndex,
+  );
   const L = landmarkIndices.length;
 
   const landmarkPoints = new Float64Array(L * dims);
   for (let i = 0; i < L; i++) {
     const src = landmarkIndices[i]! * dims;
     const dst = i * dims;
-    for (let d = 0; d < dims; d++) landmarkPoints[dst + d] = points[src + d]!;
+    for (let d = 0; d < dims; d++) {
+      landmarkPoints[dst + d] = points[src + d]!;
+    }
   }
 
   const result = computePersistentHomology(landmarkPoints, dims, maxDist, maxDim);
 
   return {
     ...result,
-    landmarkIndices,
-    coveringRadius,
     bottleneckBound: 2 * coveringRadius,
+    coveringRadius,
+    landmarkIndices,
   };
 }

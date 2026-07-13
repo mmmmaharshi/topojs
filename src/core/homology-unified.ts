@@ -7,18 +7,19 @@
  * fastest correct result without picking an engine.
  */
 
-import type { Points } from './distance.ts';
-import type { HomologyResult } from './homology.ts';
-import { computePersistentHomology as computeStandard } from './homology.ts';
-import { computePersistentHomologyFast } from './homology-fast.ts';
-import { computePersistentHomologyCohomology } from './homology-cohom.ts';
-import { computePersistentHomologyCohomologyImplicit } from './homology-cohom-implicit.ts';
-export { computePersistentHomologyCohomologyFromComplex } from './homology-cohom-implicit.ts';
+import type { Points } from "./distance.ts";
+import type { HomologyResult } from "./homology.ts";
+import { computePersistentHomology as computeStandard } from "./homology.ts";
+import { computePersistentHomologyFast } from "./homology-fast.ts";
+import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
+import { computePersistentHomologyCohomologyImplicit } from "./homology-cohom-implicit.ts";
 
-export type { HomologyResult } from './homology.ts';
+export { computePersistentHomologyCohomologyFromComplex } from "./homology-cohom-implicit.ts";
+
+export type { HomologyResult } from "./homology.ts";
 
 /** Engine selection for `computePersistentHomology`. */
-export type HomologyEngine = 'auto' | 'standard' | 'cohomology' | 'implicit' | 'fast';
+export type HomologyEngine = "auto" | "standard" | "cohomology" | "implicit" | "fast";
 
 export interface HomologyOptions {
   /** Maximum filtration distance (default Infinity). */
@@ -62,30 +63,30 @@ export function computePersistentHomology(
   arg4?: number,
 ): HomologyResult {
   // Normalise to options object
-  let opts: HomologyOptions;
-  if (arg3 === undefined || typeof arg3 === 'number') {
-    opts = { maxDist: arg3, maxDim: arg4 };
-  } else {
-    opts = arg3;
-  }
+  const opts: HomologyOptions =
+    arg3 === undefined || typeof arg3 === "number" ? { maxDim: arg4, maxDist: arg3 } : arg3;
 
-  const { maxDist = Infinity, maxDim = 2, engine = 'auto', epsilon } = opts;
+  const { maxDist = Infinity, maxDim = 2, engine = "auto", epsilon } = opts;
 
   // Auto-select engine
   let resolved: HomologyEngine = engine;
-  if (resolved === 'auto') {
-    resolved = epsilon !== undefined ? 'implicit' : 'cohomology';
+  if (resolved === "auto") {
+    resolved = epsilon === undefined ? "cohomology" : "implicit";
   }
 
   switch (resolved) {
-    case 'cohomology':
+    case "cohomology": {
       return computePersistentHomologyCohomology(points, dims, maxDist, maxDim);
-    case 'implicit':
+    }
+    case "implicit": {
       return computePersistentHomologyCohomologyImplicit(points, dims, maxDist, maxDim, epsilon);
-    case 'standard':
+    }
+    case "standard": {
       return computeStandard(points, dims, maxDist, maxDim);
-    case 'fast':
+    }
+    case "fast": {
       return computePersistentHomologyFast(points, dims, maxDist, maxDim);
+    }
     default: {
       const _exhaustive: never = resolved;
       throw new Error(`Unknown homology engine: ${_exhaustive}`);

@@ -1,12 +1,12 @@
-import type { Points } from './distance.ts';
-import { SpatialGrid } from './spatial-grid.ts';
-import type { EdgeEntry } from './h0.ts';
-import { selectLandmarks } from './landmarks.ts';
+import type { Points } from "./distance.ts";
+import { SpatialGrid } from "./spatial-grid.ts";
+import type { EdgeEntry } from "./h0.ts";
+import { selectLandmarks } from "./landmarks.ts";
 
 function euclidean(points: Points, dims: number, i: number, j: number): number {
   const bi = i * dims;
   const bj = j * dims;
-  let sq = 0.0;
+  let sq = 0;
   for (let d = 0; d < dims; d++) {
     const diff = points[bi + d]! - points[bj + d]!;
     sq += diff * diff;
@@ -194,7 +194,7 @@ export function buildRipsComplex(
   points: Points,
   dims: number,
   maxDist: number,
-  maxDim: number = 2,
+  maxDim = 2,
   epsilon?: number,
 ): RipsComplex {
   const n = points.length / dims;
@@ -221,18 +221,22 @@ export function buildRipsComplex(
     // Points with radii > threshold are skipped (inactive); the remaining
     // suffix of the permutation is active (radii <= threshold).
     let inactivePrefix = 0;
-    for (let i = 1; i < n && radii[i]! > threshold; i++) inactivePrefix++;
+    for (let i = 1; i < n && radii[i]! > threshold; i++) {
+      inactivePrefix++;
+    }
     activeCount = n - inactivePrefix;
     let maxCovering = 0;
     for (let i = 1; i <= inactivePrefix; i++) {
-      if (radii[i]! > maxCovering) maxCovering = radii[i]!;
+      if (radii[i]! > maxCovering) {
+        maxCovering = radii[i]!;
+      }
     }
     sheehy = {
-      perm,
-      radii,
-      epsilon,
       activeCount,
       coveringRadius: maxCovering,
+      epsilon,
+      perm,
+      radii,
     };
   }
 
@@ -246,7 +250,9 @@ export function buildRipsComplex(
   const permRank: Int32Array | null = perm ? new Int32Array(n) : null;
   if (permRank && perm) {
     permRank.fill(-1);
-    for (let pi = 0; pi < perm.length; pi++) permRank[perm[pi]!] = pi;
+    for (let pi = 0; pi < perm.length; pi++) {
+      permRank[perm[pi]!] = pi;
+    }
   }
   const isActive = (idx: number): boolean =>
     permRank === null ? true : permRank[idx]! < activeCount;
@@ -262,27 +268,35 @@ export function buildRipsComplex(
   const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
 
   for (let i = 0; i < n; i++) {
-    if (!isActive(i)) continue;
+    if (!isActive(i)) {
+      continue;
+    }
     const candidates = grid ? grid.candidatesAfter(points, i) : null;
     const checkPair = (j: number): void => {
-      if (!isActive(j)) return;
+      if (!isActive(j)) {
+        return;
+      }
       const d = euclidean(points, dims, i, j);
       if (d <= maxDist) {
-        tempEdges.push({ u: i, v: j, val: d, origIdx: adj[i]!.length });
+        tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
       }
     };
     if (candidates) {
-      for (const j of candidates) checkPair(j);
+      for (const j of candidates) {
+        checkPair(j);
+      }
     } else {
-      for (let j = i + 1; j < n; j++) checkPair(j);
+      for (let j = i + 1; j < n; j++) {
+        checkPair(j);
+      }
     }
   }
 
   tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
 
-  const edges: EdgeEntry[] = tempEdges.map(e => ({ u: e.u, v: e.v, val: e.val }));
+  const edges: EdgeEntry[] = tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val }));
 
   // Dense u*n+v keyspace -> flat Int32Array lookup when n is small (below
   // EDGE_INDEX_DENSE_MAX_N -- a separate constant from GRID_MIN_N above, see
@@ -304,11 +318,16 @@ export function buildRipsComplex(
     n < EDGE_INDEX_DENSE_MAX_N ? new Int32Array(n * n).fill(-1) : null;
   const edgeIndexSparse: Map<number, number> | null = edgeIndexDense ? null : new Map();
   const setEdgeIndex = (u: number, v: number, idx: number): void => {
-    if (edgeIndexDense) edgeIndexDense[u * n + v] = idx;
-    else edgeIndexSparse!.set(u * n + v, idx);
+    if (edgeIndexDense) {
+      edgeIndexDense[u * n + v] = idx;
+    } else {
+      edgeIndexSparse!.set(u * n + v, idx);
+    }
   };
   const getEdgeIndex = (u: number, v: number): number => {
-    if (edgeIndexDense) return edgeIndexDense[u * n + v]!;
+    if (edgeIndexDense) {
+      return edgeIndexDense[u * n + v]!;
+    }
     return edgeIndexSparse!.get(u * n + v)!;
   };
   for (let i = 0; i < edges.length; i++) {
@@ -322,12 +341,12 @@ export function buildRipsComplex(
 
   // ── Build bit-vector adjacency ──
   const words = Math.ceil(n / 32);
-  const adjBits: Uint32Array[] = new Array(n);
+  const adjBits: Uint32Array[] = Array.from({ length: n });
   for (let v = 0; v < n; v++) {
     const bits = new Uint32Array(words);
     const nbors = adj[v]!;
-    for (let k = 0; k < nbors.length; k++) {
-      bits[nbors[k]! >>> 5]! |= 1 << (nbors[k]! & 31);
+    for (const nb of nbors) {
+      bits[nb >>> 5]! |= 1 << (nb & 31);
     }
     adjBits[v] = bits;
   }
@@ -372,8 +391,8 @@ export function buildRipsComplex(
           // (u, v) is exactly the current outer-loop edge -- ei is already
           // its index, no lookup needed (was a redundant Map.get before).
           edges: [ei, ukIdx, vkIdx],
-          verts: [u, v, k],
           val: birth,
+          verts: [u, v, k],
         });
       }
     }
@@ -441,5 +460,5 @@ export function buildRipsComplex(
     tetrahedra.sort((a, b) => a.val - b.val);
   }
 
-  return { n, edges, triangles, tetrahedra, adjBits: adjBits, triMap: triMapExposed, sheehy };
+  return { adjBits, edges, n, sheehy, tetrahedra, triMap: triMapExposed, triangles };
 }
