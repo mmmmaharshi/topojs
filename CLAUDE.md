@@ -58,7 +58,7 @@ this file finding the API table under-documented the actual surface.
   type-check bypass. Match that standard for new assertions: don't add one
   without being able to state why it's safe.
 - **Differential testing, not just unit tests.** Every homology engine
-  (`computePersistentHomologyFast`, `computePersistentHomologyCohomology`,
+  (`computePersistentHomology`,
   `IncrementalH1`, the spatial grid, etc.) is validated against an
   independent reference — usually `computePersistentHomology` itself, or a
   hand-written brute-force implementation inline in the test file — across

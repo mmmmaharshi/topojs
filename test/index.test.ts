@@ -25,8 +25,7 @@ import * as topojs from '../src/index.ts';
 describe('public API barrel (src/index.ts)', () => {
   it('exports every documented batch-homology function', () => {
     expect(typeof topojs.computePersistentHomology).toBe('function');
-    expect(typeof topojs.computePersistentHomologyFast).toBe('function');
-    expect(typeof topojs.computePersistentHomologyCohomology).toBe('function');
+    expect(typeof topojs.computePersistentHomologyCohomologyFromComplex).toBe('function');
     expect(typeof topojs.computeCubicalHomology).toBe('function');
   });
 

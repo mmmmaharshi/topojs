@@ -7,120 +7,29 @@
  * be reorganized without a semver-major bump).
  */
 
-// ── Rips / cubical persistence ──
-export { computePersistentHomology } from './core/homology.ts';
-export type { HomologyResult } from './core/homology.ts';
-export { computeCubicalHomology } from './core/cubical.ts';
-export type { CubicalResult } from './core/cubical.ts';
-
-// ── Rips persistence, H1-accelerated via apparent pairs ──
-// Correctness-validated (see test/homology-fast.test.ts: 8 tests -- random
-// clouds, circles, tie-heavy grids, 1D lattices, 3D, maxDim=3 -- all
-// differential-tested against computePersistentHomology; plus ad-hoc stress
-// sweeps of 11,100 random configs and 61 grid/lattice configs, 0 mismatches).
-// Performance was previously benchmarked against synthetic i.i.d. random
-// point clouds (mean speedup roughly 0.83x-1.33x, sometimes a net loss);
-// that benchmark script and its synthetic data have been removed as part
-// of a repo-wide real-data-only policy for performance claims. Not yet
-// re-measured against real data -- see the function docstring for the
-// single-edge-vs-full-boundary bug this correctness testing caught and
-// fixed, which remains valid regardless of the removed benchmark.
-export { computePersistentHomologyFast } from './core/homology-fast.ts';
-export type { HomologyResultFast } from './core/homology-fast.ts';
-
-// ── Rips persistence, H1 AND H2 via persistent COHOMOLOGY (dual/coboundary
-// direction) -- the structural technique that makes Ripser fast ──
-// Correctness-validated (see test/homology-cohom.test.ts: 12 tests --
-// random clouds, circles, tie-heavy grids, 1D lattices, 3D, maxDim=3
-// stress across 2D/3D, tie-heavy 3D grids, a hollow-octahedron essential-H2
-// regression case, sparse/disconnected, essential classes, the dense n=80
-// regime -- all differential-tested against computePersistentHomology;
-// plus ad-hoc stress sweeps: 13,800 configs for H1 (maxDim 2), and a
-// separate 399-config sweep specifically for H2 (maxDim=3, 2D+3D, random +
-// grid + sparse + dense, 0 mismatches). Derived directly from Bauer 2019
-// ("Ripser: efficient computation of Vietoris-Rips persistence
-// barcodes", arXiv:1908.02518) and the ripser.cpp reference source, not
-// from memory.
-// Two real bugs were caught and fixed during development, both via
-// hand-picked minimal/geometric counterexamples rather than the random
-// stress sweeps (which never happened to exercise either path):
-//   1. The coboundary matrix's direction was initially backwards (Ripser
-//      processes edge/triangle-columns and searches for triangle/tetra-
-//      hedron pivots in REVERSE filtration order, not the ascending order
-//      used elsewhere in this codebase) -- produced spurious H1 pairs;
-//      found via a 4-point complete graph (K4) counterexample.
-//   2. The H2 phase was initially gated on `tetrahedra.length > 0`, which
-//      silently DROPPED the essential H2 class whenever a configuration
-//      had zero tetrahedra at all (small random clouds essentially never
-//      hit this; a hollow octahedron -- 6 vertices, 0 tetrahedra since
-//      every 4-point subset includes an antipodal pair -- does, reliably).
-// H2 uses the same construction as H1, one dimension up: "cycle triangles"
-// (triangles not already claimed as an H1 pivot) are reduced against a
-// tetrahedra coboundary. Skipping H1-claimed triangles entirely is exactly
-// the CLEARING optimization (Bauer 2019 section 4.3) applied across
-// dimensions -- investigated earlier for the plain homology direction and
-// found inapplicable there (no higher dimension to clear against in the
-// default H0+H1-only case), but here it falls out for free.
-// This is a STRUCTURAL win, not a constant-factor one -- H1 reduces one
-// column per CYCLE EDGE instead of one column per TRIANGLE (~19x fewer
-// columns on one profiled case: 16,516 edges vs. 310,841 triangles), so
-// unlike the apparent-pairs speedup, this one should GROW with
-// density/size rather than shrink toward 1x. It was previously benchmarked
-// on synthetic i.i.d. random point clouds (mean speedup roughly 1.3x-4.3x
-// for H1-only, 1.4x-3.6x with H2 also accelerated); that benchmark script
-// and its synthetic data have been removed as part of a repo-wide
-// real-data-only policy for performance claims. Not yet re-measured
-// against real data.
-export { computePersistentHomologyCohomology } from './core/homology-cohom.ts';
+// ── Unified Rips persistence (auto-selects best engine) ──
+export {
+  computePersistentHomology,
+  computePersistentHomologyCohomologyFromComplex,
+  HomologyEngine,
+} from './core/homology-unified.ts';
+export type { HomologyResult, HomologyOptions } from './core/homology-unified.ts';
 
 // ── Rips persistence, ARBITRARY dimension (H0..Hk, k unbounded) ──
-// Generalizes computePersistentHomology's hardcoded H0+H1+H2 to a loop over
-// dimension -- the exact same column-reduction algorithm, applied uniformly
-// for j = 1..maxHomologyDim instead of unrolled per dimension. Populates the
-// `higher` bucket that PerDimensionPairs/summarize/splitByDimension have
-// reserved for dim>=3 pairs since they were written, but that no engine
-// before this one ever actually produced.
-// Correctness-validated (see test/homology-general.test.ts, 12 tests):
-// differential-tested against computePersistentHomology itself (must match
-// EXACTLY when maxHomologyDim<=2) across 300 random 2D/3D configs, PLUS a
-// closed-form ground-truth case for H3 -- the boundary of the 4D
-// cross-polytope (16-cell: 8 vertices, antipodal pairs excluded by
-// maxDist), a known triangulation of S^3 (Betti (1,0,0,1), f-vector
-// (8,24,32,16), chi=0) -- the direct 4D generalization of this repo's
-// existing octahedron/S^2/H2 test in test/rips.test.ts.
-// SCOPE, stated honestly: builds on a correctness-first (not
-// performance-tuned) complex construction (src/core/complex-general.ts) --
-// does not reuse buildRipsComplex's spatial-grid edge-building optimization,
-// and simplex counts grow combinatorially with dimension for dense/large
-// point clouds (inherent to flag complexes, not a shortcut taken here).
-// Intended for small-to-moderate n and maxHomologyDim -- to make dimension
-// >= 3 homology computable AT ALL (no other engine here can), not to
-// compete with the exact H0-H2 engines' performance where they already work
-// well. See src/core/homology-general.ts's docstring for the full algorithm.
 export { computePersistentHomologyGeneral } from './core/homology-general.ts';
 export type { HomologyResultGeneral } from './core/homology-general.ts';
 export { buildGeneralRipsComplex } from './core/complex-general.ts';
 export type { GeneralRipsComplex, GeneralSimplexEntry } from './core/complex-general.ts';
 
 // ── Rips persistence, APPROXIMATE via landmark subsampling ──
-// This repo's first approximate (not exact) engine -- exists to make
-// persistence computable past the ~n=1000 ceiling of the exact engines
-// above (see README's "Against Ripser" section for that ceiling). Backed
-// by a PROVEN bottleneck-distance bound (Chazal/de Silva/Oudot 2014
-// Lipschitz stability of the Rips filtration under Hausdorff perturbation,
-// applied to farthest-point-sampled landmarks -- see sparse-rips.ts's top
-// docstring for the theorem statement), not an empirical-only "good
-// enough" claim. Validated in test/sparse-rips.test.ts by checking the
-// bound actually holds (measured bottleneck distance <= 2*coveringRadius)
-// across many random configs and real datasets already bundled in this
-// repo (Iris, MNIST digit pixel clouds) -- the same "validate at scale
-// against ground truth" discipline as every exact engine here, adapted to
-// a bounded-error claim since exact match is not the applicable standard
-// for an approximate method.
 export { computeSparseRipsHomology } from './core/sparse-rips.ts';
 export type { SparseRipsResult } from './core/sparse-rips.ts';
 export { selectLandmarks } from './core/landmarks.ts';
 export type { LandmarkResult } from './core/landmarks.ts';
+
+// ── Cubical persistence (2D grayscale images) ──
+export { computeCubicalHomology } from './core/cubical.ts';
+export type { CubicalResult } from './core/cubical.ts';
 
 // ── Distances ──
 export { computePairwiseDistances, lookupDist } from './core/distance.ts';
@@ -131,7 +40,7 @@ export { bottleneckDistance } from './core/bottleneck.ts';
 
 // ── Core types ──
 export type { PersistencePair, EdgeEntry } from './core/h0.ts';
-export type { TriangleEntry, TetraEntry, RipsComplex } from './core/complex.ts';
+export type { TriangleEntry, TetraEntry, RipsComplex, SheehyInfo } from './core/complex.ts';
 
 // ── Export / serialization ──
 export {
@@ -147,48 +56,11 @@ export type { PerDimensionPairs, DiagramStats } from './export/persistence-diagr
 // ── Real-world example datasets ──
 export { loadMNISTDigits, loadIrisDataset, generateTerrain } from './data/realworld-datasets.ts';
 
-// ── Streaming persistent homology (Phase A / naive baseline) ──
+// ── Streaming persistent homology ──
 export { SlidingWindow } from './streaming/sliding-window.ts';
 export { StreamingHomology } from './streaming/streaming-homology.ts';
 export type { StreamingHomologyOptions, StreamingUpdate } from './streaming/streaming-homology.ts';
 export { summarizeForStreaming } from './streaming/topological-summary.ts';
 export type { TopologicalSummary } from './streaming/topological-summary.ts';
-
-// ── Streaming persistent homology (Phase B / prefix-stable incremental H1) ──
-// Correctness-validated (see test/incremental.test.ts: 8 tests, many seeds,
-// dense/sparse regimes, 3D, exact match against full recompute every push;
-// re-verified after the v3 geometry rewrite below).
-//
-// v3 (current): geometry construction (which edges/triangles exist) is now
-// itself incremental -- only the evicted point's edges/triangles are
-// filtered out and only the new point's are computed and merged in, instead
-// of rebuilding the full O(k^2) edge set + O(k^3) triangle set from scratch
-// every push (that full rebuild was the acknowledged bottleneck in v1/v2;
-// see the class docstring's version history). Reduction itself (the
-// prefix-caching mechanism) is unchanged and still skips little work
-// (98.9-99.8% of triangles still get re-reduced per push on every real
-// dataset tested so far) -- the v3 win is a distinct mechanism from that one.
-//
-// All performance claims for this class are now benchmarked against real,
-// externally-sourced data only (earlier synthetic i.i.d.-random benchmarks
-// and their output data have been removed). See bench/data/summary.txt for
-// full methodology and bench/benchmark.ts (one parameterized harness,
-// dataset registry covers sunspots, UCI Iris, and Melbourne daily min
-// temps -- run all with `npm run bench`, or a single dataset with
-// `npm run bench -- <name>`) for the three
-// independent real-data measurements: geometric mean speedup over
-// StreamingHomology of 1.34x-1.91x, all statistically significant (paired
-// t-test on log-speedup, p<0.05) despite small chunk counts (the practical
-// limit of chunking a single real series). Re-run before citing exact
-// numbers. Add new benchmark axes to that file's dataset registry, not as
-// a new standalone script.
-//
-// Statistical caveat: chunks are disjoint slices of one real series, not
-// independent draws. bench/benchmark.ts's pairedStats() now reports a
-// chunk-order autocorrelation diagnostic and an effective-N-adjusted CI
-// alongside the raw one -- on at least one observed run this widened the
-// Melbourne-temps CI enough to cross 1x. See bench/data/summary.txt
-// "Statistical caveat" section before citing any single dataset's
-// significance as settled.
 export { IncrementalH1 } from './streaming/incremental-h1.ts';
 export type { IncrementalH1Options, IncrementalH1Update } from './streaming/incremental-h1.ts';

@@ -14,7 +14,8 @@
 // the plain engine's 16x-93x gap that acceleration actually closes, instead
 // of leaving that as an unmeasured docstring claim).
 import { readFileSync, writeFileSync } from 'node:fs';
-import { computePersistentHomology, computePersistentHomologyCohomology } from '../src/index.ts';
+import { computePersistentHomology } from '../src/index.ts';
+import { computePersistentHomologyCohomology } from '../src/core/homology-cohom.ts';
 
 const [, , csvPath, dimsArg, maxDistArg, maxDimArg, outPath, engineArg] = process.argv;
 const dims = Number(dimsArg);

@@ -35,9 +35,8 @@ console.log(cubical.pairs);
 
 | Function | Description |
 |----------|-------------|
-| `computePersistentHomology(points, dims, maxDist, maxDim)` | Vietoris–Rips H₀+H₁+H₂ — the reference all other engines are differential-tested against |
-| `computePersistentHomologyFast(points, dims, maxDist, maxDim)` | Same result, H₁ accelerated via apparent pairs. Cross-validated across 11,100+ configs, zero mismatches. |
-| `computePersistentHomologyCohomology(points, dims, maxDist, maxDim)` | Same result, H₁ *and* H₂ accelerated via persistent cohomology (the coboundary technique behind Ripser's speed). Reduces one column per cycle *edge*, not per triangle. Validated across 13,800+ H₁ configs and 399 H₂ configs, zero mismatches. |
+| `computePersistentHomology(points, dims, maxDist?, maxDim?)` | Vietoris–Rips H₀+H₁+H₂ with automatic best-engine selection. For extra control pass an options object (`engine`, `epsilon`). |
+| `computePersistentHomologyCohomologyFromComplex(complex, maxDim?)` | Cohomology on a pre-built `RipsComplex` (e.g. from `buildRipsComplex`), for callers who already have one. |
 | `computeCubicalHomology(image, height, width, maxDim)` | Cubical H₀+H₁ for 2D images (parameter order is `height, width`) |
 
 ### Arbitrary-dimension homology
