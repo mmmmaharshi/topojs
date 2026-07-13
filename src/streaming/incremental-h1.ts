@@ -102,6 +102,24 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  * avoid. Practical upshot: treat this class as a validated win in the
  * mid-size window regime this repo's own benchmarks and demo use
  * (windowSize <= 80), not a strictly-dominant replacement for
+ *
+ * SO WHERE IS THE ACTUAL WORST CASE, MEASURED ON REAL DATA (not
+ * constructed synthetically -- see bench/data/worst_case_regime_summary.txt
+ * for the full writeup)? Two axes: window size and push order. Window size:
+ * extending Melbourne-temp's scaling sweep further (windowSize 200, 220)
+ * shows the decline continuing (1.14x, 1.10x) but NOT yet crossing below
+ * 1x in the range tractable to measure on this sandbox (windowSize=250 did
+ * not finish within 44s even for a single trial). Push order is where a
+ * real, statistically significant sub-1x result actually shows up: UCI Wine
+ * under random push-orderings (see the order-sensitivity sweep referenced
+ * above) has geometric mean speedup 0.846x (95% CI 0.724x-0.989x, entirely
+ * below 1x) -- IncrementalH1 reliably LOSES to the naive baseline once
+ * Wine's convenient default (file) ordering is removed. This is the
+ * practical warning for real deployments: README's headline speedups
+ * describe a favorable-ordering best case more than a guarantee, and a
+ * genuine online stream (points arriving in whatever order the world
+ * produces, not pre-sorted by class) should expect results closer to the
+ * order-randomized numbers.
  * StreamingHomology at all scales -- re-benchmark before assuming the
  * advantage holds at much larger windows.
  *
@@ -121,6 +139,21 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  * Theta(T+Q) + O(deg(new)^3) cost applies to tetrahedron building (Q =
  * tetrahedron count, O(deg(new)^3) for new tetrahedra enumeration), and
  * the prefix-stable reduction extends identically to the H2 phase.
+ *
+ * IS THIS FORMULA ACTUALLY FIT AGAINST DATA, OR JUST DERIVED? Both, as of
+ * `npm run bench:complexity-fit`: an OLS regression of measured per-push
+ * time against (E+T), k, and deg(new)^2 on real data (sunspots, Melbourne
+ * temps, windowSizes 10-160) explains 98.2%-98.8% of variance -- strong
+ * support for the general claim that time tracks realized complex size, not
+ * a flat function of k. But (E+T) ALONE already explains 93.0%-96.6% by
+ * itself, and the individual fitted coefficients for k and deg(new)^2 come
+ * out negative (an artifact, not a real effect) because k, E+T, and
+ * deg(new)^2 are themselves strongly correlated in real windowed data
+ * (r=0.64-0.95 pairwise) -- k mechanically bounds E, T, and deg(new), so
+ * OLS cannot cleanly separate their individual contributions. Read the
+ * three-term formula as "these effects TOGETHER explain the timing well",
+ * not as three separately-measurable regression coefficients. See
+ * bench/data/complexity_fit_results.txt.
  *
  * DOES DENSITY PREDICT THE BREAKDOWN? Tested directly (`npm run bench --
  * --regime`): swept realized triangle density from <1% to 88% of the
@@ -149,7 +182,24 @@ import { DenseWorkingCol } from "../core/reduction.ts";
  *  entirely -- the adjacency check during triangle building now uses the
  *  same edge-pair lookup (pairIndex) already built during the merge phase,
  *  and the eviction-triggered neighbor-set cleanup is no longer needed.
- *  This removes k Set objects + k Map entries per instance. Still a
+ *  This removes k Set objects + k Map entries per instance.
+ *
+ *  ABLATED, not just combined (`bench/data/ablation_results.txt`, via
+ *  git-archiving the commit right before each fix and re-running the same
+ *  memory sweep): the "7.3x-52.5x" figure above was previously only ever
+ *  reported as fix #1+#2's COMBINED effect. Isolated: fix #1 alone gives a
+ *  consistent ~2.4x-2.7x reduction across windowSize 40/80/160 -- the
+ *  cleanest, most stable of the three. Fix #2 alone contributes the
+ *  largest share and grows with window size (3.1x at w=40, 7.8x at w=160,
+ *  though the w=80 point at 20.1x looks like a favorable measurement
+ *  outlier rather than the true trend). Fix #3 alone is real at w=160
+ *  (1.84x) but disappears into measurement noise at w=80 and below -- by
+ *  that point absolute memory is already down to tens of KB, near
+ *  process.memoryUsage().heapUsed's inherent noise floor, so fix #3's
+ *  contribution is only reliably visible at larger windows where the
+ *  absolute savings clear that floor.
+ *
+ *  Still a
  *  real, unresolved trade-off, not eliminated by these fixes: fine for one
  *  or a few concurrent windows; a real limitation for use cases with many
  *  concurrent windows (e.g. one per sensor across a fleet), where

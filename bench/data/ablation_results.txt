@@ -1,0 +1,74 @@
+ABLATION STUDY -- IncrementalH1's 3 storage-layout memory fixes
+Method: git-archived each commit's full tree into an isolated directory
+(no shared node_modules needed -- IncrementalH1/bench/benchmark.ts are
+zero-dependency, so `node --experimental-strip-types --expose-gc
+bench/benchmark.ts --memory melbourne-temp <windowSize>` runs directly from
+each historical checkout with no build step). Real data (Melbourne daily
+min. temperatures), median-of-7-builds heap-delta measurement, same
+methodology bench/benchmark.ts's memory sweep already uses.
+
+COMMITS ISOLATED:
+  baseline = e8ef1d9 (last commit before any of the 3 fixes)
+  fix1     = 419f07a "Pool IncrementalH1's reducedCols/triPair"
+  fix2     = 5f209b9 "Pool IncrementalH1's triOrder too" (on top of fix1)
+  fix3     = fc99e5e "pool pointCoords into flat Float64Array, eliminate
+             neighborsOf Map<Set> entirely" (on top of fix1+fix2)
+
+README.md previously reported these three fixes' COMBINED effect only
+("together a verified 7.3x-52.5x reduction"), never each fix's individual
+contribution. This isolates them.
+
+RESULTS (IncrementalH1 heap delta, MB, at three window sizes):
+
+windowSize=40:
+  baseline: 0.333 MB
+  fix1:     0.141 MB  (2.36x reduction vs. baseline)
+  fix2:     0.045 MB  (3.13x reduction vs. fix1; 7.40x cumulative vs. baseline)
+  fix3:     0.010 MB  (4.50x reduction vs. fix2; 33.3x cumulative vs. baseline)
+
+windowSize=80:
+  baseline: 1.940 MB
+  fix1:     0.745 MB  (2.60x reduction vs. baseline)
+  fix2:     0.037 MB  (20.1x reduction vs. fix1; 52.4x cumulative vs. baseline)
+  fix3:    -0.013 MB  (below the heap-measurement noise floor at this scale --
+             fix3's marginal contribution is NOT reliably measurable here,
+             see HONEST INTERPRETATION below)
+
+windowSize=160:
+  baseline: 7.750 MB
+  fix1:     2.866 MB  (2.70x reduction vs. baseline)
+  fix2:     0.369 MB  (7.77x reduction vs. fix1; 21.0x cumulative vs. baseline)
+  fix3:     0.201 MB  (1.84x reduction vs. fix2; 38.6x cumulative vs. baseline)
+
+HONEST INTERPRETATION.
+
+1. Fix #1 (pool reducedCols/triPair) contributes a consistent ~2.4x-2.7x
+   reduction across all three window sizes -- the most stable, most clearly
+   isolated effect of the three.
+
+2. Fix #2 (pool triOrder) contributes the LARGEST share, and its benefit
+   GROWS with window size: 3.1x at w=40, 20.1x at w=80, 7.8x at w=160 (not
+   perfectly monotonic -- w=80's outsized 20.1x looks like it's partly
+   catching a favorable measurement point, given w=160's 7.8x is more
+   consistent with w=40's 3.1x scaling trend). Directionally this matches
+   the expectation that triOrder pooling savings scale with k, but the
+   w=80 number specifically should be treated as noisier than w=40/w=160.
+
+3. Fix #3 (pool pointCoords, eliminate neighborsOf) is the hardest of the
+   three to isolate cleanly: it shows a real 1.84x reduction at w=160 (large
+   enough to be above the noise floor), but at w=80 its contribution comes
+   out NEGATIVE (-0.013 MB, i.e. no measurable effect, or the measurement
+   noise exceeded the true effect size) -- by this point in the fix
+   sequence, absolute memory is already down to tens of KB, close to or
+   below process.memoryUsage().heapUsed's inherent measurement noise floor
+   (see bench/benchmark.ts's own memory-sweep docstring caveat). Fix #3's
+   real contribution is most visible at LARGER window sizes where the
+   absolute savings are large enough to clear the noise floor, not at the
+   smaller sizes where the combined effect of fixes #1+#2 has already
+   brought memory down near where V8 heap-delta measurement stops being
+   reliable.
+
+4. The combined fix1+fix2 effect (21.0x-52.4x depending on window size,
+   measured here) is consistent with README.md's previously-stated combined
+   "7.3x-52.5x reduction" range -- this ablation confirms that headline
+   number while also showing it was never broken down per-fix until now.

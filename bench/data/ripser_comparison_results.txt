@@ -1,3 +1,63 @@
+RIGOR UPDATE (this run supersedes the single-run H0+H1 numbers below for
+statistical treatment; the H2/n=400 follow-up section further down is
+separate work and still stands as-is). An audit found this script had run
+each case exactly ONCE per re-run -- a single wall-clock sample, no repeated
+trials, no CI, no significance test, unlike bench/benchmark.ts's streaming-
+engine comparison. bench/compare_ripser.py now supports `--trials N`
+(default 8) and reports the same statistical treatment: geometric mean speed
+ratio, 95% CI (Student's t), and per-case trial count. Below: 6 trials/case,
+all 4 cases, generated via `python3 bench/compare_ripser.py --trials 6`.
+
+=== sunspots_n60: n=60, maxDist=0.15, maxDim=2, trials=6 ===
+[plain] geometric mean speed ratio across 6 trials: 17.53x  (95% CI: 16.63x .. 18.48x)  t=139.12
+[cohom] geometric mean speed ratio across 6 trials: 17.81x  (95% CI: 16.94x .. 18.72x)  t=148.45
+Betti-number match: YES (both engines, exact)
+
+=== melbourne_n60: n=60, maxDist=0.15, maxDim=2, trials=6 ===
+[plain] geometric mean speed ratio across 6 trials: 14.86x  (95% CI: 14.25x .. 15.50x)  t=165.43
+[cohom] geometric mean speed ratio across 6 trials: 14.57x  (95% CI: 13.90x .. 15.28x)  t=146.33
+Betti-number match: YES (both engines, exact)
+
+=== sunspots_n400_H0H1only: n=400, maxDist=0.1, maxDim=1, trials=6 ===
+[plain] geometric mean speed ratio across 6 trials: 30.46x  (95% CI: 28.58x .. 32.47x)  t=137.46
+[cohom] geometric mean speed ratio across 6 trials: 30.52x  (95% CI: 28.56x .. 32.61x)  t=132.73
+Betti-number match: YES (both engines, exact)
+
+=== melbourne_n400_H0H1only: n=400, maxDist=0.1, maxDim=1, trials=6 ===
+[plain] geometric mean speed ratio across 6 trials: 16.93x  (95% CI: 16.67x .. 17.20x)  t=465.06
+[cohom] geometric mean speed ratio across 6 trials: 16.87x  (95% CI: 16.60x .. 17.14x)  t=448.33
+Betti-number match: reconciled via zero-persistence-bar convention (already root-caused, see below) -- YES
+
+=== summary: topojs engine speed ratio vs Ripser, across all cases ===
+case                        plain (x, 95% CI)         cohom (x, 95% CI)         cohom speedup over plain
+sunspots_n60                17.5x (16.6-18.5)         17.8x (16.9-18.7)         0.98
+melbourne_n60               14.9x (14.3-15.5)         14.6x (13.9-15.3)         1.02
+sunspots_n400_H0H1only      30.5x (28.6-32.5)         30.5x (28.6-32.6)         1.00
+melbourne_n400_H0H1only     16.9x (16.7-17.2)         16.9x (16.6-17.1)         1.02
+
+geometric mean slowdown vs Ripser (across cases' multi-trial geo means): plain=19.1x, cohom=19.1x
+all cases correct (raw match OR reconciled via zero-persistence-bar convention): YES
+
+HONEST NOTE ON THE cohom-vs-plain DIRECTION. The single-run numbers this
+section replaces (see below) showed cohom consistently 1.1x-3.3x faster than
+plain, with a caveat that the exact multiplier was noisy run-to-run. With 6
+trials/case and CIs, that direction did NOT reproduce cleanly on THIS
+sandboxed run: cohom vs plain came out at 0.98x-1.02x across all four cases
+-- i.e. statistically indistinguishable, not a reliable win either way in
+this environment. This does not necessarily contradict the earlier finding
+(different hardware -- this is a shared sandboxed VM, not the original dev
+machine -- can shift small, constant-factor JIT/GC effects like this one
+noticeably), but it does mean the "cohom is faster than plain" claim should
+be re-verified on the actual target machine before being stated as a stable
+result, rather than carried forward from a single prior run.
+
+REQUIRES scipy now (bench/requirements.txt updated) for the t-distribution
+critical value used in the CI computation.
+
+---
+
+ORIGINAL SINGLE-RUN DATA (pre-rigor-update, kept for history; superseded by
+the multi-trial section above for magnitude claims):
 
 === sunspots_n60: n=60 points, maxDist=0.15, maxDim=2 ===
 ripser (C++, state-of-the-art batch reference): 3.60ms  byDim={'0': {'finite': 58, 'essential': 2}, '1': {'finite': 10, 'essential': 0}, '2': {'finite': 0, 'essential': 0}}

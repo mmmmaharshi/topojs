@@ -28,6 +28,7 @@
  * Scaling sweep (see below):    npm run bench -- --scaling melbourne-temp
  * Memory sweep (see below):     npm run bench -- --memory melbourne-temp
  * Regime sweep (see below):     npm run bench -- --regime
+ * Order-sensitivity (below):    npm run bench -- --order-sensitivity iris
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -73,6 +74,31 @@ function dataDrivenLag(
 
 function minMax(series: number[]): [number, number] {
   return [Math.min(...series), Math.max(...series)];
+}
+
+/** Deterministic PRNG (mulberry32) -- seeded so order-sensitivity trials are reproducible. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d_2b_79_f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) | 0;
+    t ^= t >>> 14;
+    return (t >>> 0) / 4_294_967_296;
+  };
+}
+
+/** Fisher-Yates shuffle of a copy of `points`, seeded for reproducibility. Does not mutate the input. */
+function shuffledCopy<T>(points: T[], seed: number): T[] {
+  const rng = mulberry32(seed);
+  const out = points.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = out[i]!;
+    out[i] = out[j]!;
+    out[j] = tmp;
+  }
+  return out;
 }
 
 function delayEmbed2D(series: number[], lag: number): number[][] {
@@ -294,6 +320,26 @@ function lag1Autocorr(x: number[]): number {
   return den === 0 ? 0 : num / den;
 }
 
+/**
+ * Approximate magnitude label for Cohen's d (Cohen 1988 conventional bands:
+ * small ~0.2, medium ~0.5, large ~0.8). Those bands were defined for raw
+ * score differences, not log-ratios, so this is a rough read, not a precise
+ * classification -- stated at the call site too, not just here.
+ */
+function cohensDLabel(d: number): string {
+  const abs = Math.abs(d);
+  if (abs < 0.2) {
+    return "negligible";
+  }
+  if (abs < 0.5) {
+    return "small";
+  }
+  if (abs < 0.8) {
+    return "medium";
+  }
+  return "large";
+}
+
 function pairedStats(logSpeedups: number[]) {
   const n = logSpeedups.length;
   const mean = logSpeedups.reduce((a, b) => a + b, 0) / n;
@@ -316,12 +362,23 @@ function pairedStats(logSpeedups: number[]) {
   const seEff = Math.sqrt(variance) / Math.sqrt(nEff);
   const tCritEff = tCritical95(nEff - 1);
 
+  // Cohen's d for a one-sample/paired test: mean effect in SD units, not SE
+  // units like the t-stat above. A significant t-stat (small SE, driven by
+  // large n) can coexist with a small Cohen's d (noisy per-trial effect) --
+  // reporting both separately, rather than only the t-stat, is standard
+  // practice precisely because significance and effect size answer different
+  // questions ("is there an effect" vs. "how big is it, relative to its own
+  // noise"). Uses the SAME sample standard deviation as the raw (non-
+  // effective-N-adjusted) t-test above, for direct comparability.
+  const cohensD = mean / Math.sqrt(variance);
+
   return {
     chunkAutocorr,
     ciHigh: Math.exp(mean + tCrit * se),
     ciHighEff: Math.exp(mean + tCritEff * seEff),
     ciLow: Math.exp(mean - tCrit * se),
     ciLowEff: Math.exp(mean - tCritEff * seEff),
+    cohensD,
     geoMean: Math.exp(mean),
     mean,
     n,
@@ -605,6 +662,7 @@ function runDataset(key: string): {
   n: number;
   mean: number;
   se: number;
+  cohensD: number;
 } {
   const cfg = DATASETS[key];
   if (!cfg) {
@@ -718,6 +776,7 @@ function runDataset(key: string): {
     tStatEff,
     ciLowEff,
     ciHighEff,
+    cohensD,
   } = stats;
   const meanReReduced =
     reReducedFracs.reduce((a, b) => a + b, 0) / reReducedFracs.length;
@@ -728,6 +787,9 @@ function runDataset(key: string): {
   console.log(`mean re-reduced fraction: ${(meanReReduced * 100).toFixed(1)}%`);
   console.log(
     `paired t-test on log(speedup), H0: speedup=1x, H1: speedup>1x, df=${n - 1}: t=${tStat.toFixed(3)}`
+  );
+  console.log(
+    `effect size (Cohen's d on log-speedup): ${cohensD.toFixed(3)}  (${cohensDLabel(cohensD)}, approximate -- Cohen's bands are for raw scores, not log-ratios)`
   );
   if (cfg.mode === "repeats") {
     // 'repeats' trials are re-timings of the IDENTICAL stream (see dataset
@@ -767,6 +829,7 @@ function runDataset(key: string): {
     ciHighEff,
     ciLow,
     ciLowEff,
+    cohensD,
     geoMean,
     key,
     mean,
@@ -1246,6 +1309,106 @@ function summarizeRegime(rows: RegimeRow[]): void {
   }
 }
 
+// ── order-sensitivity sweep ─────────────────────────────────────────────
+// "repeats"-mode datasets (Iris, Wine, Seeds, Sonar, Jazz) push their fixed
+// point set in ONE real ordering (the ordering the source file happens to
+// store them in -- e.g. Iris is 50 Setosa/50 Versicolor/50 Virginica,
+// class-sorted, not shuffled). The main runDataset() "repeats" trials re-time
+// that SAME ordering N times, which measures measurement/JIT noise, not
+// whether the reported speedup is an artifact of that one particular push
+// order. This sweep answers that directly: reshuffle the same real points
+// into N distinct random orderings (seeded, reproducible) and measure the
+// speedup fresh on each -- if the speedup is a property of the incremental
+// algorithm rather than of Iris's class-sorted ordering, it should recur
+// across shuffles with the same rough magnitude and low variance.
+// NOT run on "chunks"-mode datasets (sunspots, Melbourne temps): those are
+// real time series where push order IS the signal (delay-embedded from a
+// temporal sequence), so shuffling would destroy the thing being measured,
+// not test a confound.
+
+function runOrderSensitivity(key: string, nOrderings = 12): void {
+  const cfg = DATASETS[key];
+  if (!cfg) {
+    throw new Error(
+      `unknown dataset "${key}". Known: ${Object.keys(DATASETS).join(", ")}`
+    );
+  }
+  if (cfg.mode !== "repeats") {
+    console.log(
+      `\n=== ORDER-SENSITIVITY: ${cfg.name} ===\n` +
+        "SKIPPED -- this is a mode='chunks' real time series (push order is the temporal " +
+        "signal being measured, not an arbitrary artifact to test for). Order-sensitivity " +
+        "only applies to mode='repeats' fixed-set datasets."
+    );
+    return;
+  }
+
+  console.log(`\n=== ORDER-SENSITIVITY: ${cfg.name} ===`);
+  console.log(`source: ${cfg.source}`);
+  console.log(
+    `${nOrderings} independent random push-orderings (seeded, Fisher-Yates) of the SAME ${cfg.name.match(/\d+/u)?.[0] ?? "?"} real points -- ` +
+      "tests whether the reported speedup depends on this dataset's default (file) ordering, not just measurement noise on one fixed order."
+  );
+
+  const { points: basePoints } = cfg.load();
+  const warmup = cfg.windowSize + 5;
+  const timedSteps = basePoints.length - warmup - 1;
+
+  const logSpeedups: number[] = [];
+  console.log(
+    "ordering".padStart(10) +
+      "naive_ms".padStart(12) +
+      "incr_ms".padStart(12) +
+      "speedup".padStart(10)
+  );
+
+  for (let o = 0; o < nOrderings; o++) {
+    // Seed offset by a large prime-ish constant so this sweep's shuffles never
+    // collide with seeds used elsewhere in this file.
+    const shuffled = shuffledCopy(basePoints, 900_001 + o);
+    const naiveMs = benchNaive(
+      shuffled,
+      cfg.dims,
+      cfg.windowSize,
+      cfg.maxDist,
+      warmup,
+      timedSteps
+    );
+    const { ms: incrMs } = benchIncremental(
+      shuffled,
+      cfg.dims,
+      cfg.windowSize,
+      cfg.maxDist,
+      warmup,
+      timedSteps
+    );
+    const speedup = naiveMs / incrMs;
+    logSpeedups.push(Math.log(speedup));
+    console.log(
+      String(o).padStart(10) +
+        naiveMs.toFixed(3).padStart(12) +
+        incrMs.toFixed(3).padStart(12) +
+        `${speedup.toFixed(3)}x`.padStart(10)
+    );
+  }
+
+  const stats = pairedStats(logSpeedups);
+  console.log(
+    `\ngeometric mean speedup across ${nOrderings} random orderings: ${stats.geoMean.toFixed(3)}x  ` +
+      `(95% CI: ${stats.ciLow.toFixed(3)}x .. ${stats.ciHigh.toFixed(3)}x)`
+  );
+  console.log(
+    `paired t-test on log(speedup) across shuffles, H0: speedup=1x: t=${stats.tStat.toFixed(3)}, df=${stats.n - 1}`
+  );
+  console.log(
+    `effect size (Cohen's d on log-speedup): ${stats.cohensD.toFixed(3)}`
+  );
+  console.log(
+    "Interpretation: if this CI overlaps the main run's default-order geometric mean, the speedup is " +
+      "not an artifact of the dataset's default (e.g. class-sorted) ordering."
+  );
+}
+
 // ── CLI ──────────────────────────────────────────────────────────────────
 
 const argv = process.argv.slice(3);
@@ -1291,6 +1454,17 @@ if (arg === "--memory") {
     ? sizesArg.split(",").map(Number)
     : cfg.scalingWindowSizes;
   runMemorySweep(dsKey, windowSizes);
+  process.exit(0);
+}
+
+if (arg === "--order-sensitivity") {
+  const [dsKey, nArg] = argv;
+  if (!dsKey) {
+    throw new Error(
+      "--order-sensitivity requires a dataset key, e.g. --order-sensitivity iris"
+    );
+  }
+  runOrderSensitivity(dsKey, nArg ? Number(nArg) : 12);
   process.exit(0);
 }
 

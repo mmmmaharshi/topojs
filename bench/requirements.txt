@@ -15,3 +15,4 @@
 # produced them, per README's "measured not just claimed" ethos).
 ripser>=0.6.15
 numpy>=2.2.6
+scipy>=1.15.0

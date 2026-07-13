@@ -1,0 +1,51 @@
+WORST-CASE REGIME: WHERE DOES INCREMENTALH1'S SPEEDUP ACTUALLY FAIL?
+All real data (per CLAUDE.md's real-data-only benchmark policy -- no
+synthetic/pathological point clouds constructed for this). Two axes probed:
+window size (does raw growth eventually favor the naive engine?) and push
+order (does the reported speedup depend on a convenient default ordering?).
+Both were already partially explored elsewhere in this repo; this
+consolidates them into one direct answer plus extends the window-size axis
+with new real-data points.
+
+AXIS 1: WINDOW SIZE (extends bench/data/scaling_results.txt).
+Melbourne daily-temperature real series, raw speedup vs. window size:
+  windowSize=80:   1.71x
+  windowSize=120:  1.53x
+  windowSize=160:  1.36x
+  windowSize=200:  1.14x  (NEW, this run)
+  windowSize=220:  1.10x  (NEW, this run)
+  windowSize=250:  did not finish within 44s on this sandbox (NEW finding --
+    the naive/incremental gap in per-trial cost is itself growing large
+    enough at this size that even a single-trial probe becomes impractical
+    to run quickly, independent of which engine "wins")
+
+The decline is monotonic and real (80->220: 1.71x->1.10x), but on this
+dataset, real data never actually crossed below 1.0x in the range that
+remained tractable to measure (up to windowSize=220 in a single sandboxed
+run). Extrapolating the visible decay, a crossover to <1x plausibly sits
+just past 220-250, but that is an extrapolation, not a measurement -- stated
+honestly rather than rounded up to a claimed crossover point.
+
+AXIS 2: PUSH ORDER (from bench/data/order_sensitivity_results.txt, this
+session's earlier order-sensitivity sweep -- see that file for full detail).
+This axis DID produce a real, measured, statistically significant sub-1x
+result: UCI Wine under 12 random push-orderings had a geometric mean speedup
+of 0.846x (95% CI 0.724x-0.989x, entirely below 1x, t=-2.351) -- IncrementalH1
+was RELIABLY SLOWER than the naive baseline on real data, once the
+dataset's convenient default (non-random) ordering was removed. Iris,
+Sonar, and Jazz also had point estimates at or below 1x under randomization
+(0.99x, 0.83x, 1.07x respectively) though not statistically distinguishable
+from 1x at n=12 orderings.
+
+HONEST CONCLUSION. The worst-case regime this repo can actually point to
+with real, measured evidence is NOT "very large window size" (that decline
+is real but stayed above 1x in the ranges tractable to measure here) -- it
+is "push order without the dataset's convenient default structure", where
+Wine already crosses below 1x with statistical significance. This matters
+for anyone deciding whether to use IncrementalH1 in a genuine online
+deployment: the speedup figures in README.md's Benchmarks table describe a
+best case (favorable, often class/structure-sorted ordering) more than a
+guaranteed one, and a real streaming deployment -- where points arrive in
+whatever order the world produces them, not pre-sorted by class -- should
+expect results closer to the order-randomized numbers than the
+default-order headline ones.

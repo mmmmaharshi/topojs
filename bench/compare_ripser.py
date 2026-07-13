@@ -20,11 +20,29 @@ from source, so it is not included here -- Ripser alone is used as the
 comparison partner, which the Ripser paper itself establishes as the fastest
 of the batch tools it compared against.
 
-Run with: python3 bench/compare_ripser.py
+RIGOR NOTE (added after an audit found this script ran each case exactly
+ONCE -- a single wall-clock sample per case/engine, no repeated trials, no
+confidence interval, no significance test, in sharp contrast to
+bench/benchmark.ts's streaming-engine comparison, which reports geometric
+mean speedup with 95% CIs and a paired t-test across multiple trials per
+dataset). This script now repeats each case TRIALS times (default 8,
+override with --trials N) and reports the SAME statistical treatment as
+bench/benchmark.ts: geometric mean speed ratio, 95% CI (Student's t,
+small-sample correct), and a paired t-test on log(speed ratio) across
+trials. The first trial of each case still does the full correctness check
+(Betti-number match); subsequent trials are timing-only re-runs of the
+identical case (same points, same params) -- this measures measurement/
+process-spawn noise across repeats of one case, analogous to bench/
+benchmark.ts's "repeats" mode caveat for its own fixed small datasets (see
+that file's DATASETS registry notes) -- not diversity across independent
+data, which would require more real datasets, not more repeats of these four.
+
+Run with: python3 bench/compare_ripser.py [--trials N] [--cases name1,name2]
 Requires: pip install --break-system-packages -r bench/requirements.txt
           (or: pip install --break-system-packages ripser numpy)
 """
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -94,6 +112,62 @@ def load_melbourne() -> np.ndarray:
     vals = np.array([float(line.split(",")[1].strip('"')) for line in lines])
     lag = data_driven_lag(vals, 60, 10)
     return delay_embed_2d(vals, lag)
+
+
+def t_critical95(df: int) -> float:
+    """Two-sided 97.5th-percentile Student's-t critical value. Uses scipy
+    (already a transitive dependency here via ripser/persim/scikit-learn)
+    instead of reimplementing the Cornish-Fisher expansion bench/benchmark.ts
+    uses in JS, since a real stats library is available in this Python
+    context and there's no reason to hand-roll it twice."""
+    from scipy import stats as scipy_stats
+    return float(scipy_stats.t.ppf(0.975, df))
+
+
+def paired_log_ratio_stats(ratios: list) -> dict:
+    """Same statistical treatment as bench/benchmark.ts's pairedStats():
+    geometric mean, 95% CI (small-sample Student's t, not a normal-
+    approximation z), and a paired t-test on log(ratio), H0: ratio=1."""
+    n = len(ratios)
+    logs = [math.log(r) for r in ratios]
+    mean = sum(logs) / n
+    if n < 2:
+        return {"ci_high": math.exp(mean), "ci_low": math.exp(mean),
+                "geo_mean": math.exp(mean), "n": n, "t_stat": float("nan")}
+    variance = sum((v - mean) ** 2 for v in logs) / (n - 1)
+    se = math.sqrt(variance) / math.sqrt(n)
+    t_crit = t_critical95(n - 1)
+    t_stat = mean / se if se > 0 else float("inf")
+    return {
+        "ci_high": math.exp(mean + t_crit * se),
+        "ci_low": math.exp(mean - t_crit * se),
+        "geo_mean": math.exp(mean),
+        "n": n,
+        "t_stat": t_stat,
+    }
+
+
+def time_only_rerun(name: str, engine: str, points: np.ndarray, max_dist: float,
+                     max_dim: int) -> float:
+    """Timing-only re-run of an already-correctness-verified case (no Betti
+    comparison, no console spam) -- used for repeat trials 2..TRIALS so the
+    statistical treatment below has more than one sample per case/engine."""
+    csv_path = TMPDIR / f"{name}_{engine}_rerun.csv"
+    out_path = TMPDIR / f"{name}_{engine}_rerun_result.json"
+    np.savetxt(csv_path, points, fmt="%.10f")
+    topojs_max_dim = max_dim + 1 if max_dim >= 2 else max_dim
+    subprocess.run(
+        [
+            "node", "--experimental-strip-types",
+            str(HERE / "export_topojs_diagram.ts"),
+            str(csv_path), "2", str(max_dist), str(topojs_max_dim), str(out_path), engine,
+        ],
+        check=True, capture_output=True, text=True,
+    )
+    ms = json.loads(out_path.read_text())["ms"]
+    csv_path.unlink(missing_ok=True)
+    out_path.unlink(missing_ok=True)
+    return ms
 
 
 def betti_summary(dgms, maxdim: int) -> dict:
@@ -201,16 +275,17 @@ def run_topojs_engine(name: str, engine: str, points: np.ndarray, max_dist: floa
     }
 
 
-def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> list:
+def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int,
+             trials: int = 8) -> list:
     n = len(points)
-    print(f"\n=== {name}: n={n} points, maxDist={max_dist}, maxDim={max_dim} ===")
+    print(f"\n=== {name}: n={n} points, maxDist={max_dist}, maxDim={max_dim}, trials={trials} ===")
 
     # -- Ripser (run once per case, shared as the baseline for both topojs engines) --
     t0 = time.perf_counter()
     result = ripser(points, maxdim=max_dim, thresh=max_dist)
     ripser_ms = (time.perf_counter() - t0) * 1000
     ripser_betti = betti_summary(result["dgms"], max_dim)
-    print(f"ripser (C++, state-of-the-art batch reference): {ripser_ms:.2f}ms  byDim={ripser_betti}")
+    print(f"ripser (C++, state-of-the-art batch reference), trial 0: {ripser_ms:.2f}ms  byDim={ripser_betti}")
 
     engine_results = []
     for engine in ("plain", "cohom"):
@@ -224,21 +299,72 @@ def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int) -> li
         print(f"cohom vs plain (this repo, same case): {plain_ms / cohom_ms:.2f}x "
               f"({'cohom faster' if cohom_ms < plain_ms else 'cohom slower or equal'})")
 
+    # -- repeat trials 2..N: timing-only, no re-verification (correctness is
+    # deterministic given identical inputs, already checked above) -- gives
+    # the same "multiple trials -> CI -> paired t-test" treatment bench/
+    # benchmark.ts applies to the streaming-engine comparison, previously
+    # missing here entirely (this script ran each case exactly once).
+    plain_ratios = [plain_ms / ripser_ms] if ripser_ms > 0 else []
+    cohom_ratios = [cohom_ms / ripser_ms] if ripser_ms > 0 else []
+    for _ in range(trials - 1):
+        t0 = time.perf_counter()
+        ripser(points, maxdim=max_dim, thresh=max_dist)
+        r_ms = (time.perf_counter() - t0) * 1000
+        p_ms = time_only_rerun(name, "plain", points, max_dist, max_dim)
+        c_ms = time_only_rerun(name, "cohom", points, max_dist, max_dim)
+        if r_ms > 0:
+            plain_ratios.append(p_ms / r_ms)
+            cohom_ratios.append(c_ms / r_ms)
+
+    plain_stats = paired_log_ratio_stats(plain_ratios)
+    cohom_stats = paired_log_ratio_stats(cohom_ratios)
+    print(
+        f"[plain] geometric mean speed ratio across {plain_stats['n']} trials: "
+        f"{plain_stats['geo_mean']:.2f}x  (95% CI: {plain_stats['ci_low']:.2f}x .. {plain_stats['ci_high']:.2f}x)  "
+        f"t={plain_stats['t_stat']:.2f}"
+    )
+    print(
+        f"[cohom] geometric mean speed ratio across {cohom_stats['n']} trials: "
+        f"{cohom_stats['geo_mean']:.2f}x  (95% CI: {cohom_stats['ci_low']:.2f}x .. {cohom_stats['ci_high']:.2f}x)  "
+        f"t={cohom_stats['t_stat']:.2f}"
+    )
+    for r in engine_results:
+        r["ratio_stats"] = plain_stats if r["engine"] == "plain" else cohom_stats
+
     return engine_results
 
 
 def main():
+    trials = 8
+    case_filter = None
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        if args[i] == "--trials" and i + 1 < len(args):
+            trials = int(args[i + 1])
+            i += 2
+        elif args[i] == "--cases" and i + 1 < len(args):
+            case_filter = set(args[i + 1].split(","))
+            i += 2
+        else:
+            i += 1
+
     sunspots = load_sunspots()
     melbourne = load_melbourne()
 
     all_results = []
 
+    def maybe_run(name, points, max_dist, max_dim):
+        if case_filter is not None and name not in case_filter:
+            return []
+        return run_case(name, points, max_dist, max_dim, trials=trials)
+
     # Small case, H0+H1+H2: same order of magnitude as the streaming
     # benchmarks' window sizes. topojs's plain computePersistentHomology
     # needs maxDim=3 (tetrahedra construction) to compute H2 at all -- see
     # the conversion note in run_topojs_engine().
-    all_results += run_case("sunspots_n60", sunspots[:60], max_dist=0.15, max_dim=2)
-    all_results += run_case("melbourne_n60", melbourne[:60], max_dist=0.15, max_dim=2)
+    all_results += maybe_run("sunspots_n60", sunspots[:60], 0.15, 2)
+    all_results += maybe_run("melbourne_n60", melbourne[:60], 0.15, 2)
 
     # Larger case, H0+H1 ONLY (max_dim=1 -> topojs maxDim=1, no tetrahedra).
     # An earlier version of this script tried n=400 WITH H2 (max_dim=2) here
@@ -257,25 +383,33 @@ def main():
     # was never extended to add that H2/n=400 cohom case directly; it's
     # still H0+H1-only below for that reason, not because the question is
     # open.
-    all_results += run_case("sunspots_n400_H0H1only", sunspots[:400], max_dist=0.1, max_dim=1)
-    all_results += run_case("melbourne_n400_H0H1only", melbourne[:400], max_dist=0.1, max_dim=1)
+    all_results += maybe_run("sunspots_n400_H0H1only", sunspots[:400], 0.1, 1)
+    all_results += maybe_run("melbourne_n400_H0H1only", melbourne[:400], 0.1, 1)
 
     # -- cross-case summary: how much of the plain engine's gap does cohom close? --
+    # Uses the MULTI-TRIAL geometric mean + 95% CI from ratio_stats (n=trials
+    # per case), not the single-trial speed_ratio -- previously this summary
+    # (and the geometric-mean-across-cases line) was built entirely from one
+    # sample per case, with no CI anywhere in this script.
     print("\n=== summary: topojs engine speed ratio vs Ripser, across all cases ===")
-    print(f"{'case':<28}{'plain (x slower)':<20}{'cohom (x slower)':<20}{'cohom speedup over plain':<26}")
-    plain_ratios, cohom_ratios = [], []
+    print(f"{'case':<28}{'plain (x, 95% CI)':<26}{'cohom (x, 95% CI)':<26}{'cohom speedup over plain':<26}")
+    plain_geo_means, cohom_geo_means = [], []
     for case_name in dict.fromkeys(r["case"] for r in all_results):  # preserve order, de-dup
         case_rs = [r for r in all_results if r["case"] == case_name]
         plain_r = next(r for r in case_rs if r["engine"] == "plain")
         cohom_r = next(r for r in case_rs if r["engine"] == "cohom")
-        plain_ratios.append(plain_r["speed_ratio"])
-        cohom_ratios.append(cohom_r["speed_ratio"])
+        ps, cs = plain_r["ratio_stats"], cohom_r["ratio_stats"]
+        plain_geo_means.append(ps["geo_mean"])
+        cohom_geo_means.append(cs["geo_mean"])
         speedup = plain_r["ms"] / cohom_r["ms"] if cohom_r["ms"] > 0 else float("inf")
-        print(f"{case_name:<28}{plain_r['speed_ratio']:<20.1f}{cohom_r['speed_ratio']:<20.1f}{speedup:<26.2f}")
-    if plain_ratios and cohom_ratios:
+        plain_str = f"{ps['geo_mean']:.1f}x ({ps['ci_low']:.1f}-{ps['ci_high']:.1f})"
+        cohom_str = f"{cs['geo_mean']:.1f}x ({cs['ci_low']:.1f}-{cs['ci_high']:.1f})"
+        print(f"{case_name:<28}{plain_str:<26}{cohom_str:<26}{speedup:<26.2f}")
+    if plain_geo_means and cohom_geo_means:
         import statistics
-        print(f"\ngeometric mean slowdown vs Ripser: plain={statistics.geometric_mean(plain_ratios):.1f}x, "
-              f"cohom={statistics.geometric_mean(cohom_ratios):.1f}x")
+        print(f"\ngeometric mean slowdown vs Ripser (across cases' multi-trial geo means): "
+              f"plain={statistics.geometric_mean(plain_geo_means):.1f}x, "
+              f"cohom={statistics.geometric_mean(cohom_geo_means):.1f}x")
     all_reconciled = all(r["match"] or r["reconciled"] for r in all_results)
     print(f"all cases correct (raw match OR reconciled via zero-persistence-bar convention): "
           f"{'YES' if all_reconciled else 'NO -- see MISMATCH lines above'}")

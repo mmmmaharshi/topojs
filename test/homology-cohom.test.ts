@@ -212,4 +212,60 @@ describe("computePersistentHomologyCohomology (cohomology direction) vs. compute
     const flat = generatePoints(pts);
     checkMatches(flat, 2, 0.3, 2);
   });
+
+  describe("dense/tie-heavy configs with long pivot cascades -- dedicated large-scale sweep", () => {
+    // Added while evaluating (and ultimately rejecting -- see homology-
+    // cohom.ts's "TRIED AND REJECTED (2)" docstring section) a swap-
+    // reduction variant that specifically needed long pivot cascades (many
+    // cycle edges' reductions colliding on the same triangle pivot) to be
+    // exercised at all. That variant is gone, but the sweep itself is
+    // independently useful stress coverage this suite didn't have before:
+    // per CLAUDE.md's differential-testing convention ("hundreds to
+    // thousands of random trials, not just hand-picked examples"), it adds
+    // a large sweep beyond the 40-seed default one above, biased toward
+    // DENSE/near-complete complexes where cascades are longest -- kept
+    // rather than deleted alongside the rejected variant.
+    it("matches for 300 random dense/tie-heavy 2D configs", () => {
+      for (let seed = 1; seed <= 300; seed++) {
+        const rng = mulberry32(seed * 31 + 7);
+        // Bias toward smaller point counts with LARGE maxDist (near-complete
+        // complexes -- long cascades, lots of shared pivots) since that's
+        // where swap reduction's owner-lookup branch is exercised most.
+        const n = 10 + (seed % 15);
+        const pts: [number, number][] = [];
+        for (let i = 0; i < n; i++) {
+          pts.push([rng(), rng()]);
+        }
+        const flat = generatePoints(pts);
+        const maxDist = 0.5 + (seed % 10) * 0.15; // ranges up to ~1.85, often near-complete
+        checkMatches(flat, 2, maxDist, 2);
+      }
+    });
+
+    it("matches for 60 random dense 3D configs with maxDim=3", () => {
+      for (let seed = 1; seed <= 60; seed++) {
+        const rng = mulberry32(seed * 53 + 3);
+        const n = 8 + (seed % 8);
+        const pts: number[] = [];
+        for (let i = 0; i < n * 3; i++) {
+          pts.push(rng());
+        }
+        const maxDist = 0.6 + (seed % 6) * 0.2;
+        checkMatches(new Float64Array(pts), 3, maxDist, 3);
+      }
+    });
+
+    it("matches on tie-heavy grids at Infinity maxDist (fully complete complex, maximal cascade length)", () => {
+      for (const size of [3, 4, 5]) {
+        const pts: [number, number][] = [];
+        for (let i = 0; i < size; i++) {
+          for (let j = 0; j < size; j++) {
+            pts.push([i, j]);
+          }
+        }
+        const flat = generatePoints(pts);
+        checkMatches(flat, 2, Number.POSITIVE_INFINITY, 2);
+      }
+    });
+  });
 });

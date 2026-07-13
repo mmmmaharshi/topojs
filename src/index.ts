@@ -11,11 +11,11 @@
 export {
   computePersistentHomology,
   computePersistentHomologyCohomologyFromComplex,
-  HomologyEngine,
 } from "./core/homology-unified.ts";
 export type {
   HomologyResult,
   HomologyOptions,
+  HomologyEngine,
 } from "./core/homology-unified.ts";
 
 // ── Rips persistence, ARBITRARY dimension (H0..Hk, k unbounded) ──
