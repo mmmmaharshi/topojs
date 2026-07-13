@@ -243,4 +243,42 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
       );
     }
   });
+
+  it("maxDim=0 emits only H0 pairs (no H1 or H2)", () => {
+    const rng = mulberry32(42);
+    const inc = new IncrementalH1({
+      dims: 2,
+      maxDim: 0,
+      maxDist: 0.6,
+      windowSize: 10,
+    });
+    for (let i = 0; i < 30; i++) {
+      const update = inc.push([rng(), rng()]);
+      if (!update) {
+        continue;
+      }
+      for (const p of update.pairs) {
+        expect(p.dim).toBe(0);
+      }
+    }
+  });
+
+  it("maxDim=1 emits only H0 and H1 pairs (no H2)", () => {
+    const rng = mulberry32(43);
+    const inc = new IncrementalH1({
+      dims: 2,
+      maxDim: 1,
+      maxDist: 0.6,
+      windowSize: 10,
+    });
+    for (let i = 0; i < 30; i++) {
+      const update = inc.push([rng(), rng()]);
+      if (!update) {
+        continue;
+      }
+      for (const p of update.pairs) {
+        expect(p.dim).toBeLessThan(2);
+      }
+    }
+  });
 });

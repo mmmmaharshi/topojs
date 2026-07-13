@@ -85,7 +85,7 @@ console.log(cubical.pairs);
 | --- | --- |
 | `SlidingWindow` | Fixed-capacity ring buffer of the most recent points, feeding both engines below |
 | `StreamingHomology` | Naive baseline — full recompute on every `push()`. Every incremental engine is differential-tested against this. |
-| `IncrementalH1` | Prefix-stable incremental engine — updates H₀+H₁ without a full recompute (H₂ out of scope). Validated across many seeds/regimes against full recompute. See Benchmarks for the speed-to-memory trade-off. |
+| `IncrementalH1` | Prefix-stable incremental engine — updates H₀+H₁+H₂ without a full recompute. Configured via `maxDim` (0=H₀ only, 1=H₀+H₁, 2=H₀+H₁+H₂, default 2). Returns `numTetrahedra` in `complex` and `reReducedTetrahedra`/`totalTetrahedra` in `stats`. Validated across many seeds/regimes against full recompute. See Benchmarks for the speed-to-memory trade-off. |
 | `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result, for either streaming engine |
 
 ### Example datasets

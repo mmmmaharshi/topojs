@@ -204,10 +204,8 @@ export function computePersistentHomologyFast(
 
   // ── Phase 3: H2 (identical to computePersistentHomology; not accelerated) ──
   const h2Pairs: PersistencePair[] = [];
-  const rank_d2 = h1Pivots.reduce((c, v) => c + (v >= 0 ? 1 : 0), 0);
-  const ker_d2 = triangles.length - rank_d2;
 
-  if (maxDim >= 3 && ker_d2 > 0) {
+  if (maxDim >= 3) {
     const nullspaceTrigs = new Uint8Array(triangles.length);
     for (let ci = 0; ci < triangles.length; ci++) {
       if (h1reduced[ci] !== null && h1reduced[ci]!.length === 0) {

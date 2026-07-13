@@ -992,14 +992,16 @@ export class IncrementalH1 {
     );
 
     const h1Pairs: PersistencePair[] = [];
-    for (let ci = 0; ci < newTrisCount; ci++) {
-      if (newTriPair[ci]) {
-        h1Pairs.push(newTriPair[ci]!);
+    if (this.maxDim >= 1) {
+      for (let ci = 0; ci < newTrisCount; ci++) {
+        if (newTriPair[ci]) {
+          h1Pairs.push(newTriPair[ci]!);
+        }
       }
-    }
-    for (let ei = 0; ei < newEdges.length; ei++) {
-      if (cycleEdge[ei] && newPivotOfEdgeIdx[ei]! < 0) {
-        h1Pairs.push({ birth: newEdges[ei]!.val, death: -1, dim: 1 });
+      for (let ei = 0; ei < newEdges.length; ei++) {
+        if (cycleEdge[ei] && newPivotOfEdgeIdx[ei]! < 0) {
+          h1Pairs.push({ birth: newEdges[ei]!.val, death: -1, dim: 1 });
+        }
       }
     }
 
