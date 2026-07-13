@@ -98,9 +98,7 @@ function runDifferentialTrial(
   // pivot triangle has the same filtration value (birth = death), so no finite
   // H2 pairs are emitted. The canon comparison against maxDim=3 already
   // validates H2 correctness for any pairs that ARE produced.
-  if (assertDense) {
-    expect(sawTetrahedra).toBeTruthy();
-  }
+  expect(!assertDense || sawTetrahedra).toBeTruthy();
 }
 
 describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => {
@@ -324,11 +322,11 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // include at least one antipodal pair).
     const eps = Math.SQRT2 + 0.01;
     const inc = new IncrementalH1({
-        dims: 3,
-        maxDim: 2,
-        maxDist: eps,
-        windowSize: 8,
-      });
+      dims: 3,
+      maxDim: 2,
+      maxDist: eps,
+      windowSize: 8,
+    });
     const updates: ReturnType<typeof inc.push>[] = [];
     for (const pt of octPts) {
       updates.push(inc.push(pt));
@@ -341,9 +339,9 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     const b2 = update.pairs.filter((p) => p.dim === 2 && p.death < 0).length;
     expect(b2).toBe(1);
     // Finite H2 pairs should be zero (no tetrahedra to kill cycles)
-    expect(update.pairs.filter((p) => p.dim === 2 && p.death >= 0)).toHaveLength(
-      0
-    );
+    expect(
+      update.pairs.filter((p) => p.dim === 2 && p.death >= 0)
+    ).toHaveLength(0);
   });
 
   it("octahedron at larger radius: tetrahedra kill the H2 class", () => {
@@ -358,24 +356,24 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
       [0, 0, 1],
       [0, 0, -1],
     ];
-      const inc = new IncrementalH1({
-        dims: 3,
-        maxDim: 2,
-        maxDist: 2.1,
-        windowSize: 8,
-      });
-      const updates: ReturnType<typeof inc.push>[] = [];
-      for (const pt of octPts) {
-        updates.push(inc.push(pt));
-      }
-      // Push 5 (0-indexed) is the 6th push — all 6 unique octahedron points
-      // are now in the window with ALL 15 edges (antipodal distance 2 < 2.1).
+    const inc = new IncrementalH1({
+      dims: 3,
+      maxDim: 2,
+      maxDist: 2.1,
+      windowSize: 8,
+    });
+    const updates: ReturnType<typeof inc.push>[] = [];
+    for (const pt of octPts) {
+      updates.push(inc.push(pt));
+    }
+    // Push 5 (0-indexed) is the 6th push — all 6 unique octahedron points
+    // are now in the window with ALL 15 edges (antipodal distance 2 < 2.1).
     const update = updates[5]!;
     expect(update.complex.numTetrahedra).toBeGreaterThan(0);
     // Essential H2 should be 0 (all 2-cycles killed by tetrahedra)
-    expect(
-      update.pairs.filter((p) => p.dim === 2 && p.death < 0)
-    ).toHaveLength(0);
+    expect(update.pairs.filter((p) => p.dim === 2 && p.death < 0)).toHaveLength(
+      0
+    );
     // There should be finite H2 pairs (tetrahedra killing triangles)
     expect(
       update.pairs.filter((p) => p.dim === 2 && p.death >= 0).length
@@ -402,16 +400,16 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     ];
     const eps = Math.SQRT2 + 0.01;
     const inc = new IncrementalH1({
-        dims: 3,
-        maxDim: 2,
-        maxDist: eps,
-        windowSize: 12,
-      });
-      const updates: ReturnType<typeof inc.push>[] = [];
-      for (const pt of octPts) {
-        updates.push(inc.push(pt));
-      }
-      // Push 11 (0-indexed) is the 12th push — all 12 unique octahedron
+      dims: 3,
+      maxDim: 2,
+      maxDist: eps,
+      windowSize: 12,
+    });
+    const updates: ReturnType<typeof inc.push>[] = [];
+    for (const pt of octPts) {
+      updates.push(inc.push(pt));
+    }
+    // Push 11 (0-indexed) is the 12th push — all 12 unique octahedron
     // points are now in the window. No edge connects the two octahedra
     // since the closest inter-octahedron distance is ~1000 >> maxDist.
     const update = updates[11]!;
@@ -422,45 +420,43 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
 
   // ── Stage 3: edge cases and stress ──
 
+  /* eslint-disable vitest/max-expects */
   it("handles maxDist=0 (only H0, no edges/triangles/tetrahedra)", () => {
     // With maxDist=0, only points at exactly the same location form edges.
     // Using points far apart (distance > 0) ensures no edges.
     const inc = new IncrementalH1({ dims: 2, maxDist: 0, windowSize: 10 });
     expect(inc.push([0, 0])).toBeNull();
-    const u1 = inc.push([10, 0]);
-    expect(u1).not.toBeNull();
-    if (u1) {
-      expect(u1.complex.numEdges).toBe(0);
-      expect(u1.complex.numTriangles).toBe(0);
-      expect(u1.complex.numTetrahedra).toBe(0);
-      for (const p of u1.pairs) {
-        expect(p.dim).toBe(0);
-      }
+    const u1 = inc.push([10, 0])!;
+    expect(u1.complex.numEdges).toBe(0);
+    expect(u1.complex.numTriangles).toBe(0);
+    expect(u1.complex.numTetrahedra).toBe(0);
+    for (const p of u1.pairs) {
+      expect(p.dim).toBe(0);
     }
-    const u2 = inc.push([20, 0]);
-    expect(u2).not.toBeNull();
-    if (u2) {
-      expect(u2.complex.numEdges).toBe(0);
-      expect(u2.complex.numTriangles).toBe(0);
-      expect(u2.complex.numTetrahedra).toBe(0);
-    }
+    const u2 = inc.push([20, 0])!;
+    expect(u2.complex.numEdges).toBe(0);
+    expect(u2.complex.numTriangles).toBe(0);
+    expect(u2.complex.numTetrahedra).toBe(0);
   });
+  /* eslint-enable vitest/max-expects */
 
   it("handles maxDist=Infinity (maximal complex up to window capacity)", () => {
     // With maxDist=Infinity, all pairs are within distance. For 4+ points
     // in 3D, tetrahedra must form.
     const inc = new IncrementalH1({
-        dims: 3,
-        maxDim: 2,
-        maxDist: Infinity,
-        windowSize: 6,
-      });
-      for (let i = 0; i < 6; i++) {
-        const update = inc.push([i, i, i]);
-      if (!update) continue;
-      if (update.complex.numVertices >= 4) {
-        expect(update.complex.numTetrahedra).toBeGreaterThan(0);
+      dims: 3,
+      maxDim: 2,
+      maxDist: Infinity,
+      windowSize: 6,
+    });
+    for (let i = 0; i < 6; i++) {
+      const update = inc.push([i, i, i]);
+      if (!update) {
+        continue;
       }
+      expect(
+        update.complex.numVertices < 4 || update.complex.numTetrahedra > 0
+      ).toBeTruthy();
     }
   });
 
@@ -474,22 +470,21 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // Four coincident points at the origin: all edges have val=0.
     // With maxDist > 0, all 4 points form a 4-clique with tetrahedra.
     const inc = new IncrementalH1({
-        dims: 3,
-        maxDim: 2,
-        maxDist: 1,
-        windowSize: 8,
-      });
-      for (let i = 0; i < 4; i++) {
-        inc.push([0, 0, 0]);
-      }
-      const update = inc.push([0, 0, 0]); // push 5
-    if (update) {
-      expect(update.complex.numEdges).toBeGreaterThan(0);
-      expect(update.complex.numTriangles).toBeGreaterThan(0);
-      expect(update.complex.numTetrahedra).toBeGreaterThan(0);
+      dims: 3,
+      maxDim: 2,
+      maxDist: 1,
+      windowSize: 8,
+    });
+    for (let i = 0; i < 4; i++) {
+      inc.push([0, 0, 0]);
     }
+    const update = inc.push([0, 0, 0])!; // push 5
+    expect(update.complex.numEdges).toBeGreaterThan(0);
+    expect(update.complex.numTriangles).toBeGreaterThan(0);
+    expect(update.complex.numTetrahedra).toBeGreaterThan(0);
   });
 
+  /* eslint-disable vitest/max-expects */
   it("3D eviction stress: many pushes with 3D points exercise tetrahedron management", () => {
     // 500 pushes, windowSize=12, dims=3 — stresses tetrahedron survivor
     // filtering, boundary remapping, and H2 reduction across ~488 evictions.
@@ -497,48 +492,46 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // comparison on the final push.
     const rng = mulberry32(71);
     const inc = new IncrementalH1({
-        dims: 3,
-        maxDim: 2,
-        maxDist: 0.8,
-        windowSize: 12,
-      });
-      const allPts: number[][] = [];
-      let lastUpdate: Exclude<ReturnType<typeof inc.push>, null> | null = null;
+      dims: 3,
+      maxDim: 2,
+      maxDist: 0.8,
+      windowSize: 12,
+    });
+    const allPts: number[][] = [];
+    let lastUpdate: Exclude<ReturnType<typeof inc.push>, null> | null = null;
     for (let i = 0; i < 500; i++) {
       const pt = [rng(), rng(), rng()];
       allPts.push(pt);
       const update = inc.push(pt);
-      if (!update) continue;
+      if (!update) {
+        continue;
+      }
       lastUpdate = update;
       expect(update.complex.numTetrahedra).toBeGreaterThanOrEqual(0);
     }
     // Differential check on the final push
     expect(lastUpdate).not.toBeNull();
-    if (lastUpdate) {
-      const start = Math.max(0, allPts.length - 12);
-      const windowPts = allPts.slice(start);
-      const flat = new Float64Array(windowPts.length * 3);
-      windowPts.forEach((p, idx) => {
-        flat[idx * 3] = p[0]!;
-        flat[idx * 3 + 1] = p[1]!;
-        flat[idx * 3 + 2] = p[2]!;
-      });
-      const expected = computePersistentHomology(flat, 3, 0.8, 3);
-      expect(lastUpdate.complex.numEdges).toBe(expected.complex.numEdges);
-      expect(lastUpdate.complex.numTriangles).toBe(
-        expected.complex.numTriangles
-      );
-      expect(lastUpdate.complex.numTetrahedra).toBe(
-        expected.complex.numTetrahedra
-      );
-      const incH01 = lastUpdate.pairs.filter((p) => p.dim < 2);
-      const refH01 = expected.pairs.filter((p) => p.dim < 2);
-      expect(canon(incH01)).toBe(canon(refH01));
-      const incH2 = lastUpdate.pairs.filter((p) => p.dim === 2);
-      const refH2 = expected.pairs.filter((p) => p.dim === 2);
-      expect(canon(incH2)).toBe(canon(refH2));
-    }
+    const lu = lastUpdate!;
+    const start = Math.max(0, allPts.length - 12);
+    const windowPts = allPts.slice(start);
+    const flat = new Float64Array(windowPts.length * 3);
+    windowPts.forEach((p, idx) => {
+      flat[idx * 3] = p[0]!;
+      flat[idx * 3 + 1] = p[1]!;
+      flat[idx * 3 + 2] = p[2]!;
+    });
+    const expected = computePersistentHomology(flat, 3, 0.8, 3);
+    expect(lu.complex.numEdges).toBe(expected.complex.numEdges);
+    expect(lu.complex.numTriangles).toBe(expected.complex.numTriangles);
+    expect(lu.complex.numTetrahedra).toBe(expected.complex.numTetrahedra);
+    const incH01 = lu.pairs.filter((p) => p.dim < 2);
+    const refH01 = expected.pairs.filter((p) => p.dim < 2);
+    expect(canon(incH01)).toBe(canon(refH01));
+    const incH2 = lu.pairs.filter((p) => p.dim === 2);
+    const refH2 = expected.pairs.filter((p) => p.dim === 2);
+    expect(canon(incH2)).toBe(canon(refH2));
   });
+  /* eslint-enable vitest/max-expects */
 
   // ── Stage 4: invariants and bookkeeping ──
 
@@ -547,7 +540,9 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     const inc = new IncrementalH1({ dims: 3, maxDist: 1.5, windowSize: 10 });
     for (let i = 0; i < 50; i++) {
       const update = inc.push([rng(), rng(), rng()]);
-      if (!update) continue;
+      if (!update) {
+        continue;
+      }
       expect(update.stats.reReducedTetrahedra).toBeGreaterThanOrEqual(0);
       expect(update.stats.reReducedTetrahedra).toBeLessThanOrEqual(
         update.stats.totalTetrahedra
@@ -557,13 +552,16 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
 
   it("rejects out-of-range maxDim values", () => {
     expect(
-      () => new IncrementalH1({ dims: 2, maxDim: -1, maxDist: 1, windowSize: 10 })
+      () =>
+        new IncrementalH1({ dims: 2, maxDim: -1, maxDist: 1, windowSize: 10 })
     ).toThrow("maxDim");
     expect(
-      () => new IncrementalH1({ dims: 2, maxDim: 3, maxDist: 1, windowSize: 10 })
+      () =>
+        new IncrementalH1({ dims: 2, maxDim: 3, maxDist: 1, windowSize: 10 })
     ).toThrow("maxDim");
     expect(
-      () => new IncrementalH1({ dims: 2, maxDim: 1.5, maxDist: 1, windowSize: 10 })
+      () =>
+        new IncrementalH1({ dims: 2, maxDim: 1.5, maxDist: 1, windowSize: 10 })
     ).toThrow("maxDim");
   });
 });

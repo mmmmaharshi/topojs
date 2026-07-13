@@ -1059,7 +1059,9 @@ export class IncrementalH1 {
         );
       }
       const triLookup = (a: number, b: number, c: number): number | undefined =>
-        triIdxMap.get(((a - minId) * stride + (b - minId)) * stride + (c - minId));
+        triIdxMap.get(
+          ((a - minId) * stride + (b - minId)) * stride + (c - minId)
+        );
 
       // For each surviving tetrahedron, remap its boundary triangle indices
       const survTetCount = survivingTetOrigIdx.length;
