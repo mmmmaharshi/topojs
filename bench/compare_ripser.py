@@ -208,8 +208,12 @@ def run_topojs_engine(name: str, engine: str, points: np.ndarray, max_dist: floa
         check=True, capture_output=True, text=True,
     )
     topojs_result = json.loads(out_path.read_text())
-    label = "topojs[plain] (pure JS, computePersistentHomology)" if engine == "plain" \
-        else "topojs[cohom] (pure JS, computePersistentHomologyCohomology -- re-derives some Ripser structural tricks)"
+    if engine == "plain":
+        label = "topojs[plain] (pure JS, computePersistentHomology)"
+    elif engine == "cohom":
+        label = "topojs[cohom] (pure JS, computePersistentHomologyCohomology -- re-derives some Ripser structural tricks)"
+    else:
+        label = "topojs[impl] (pure JS, computePersistentHomologyImplicit -- implicit coboundary, no materialized simplices)"
     print(f"{label}: {topojs_result['ms']:.2f}ms  byDim={topojs_result['byDim']}")
 
     # -- compare --
@@ -288,48 +292,45 @@ def run_case(name: str, points: np.ndarray, max_dist: float, max_dim: int,
     print(f"ripser (C++, state-of-the-art batch reference), trial 0: {ripser_ms:.2f}ms  byDim={ripser_betti}")
 
     engine_results = []
-    for engine in ("plain", "cohom"):
+    for engine in ("plain", "cohom", "impl"):
         r = run_topojs_engine(name, engine, points, max_dist, max_dim, ripser_ms, ripser_betti)
         r["case"] = name
         engine_results.append(r)
 
-    plain_ms = next(r["ms"] for r in engine_results if r["engine"] == "plain")
-    cohom_ms = next(r["ms"] for r in engine_results if r["engine"] == "cohom")
-    if cohom_ms > 0:
-        print(f"cohom vs plain (this repo, same case): {plain_ms / cohom_ms:.2f}x "
-              f"({'cohom faster' if cohom_ms < plain_ms else 'cohom slower or equal'})")
+    def _ms(e: str) -> float:
+        return next(r["ms"] for r in engine_results if r["engine"] == e)
 
-    # -- repeat trials 2..N: timing-only, no re-verification (correctness is
-    # deterministic given identical inputs, already checked above) -- gives
-    # the same "multiple trials -> CI -> paired t-test" treatment bench/
-    # benchmark.ts applies to the streaming-engine comparison, previously
-    # missing here entirely (this script ran each case exactly once).
-    plain_ratios = [plain_ms / ripser_ms] if ripser_ms > 0 else []
-    cohom_ratios = [cohom_ms / ripser_ms] if ripser_ms > 0 else []
+    plain_ms, cohom_ms, impl_ms = _ms("plain"), _ms("cohom"), _ms("impl")
+    if cohom_ms > 0:
+        print(f"cohom vs plain (same case): {plain_ms / cohom_ms:.2f}x "
+              f"({'cohom faster' if cohom_ms < plain_ms else 'cohom slower or equal'})")
+    if impl_ms > 0:
+        print(f"impl vs plain (same case): {plain_ms / impl_ms:.2f}x "
+              f"({'impl faster' if impl_ms < plain_ms else 'impl slower or equal'})")
+
+    # -- repeat trials 2..N: timing-only --
+    ratios: dict[str, list[float]] = {}
+    for e in ("plain", "cohom", "impl"):
+        e_ms = _ms(e)
+        ratios[e] = [e_ms / ripser_ms] if ripser_ms > 0 else []
     for _ in range(trials - 1):
         t0 = time.perf_counter()
         ripser(points, maxdim=max_dim, thresh=max_dist)
         r_ms = (time.perf_counter() - t0) * 1000
-        p_ms = time_only_rerun(name, "plain", points, max_dist, max_dim)
-        c_ms = time_only_rerun(name, "cohom", points, max_dist, max_dim)
         if r_ms > 0:
-            plain_ratios.append(p_ms / r_ms)
-            cohom_ratios.append(c_ms / r_ms)
+            for e in ("plain", "cohom", "impl"):
+                ratios[e].append(time_only_rerun(name, e, points, max_dist, max_dim) / r_ms)
 
-    plain_stats = paired_log_ratio_stats(plain_ratios)
-    cohom_stats = paired_log_ratio_stats(cohom_ratios)
-    print(
-        f"[plain] geometric mean speed ratio across {plain_stats['n']} trials: "
-        f"{plain_stats['geo_mean']:.2f}x  (95% CI: {plain_stats['ci_low']:.2f}x .. {plain_stats['ci_high']:.2f}x)  "
-        f"t={plain_stats['t_stat']:.2f}"
-    )
-    print(
-        f"[cohom] geometric mean speed ratio across {cohom_stats['n']} trials: "
-        f"{cohom_stats['geo_mean']:.2f}x  (95% CI: {cohom_stats['ci_low']:.2f}x .. {cohom_stats['ci_high']:.2f}x)  "
-        f"t={cohom_stats['t_stat']:.2f}"
-    )
+    stats = {}
+    for e in ("plain", "cohom", "impl"):
+        stats[e] = paired_log_ratio_stats(ratios[e])
+        s = stats[e]
+        print(f"[{e}] geometric mean speed ratio across {s['n']} trials: "
+              f"{s['geo_mean']:.2f}x  (95% CI: {s['ci_low']:.2f}x .. {s['ci_high']:.2f}x)  "
+              f"t={s['t_stat']:.2f}")
+
     for r in engine_results:
-        r["ratio_stats"] = plain_stats if r["engine"] == "plain" else cohom_stats
+        r["ratio_stats"] = stats[r["engine"]]
 
     return engine_results
 
@@ -386,30 +387,23 @@ def main():
     all_results += maybe_run("sunspots_n400_H0H1only", sunspots[:400], 0.1, 1)
     all_results += maybe_run("melbourne_n400_H0H1only", melbourne[:400], 0.1, 1)
 
-    # -- cross-case summary: how much of the plain engine's gap does cohom close? --
-    # Uses the MULTI-TRIAL geometric mean + 95% CI from ratio_stats (n=trials
-    # per case), not the single-trial speed_ratio -- previously this summary
-    # (and the geometric-mean-across-cases line) was built entirely from one
-    # sample per case, with no CI anywhere in this script.
+    # -- cross-case summary: three engines vs Ripser --
     print("\n=== summary: topojs engine speed ratio vs Ripser, across all cases ===")
-    print(f"{'case':<28}{'plain (x, 95% CI)':<26}{'cohom (x, 95% CI)':<26}{'cohom speedup over plain':<26}")
-    plain_geo_means, cohom_geo_means = [], []
-    for case_name in dict.fromkeys(r["case"] for r in all_results):  # preserve order, de-dup
+    print(f"{'case':<28}{'plain (x, 95% CI)':<26}{'cohom (x, 95% CI)':<26}{'impl (x, 95% CI)':<26}")
+    geo_means: dict[str, list[float]] = {"plain": [], "cohom": [], "impl": []}
+    for case_name in dict.fromkeys(r["case"] for r in all_results):
         case_rs = [r for r in all_results if r["case"] == case_name]
-        plain_r = next(r for r in case_rs if r["engine"] == "plain")
-        cohom_r = next(r for r in case_rs if r["engine"] == "cohom")
-        ps, cs = plain_r["ratio_stats"], cohom_r["ratio_stats"]
-        plain_geo_means.append(ps["geo_mean"])
-        cohom_geo_means.append(cs["geo_mean"])
-        speedup = plain_r["ms"] / cohom_r["ms"] if cohom_r["ms"] > 0 else float("inf")
-        plain_str = f"{ps['geo_mean']:.1f}x ({ps['ci_low']:.1f}-{ps['ci_high']:.1f})"
-        cohom_str = f"{cs['geo_mean']:.1f}x ({cs['ci_low']:.1f}-{cs['ci_high']:.1f})"
-        print(f"{case_name:<28}{plain_str:<26}{cohom_str:<26}{speedup:<26.2f}")
-    if plain_geo_means and cohom_geo_means:
+        cells = []
+        for e in ("plain", "cohom", "impl"):
+            eng_r = next(r for r in case_rs if r["engine"] == e)
+            s = eng_r["ratio_stats"]
+            geo_means[e].append(s["geo_mean"])
+            cells.append(f"{s['geo_mean']:.1f}x ({s['ci_low']:.1f}-{s['ci_high']:.1f})")
+        print(f"{case_name:<28}{cells[0]:<26}{cells[1]:<26}{cells[2]:<26}")
+    if any(geo_means[e] for e in geo_means):
         import statistics
-        print(f"\ngeometric mean slowdown vs Ripser (across cases' multi-trial geo means): "
-              f"plain={statistics.geometric_mean(plain_geo_means):.1f}x, "
-              f"cohom={statistics.geometric_mean(cohom_geo_means):.1f}x")
+        parts = [f"{e}={statistics.geometric_mean(geo_means[e]):.1f}x" if geo_means[e] else f"{e}=N/A" for e in ("plain", "cohom", "impl")]
+        print(f"\ngeometric mean slowdown vs Ripser (across cases' multi-trial geo means): {', '.join(parts)}")
     all_reconciled = all(r["match"] or r["reconciled"] for r in all_results)
     print(f"all cases correct (raw match OR reconciled via zero-persistence-bar convention): "
           f"{'YES' if all_reconciled else 'NO -- see MISMATCH lines above'}")

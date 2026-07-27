@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
+import { computePersistentHomologyImplicit } from "../src/core/homology-implicit.ts";
 import { computePersistentHomology } from "../src/index.ts";
 
 const csvPath = process.argv[2]!;
@@ -27,7 +28,6 @@ const engineArg = process.argv[7]!;
 const dims = Number(dimsArg);
 const maxDist = Number(maxDistArg);
 const maxDim = Number(maxDimArg);
-const engine = engineArg === "cohom" ? "cohom" : "plain";
 
 const lines = readFileSync(csvPath!, "utf-8").trim().split("\n");
 const flat = new Float64Array(lines.length * dims);
@@ -39,9 +39,12 @@ lines.forEach((line, i) => {
 });
 
 const compute =
-  engine === "cohom"
+  engineArg === "cohom"
     ? computePersistentHomologyCohomology
-    : computePersistentHomology;
+    : engineArg === "impl"
+      ? computePersistentHomologyImplicit
+      : computePersistentHomology;
+const engine = engineArg === "cohom" ? "cohom" : engineArg === "impl" ? "impl" : "plain";
 const t0 = performance.now();
 const result = compute(flat, dims, maxDist, maxDim);
 const ms = performance.now() - t0;
