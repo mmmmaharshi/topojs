@@ -33,7 +33,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
 import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
 import { StreamingHomology } from "../src/streaming/streaming-homology.ts";
 
@@ -553,36 +552,7 @@ function loadMelbourneTemp(): { points: number[][]; logLines: string[] } {
 }
 
 function loadIris(): { points: number[][]; logLines: string[] } {
-  const DIMS = 4;
-  const flat = loadIrisDataset(); // 150 * 4, real UCI data, original order (by species)
-  const n = flat.length / DIMS;
-  const colMin = new Float64Array(DIMS).fill(Infinity);
-  const colMax = new Float64Array(DIMS).fill(-Infinity);
-  for (let i = 0; i < n; i++) {
-    for (let d = 0; d < DIMS; d++) {
-      const v = flat[i * DIMS + d]!;
-      if (v < colMin[d]!) {
-        colMin[d] = v;
-      }
-      if (v > colMax[d]!) {
-        colMax[d] = v;
-      }
-    }
-  }
-  const points: number[][] = [];
-  for (let i = 0; i < n; i++) {
-    const p: number[] = [];
-    for (let d = 0; d < DIMS; d++) {
-      p.push((flat[i * DIMS + d]! - colMin[d]!) / (colMax[d]! - colMin[d]!));
-    }
-    points.push(p);
-  }
-  return {
-    logLines: [
-      `Loaded ${n} REAL Iris measurements (UCI, original order: 50 Setosa, 50 Versicolor, 50 Virginica).`,
-    ],
-    points,
-  };
+  return loadMultiDimCsv("iris.csv", 4);
 }
 
 function loadMultiDimCsv(

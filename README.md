@@ -40,24 +40,18 @@ Example: `{birth: 0.3, death: 0.8, dim: 1}` means a loop formed at distance 0.3 
 
 `result.complex` reports the size of the simplicial complex: `{numVertices, numEdges, numTriangles, numTetrahedra}`.
 
-## Worked example: Iris dataset
+## Worked example
 
 ```js
-import {
-  loadIrisDataset,
-  computePersistentHomology,
-  summarize,
-} from "@manohar_maharshi/topojs";
+import { computePersistentHomology, summarize } from "@manohar_maharshi/topojs";
 
-const data = loadIrisDataset(); // Float64Array, 150 points × 4 dimensions
-const result = computePersistentHomology(data, 4, 1.5, 2);
+// 3 points forming a triangle in 2D
+const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
+const result = computePersistentHomology(points, 2, 1, 2);
 
-console.log("Complex:", result.complex); // {numVertices: 150, numEdges: 312, numTriangles: 123, ...}
+console.log("Complex:", result.complex);
 console.log("Pairs:", result.pairs); // [{birth, death, dim}, ...]
 console.log("Summary:", summarize(result.pairs));
-// {h0: 1, h1: 3, h2: 0, total: 4, ...}
-//   1 essential component (connected as a whole)
-//   3 loops that live at various scales
 ```
 
 ## Which function to use
@@ -136,8 +130,7 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `loadMNISTDigits()` | Bundled MNIST sample (returns `{label: number; pixels: Float64Array}[]`). |
-| `loadIrisDataset()` | UCI Iris flower measurements (returns `Float64Array`, 150×4). |
+| `generateTerrain(size?, octaves?)` | Procedural fractal Brownian motion heightmap (`Float64Array`, `size×size`). |
 | `generateTerrain(size, octaves)` | Procedural fBm terrain heightmap (returns `Float64Array`, size×size). |
 
 ## Benchmarks

@@ -1,42 +1,9 @@
-/* eslint-disable typescript/prefer-for-of */
 import { describe, it, expect } from "vitest";
 
 import { computeCubicalHomology } from "../src/core/cubical.ts";
-import { computePersistentHomology } from "../src/core/homology.ts";
-import {
-  loadMNISTDigits,
-  loadIrisDataset,
-  generateTerrain,
-} from "../src/data/realworld-datasets.ts";
+import { generateTerrain } from "../src/data/realworld-datasets.ts";
 
 describe("real-world datasets", () => {
-  it("MNIST — 10 digits load, cubical homology runs on digit 0", () => {
-    const digits = loadMNISTDigits();
-    expect(digits).toHaveLength(10);
-    expect(digits[0]!.pixels).toHaveLength(784);
-    expect(digits[0]!.label).toBe(7);
-    const r = computeCubicalHomology(digits[3]!.pixels, 28, 28, 1);
-    expect(r.pairs.length).toBeGreaterThan(0);
-    expect(r.dims).toStrictEqual({ height: 28, width: 28 });
-  });
-
-  it("Iris — 150x4 loads, Rips persistence runs", () => {
-    const iris = loadIrisDataset();
-    expect(iris).toHaveLength(150 * 4);
-    const r = computePersistentHomology(iris, 4, 1, 2);
-    expect(r.pairs.length).toBeGreaterThan(0);
-    expect(r.complex.numVertices).toBe(150);
-  });
-
-  // generateTerrain had zero direct test coverage before this block -- found
-  // during a codebase audit (it's the only exported dataset loader/generator
-  // with no tests at all). It's a fractal-Brownian-motion procedural
-  // generator built on a module-level seeded PRNG shared with
-  // generateTorus3D/generateSphere3D/generateMNISTLike/generatePointCloud1D,
-  // but each of those (including this one) calls resetSeed() with its own
-  // hardcoded value as the first thing it does, so results are deterministic
-  // per-function regardless of call order or what ran before it -- these
-  // tests lock that invariant in too, not just output shape/bounds.
   describe(generateTerrain, () => {
     it("default size/octaves -> 64x64 heightmap, values in [0,255]", () => {
       const terrain = generateTerrain();
@@ -59,9 +26,9 @@ describe("real-world datasets", () => {
         expect(terrain, `size=${size} octaves=${octaves}`).toHaveLength(
           size * size
         );
-        for (let i = 0; i < terrain.length; i++) {
-          expect(terrain[i]!).toBeGreaterThanOrEqual(0);
-          expect(terrain[i]!).toBeLessThanOrEqual(255);
+        for (const v of terrain) {
+          expect(v).toBeGreaterThanOrEqual(0);
+          expect(v).toBeLessThanOrEqual(255);
         }
       }
     });
@@ -73,13 +40,8 @@ describe("real-world datasets", () => {
     });
 
     it("is deterministic regardless of what ran before it (shared-PRNG isolation)", () => {
-      // Calls another generator sharing the same module-level seededRandom()
-      // between the two generateTerrain() calls -- if generateTerrain didn't
-      // reset its own seed internally, this would perturb the second call's
-      // output relative to the first.
       const a = generateTerrain(12, 3);
-      loadIrisDataset(); // unrelated call, doesn't touch the shared PRNG, but
-      generateTerrain(20, 5); // this one DOES consume seededRandom() calls
+      generateTerrain(20, 5);
       const b = generateTerrain(12, 3);
       expect([...a]).toStrictEqual([...b]);
     });

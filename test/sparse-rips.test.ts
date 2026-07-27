@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 /* eslint-disable vitest/no-conditional-expect */
 import { describe, it, expect } from "vitest";
 
@@ -6,7 +9,6 @@ import type { Points } from "../src/core/distance.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
 import { selectLandmarks } from "../src/core/landmarks.ts";
 import { computeSparseRipsHomology } from "../src/core/sparse-rips.ts";
-import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
 import { mulberry32 } from "./helpers.ts";
 
 function randomPoints(
@@ -205,12 +207,23 @@ describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
   });
 
   it("holds on real data (UCI Iris, 150 points, R^4)", () => {
-    const flat = loadIrisDataset();
+    const csvPath = path.join(
+      import.meta.dirname,
+      "..",
+      "bench",
+      "data",
+      "iris.csv"
+    );
+    const raw = readFileSync(csvPath, "utf-8").trim().split("\n");
     const dims = 4;
-    const n = flat.length / dims;
-    // Normalize to [0,1] per-dimension so maxDist is comparable to the
-    // random-point trials above (matches bench/benchmark.ts's own Iris
-    // normalization convention).
+    const n = raw.length;
+    const flat = new Float64Array(n * dims);
+    for (let i = 0; i < n; i++) {
+      const cols = raw[i]!.split(",");
+      for (let d = 0; d < dims; d++) {
+        flat[i * dims + d] = Number(cols[d]!);
+      }
+    }
     const colMin = new Float64Array(dims).fill(Infinity);
     const colMax = new Float64Array(dims).fill(-Infinity);
     for (let i = 0; i < n; i++) {

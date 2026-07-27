@@ -28,7 +28,6 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
-import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
 
 const __dirname = import.meta.dirname;
 
@@ -149,9 +148,9 @@ const cases: {
   },
   {
     dims: 4,
-    maxDist: 1.5,
-    name: "UCI Iris (150x4D, raw cm scale) maxDist=1.5",
-    points: loadIrisDataset(),
+    maxDist: 0.35,
+    name: "UCI Iris (150x4D, normalized) maxDist=0.35",
+    points: loadMultiDimCsv("iris.csv", 4),
   },
 ];
 

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 /**
  * How TIGHT is the landmark-subsampling bottleneck bound in practice?
  *
@@ -23,7 +26,6 @@ import { bottleneckDistance } from "../src/core/bottleneck.ts";
 import type { Points } from "../src/core/distance.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
 import { computeSparseRipsHomology } from "../src/core/sparse-rips.ts";
-import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -121,9 +123,18 @@ console.log(
 // ── real-dataset sweep: Iris across a range of landmark budgets ─────────
 
 function loadNormalizedIris(): { points: Points; n: number; dims: number } {
+  const __dirname = import.meta.dirname;
+  const csvPath = path.join(__dirname, "data", "iris.csv");
+  const raw = readFileSync(csvPath, "utf-8").trim().split("\n");
   const dims = 4;
-  const flat = loadIrisDataset();
-  const n = flat.length / dims;
+  const n = raw.length;
+  const flat = new Float64Array(n * dims);
+  for (let i = 0; i < n; i++) {
+    const cols = raw[i]!.split(",");
+    for (let d = 0; d < dims; d++) {
+      flat[i * dims + d] = Number(cols[d]!);
+    }
+  }
   const colMin = new Float64Array(dims).fill(Number.POSITIVE_INFINITY);
   const colMax = new Float64Array(dims).fill(Number.NEGATIVE_INFINITY);
   for (let i = 0; i < n; i++) {

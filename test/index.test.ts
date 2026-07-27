@@ -71,9 +71,7 @@ describe("public API barrel (src/index.ts)", () => {
     expect(topojs.summarizeForStreaming).toBeTypeOf("function");
   });
 
-  it("exports every documented example-dataset function", () => {
-    expect(topojs.loadMNISTDigits).toBeTypeOf("function");
-    expect(topojs.loadIrisDataset).toBeTypeOf("function");
+  it("exports generateTerrain", () => {
     expect(topojs.generateTerrain).toBeTypeOf("function");
   });
 

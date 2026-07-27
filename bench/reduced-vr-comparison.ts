@@ -39,7 +39,6 @@ import path from "node:path";
 
 import { computePersistentHomologyReduced } from "../src/core/homology-reduced.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { loadIrisDataset } from "../src/data/realworld-datasets.ts";
 
 const __dirname = import.meta.dirname;
 
@@ -210,15 +209,15 @@ const cases: {
   },
   {
     dims: 4,
-    maxDist: 0.8,
-    name: "UCI Iris (150x4D, raw cm scale) maxDist=0.8 (sparser)",
-    points: loadIrisDataset(),
+    maxDist: 0.2,
+    name: "UCI Iris (150x4D, normalized) maxDist=0.2 (sparser)",
+    points: loadMultiDimCsv("iris.csv", 4),
   },
   {
     dims: 4,
-    maxDist: 1.5,
-    name: "UCI Iris (150x4D, raw cm scale) maxDist=1.5 (denser)",
-    points: loadIrisDataset(),
+    maxDist: 0.35,
+    name: "UCI Iris (150x4D, normalized) maxDist=0.35 (denser)",
+    points: loadMultiDimCsv("iris.csv", 4),
   },
   {
     dims: 3,

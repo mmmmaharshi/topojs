@@ -78,12 +78,8 @@ export type {
   PersistenceImageOptions,
 } from "./export/vectorization.ts";
 
-// ── Real-world example datasets ──
-export {
-  loadMNISTDigits,
-  loadIrisDataset,
-  generateTerrain,
-} from "./data/realworld-datasets.ts";
+// ── Example dataset generators ──
+export { generateTerrain } from "./data/realworld-datasets.ts";
 
 // ── Streaming persistent homology ──
 export {
