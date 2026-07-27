@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/@manohar_maharshi/topojs)](https://www.npmjs.com/package/@manohar_maharshi/topojs) [![JSR](https://jsr.io/badges/@mmmmaharshi/topojs)](https://jsr.io/@mmmmaharshi/topojs)
 
-TopoJS computes persistent homology for point clouds (Vietoris–Rips, H₀–H₂) and 2D grayscale images (cubical complexes, H₀–H₁). Zero dependencies, pure TypeScript — no WASM, WebGL, WebGPU, or server. The demo bundle is ~4 KB gzipped.
+TopoJS computes persistent homology for point clouds (Vietoris–Rips, H₀–H₂) and 2D grayscale images (cubical complexes, H₀–H₁). Zero dependencies, pure TypeScript — no WASM, WebGL, WebGPU, or server. Bundle size: ~50 KB minified, ~17 KB gzipped.
 
 ```sh
 npm install @manohar_maharshi/topojs
@@ -131,7 +131,6 @@ console.log("Summary:", summarize(result.pairs));
 | Function | Description |
 | --- | --- |
 | `generateTerrain(size?, octaves?)` | Procedural fractal Brownian motion heightmap (`Float64Array`, `size×size`). |
-| `generateTerrain(size, octaves)` | Procedural fBm terrain heightmap (returns `Float64Array`, size×size). |
 
 ## Benchmarks
 
