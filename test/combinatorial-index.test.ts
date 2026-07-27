@@ -1,11 +1,20 @@
 import { describe, it, expect } from "vitest";
+
 import { CombinatorialIndex } from "../src/core/combinatorial-index.ts";
 
 function C(n: number, k: number): number {
-  if (k === 0) return 1;
-  if (k === 1) return n;
-  if (k === 2) return (n * (n - 1)) / 2;
-  if (k === 3) return (n * (n - 1) * (n - 2)) / 6;
+  if (k === 0) {
+    return 1;
+  }
+  if (k === 1) {
+    return n;
+  }
+  if (k === 2) {
+    return (n * (n - 1)) / 2;
+  }
+  if (k === 3) {
+    return (n * (n - 1) * (n - 2)) / 6;
+  }
   return 0;
 }
 
@@ -19,10 +28,11 @@ function* enumerateTriangles(n: number): Generator<[number, number, number]> {
   }
 }
 
-describe("CombinatorialIndex", () => {
+describe(CombinatorialIndex, () => {
   describe("bijection, n ≤ 30", () => {
-    for (const n of [5, 10, 15, 20, 25, 30]) {
-      it(`n=${n}: ranks are exactly [0, C(${n},3)) with no gaps or duplicates`, () => {
+    it.each([5, 10, 15, 20, 25, 30])(
+      `n=%i: ranks are exactly [0, C(%i,3)) with no gaps or duplicates`,
+      (n) => {
         const idx = new CombinatorialIndex(n);
         const total = C(n, 3);
         const seen = new Set<number>();
@@ -32,13 +42,14 @@ describe("CombinatorialIndex", () => {
         expect(seen.size).toBe(total);
         expect(Math.max(...seen)).toBe(total - 1);
         expect(Math.min(...seen)).toBe(0);
-      });
-    }
+      }
+    );
   });
 
   describe("round-trip", () => {
-    for (const n of [5, 10, 15, 20]) {
-      it(`n=${n}: unrank(rank(u,v,w)) === (u,v,w) and rank(unrank(r)) === r`, () => {
+    it.each([5, 10, 15, 20])(
+      `n=%i: unrank(rank(u,v,w)) === (u,v,w) and rank(unrank(r)) === r`,
+      (n) => {
         const idx = new CombinatorialIndex(n);
         for (const [u, v, w] of enumerateTriangles(n)) {
           const r = idx.rank(u, v, w);
@@ -48,8 +59,8 @@ describe("CombinatorialIndex", () => {
           const [u, v, w] = idx.unrank(r);
           expect(idx.rank(u, v, w)).toBe(r);
         }
-      });
-    }
+      }
+    );
   });
 
   describe("monotonicity", () => {
@@ -66,14 +77,15 @@ describe("CombinatorialIndex", () => {
   });
 
   describe("degenerate n", () => {
-    for (const n of [0, 1, 2]) {
-      it(`n=${n} does not throw and produces zero triangles`, () => {
+    it.each([0, 1, 2])(
+      `n=%i does not throw and produces zero triangles`,
+      (n) => {
         expect(() => new CombinatorialIndex(n)).not.toThrow();
         const idx = new CombinatorialIndex(n);
         expect(idx.maxRank).toBe(0);
         expect(idx.n).toBe(n);
-      });
-    }
+      }
+    );
 
     it("n=3 produces exactly one triangle, rank 0", () => {
       const idx = new CombinatorialIndex(3);
@@ -84,8 +96,9 @@ describe("CombinatorialIndex", () => {
   });
 
   describe("boundary ranks", () => {
-    for (const n of [10, 50, 200, 2000]) {
-      it(`unrank(0) = (0,1,2) and unrank(C(${n},3)-1) = (${n - 3},${n - 2},${n - 1})`, () => {
+    it.each([10, 50, 200, 2000])(
+      `unrank(0) = (0,1,2) and unrank(C(%i,3)-1) = (%i,%i,%i)`,
+      (n) => {
         const idx = new CombinatorialIndex(n);
         expect(idx.unrank(0)).toStrictEqual([0, 1, 2]);
         expect(idx.unrank(idx.maxRank - 1)).toStrictEqual([
@@ -93,15 +106,13 @@ describe("CombinatorialIndex", () => {
           n - 2,
           n - 1,
         ]);
-      });
-    }
+      }
+    );
   });
 
   describe("n ≥ 2300 throws", () => {
-    for (const n of [2300, 2345, 5000, 10000]) {
-      it(`n=${n} throws`, () => {
-        expect(() => new CombinatorialIndex(n)).toThrow();
-      });
-    }
+    it.each([2300, 2345, 5000, 10_000])(`n=%i throws`, (n) => {
+      expect(() => new CombinatorialIndex(n)).toThrow("CombinatorialIndex");
+    });
   });
 });

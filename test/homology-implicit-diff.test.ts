@@ -1,17 +1,17 @@
 /* eslint-disable vitest/expect-expect */
 import { describe, it, expect } from "vitest";
 
-import { computePersistentHomology } from "../src/core/homology.ts";
 import { computePersistentHomologyImplicit } from "../src/core/homology-implicit.ts";
-import { mulberry32, circlePoints, generatePoints, countByDim, eulerCheck } from "./helpers.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
+import { mulberry32, circlePoints, countByDim } from "./helpers.ts";
 
 function canon(pairs: { dim: number; birth: number; death: number }[]): string {
   return JSON.stringify(
     pairs
       .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
       .toSorted(
-        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death,
-      ),
+        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
+      )
   );
 }
 
@@ -19,14 +19,23 @@ function checkMatches(
   points: Float64Array,
   dims: number,
   maxDist: number,
-  maxDim: number,
+  maxDim: number
 ): void {
   const expected = computePersistentHomology(points, dims, maxDist, maxDim);
-  const actual = computePersistentHomologyImplicit(points, dims, maxDist, maxDim);
+  const actual = computePersistentHomologyImplicit(
+    points,
+    dims,
+    maxDist,
+    maxDim
+  );
   expect(canon(actual.pairs)).toBe(canon(expected.pairs));
 }
 
-function randomPoints(rng: () => number, n: number, dims: number): Float64Array {
+function randomPoints(
+  rng: () => number,
+  n: number,
+  dims: number
+): Float64Array {
   const pts = new Float64Array(n * dims);
   for (let i = 0; i < n * dims; i++) {
     pts[i] = rng() * 10;
@@ -43,7 +52,8 @@ describe("computePersistentHomologyImplicit vs computePersistentHomology (ground
       const dims = 2 + Math.floor(rng() * 4);
       const pts = randomPoints(rng, n, dims);
       const maxDistCandidates = [0.5, 1, 2, 3, 5, 8, Infinity];
-      const maxDist = maxDistCandidates[Math.floor(rng() * maxDistCandidates.length)]!;
+      const maxDist =
+        maxDistCandidates[Math.floor(rng() * maxDistCandidates.length)]!;
       checkMatches(pts, dims, maxDist, 2);
     }
   });
@@ -56,7 +66,8 @@ describe("computePersistentHomologyImplicit vs computePersistentHomology (ground
       const dims = 2 + Math.floor(rng() * 4);
       const pts = randomPoints(rng, n, dims);
       const maxDistCandidates = [0.5, 1, 2, 3, 5, 8, Infinity];
-      const maxDist = maxDistCandidates[Math.floor(rng() * maxDistCandidates.length)]!;
+      const maxDist =
+        maxDistCandidates[Math.floor(rng() * maxDistCandidates.length)]!;
       checkMatches(pts, dims, maxDist, 3);
     }
   });

@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { DenseWorkingCol } from "../src/core/reduction.ts";
+
 import { HeapColumn } from "../src/core/heap-column.ts";
+import { DenseWorkingCol } from "../src/core/reduction.ts";
 import { mulberry32 } from "./helpers.ts";
 
 describe("HeapColumn vs DenseWorkingCol on 500 random inputs", () => {
-  const rng = mulberry32(20260727);
+  const rng = mulberry32(20_260_727);
 
+  /* eslint-disable-next-line vitest/prefer-each */
   for (let trial = 0; trial < 500; trial++) {
     it(`trial ${trial}: pivot sequence matches DenseWorkingCol`, () => {
       const maxIdx = 10 + Math.floor(rng() * 200);
@@ -15,7 +17,7 @@ describe("HeapColumn vs DenseWorkingCol on 500 random inputs", () => {
       while (colSet.size < colLen) {
         colSet.add(Math.floor(rng() * maxIdx));
       }
-      const initialCol = new Int32Array([...colSet]);
+      const initialCol = new Int32Array(colSet);
 
       const dwc = new DenseWorkingCol(maxIdx);
       dwc.loadFromArray(initialCol);

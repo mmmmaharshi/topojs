@@ -1,9 +1,9 @@
+import { CombinatorialIndex } from "./combinatorial-index.ts";
+import type { SheehyInfo } from "./complex.ts";
 import type { Points } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
-import type { SheehyInfo } from "./complex.ts";
-import { SpatialGrid } from "./spatial-grid.ts";
-import { CombinatorialIndex } from "./combinatorial-index.ts";
 import { selectLandmarks } from "./landmarks.ts";
+import { SpatialGrid } from "./spatial-grid.ts";
 
 const GRID_MIN_N = 700;
 const EDGE_INDEX_DENSE_MAX_N = 1000;
@@ -34,7 +34,7 @@ export function buildImplicitRipsComplex(
   points: Points,
   dims: number,
   maxDist: number,
-  epsilon?: number,
+  epsilon?: number
 ): ImplicitRipsComplex {
   const n = points.length / dims;
 
@@ -68,7 +68,8 @@ export function buildImplicitRipsComplex(
     };
   }
 
-  const tempEdges: { u: number; v: number; val: number; origIdx: number }[] = [];
+  const tempEdges: { u: number; v: number; val: number; origIdx: number }[] =
+    [];
   const adj: number[][] = Array.from({ length: n }, () => []);
 
   const permRank: Int32Array | null = perm ? new Int32Array(n) : null;
@@ -173,22 +174,36 @@ export function buildImplicitRipsComplex(
   };
 }
 
-export function triVal(complex: ImplicitRipsComplex, u: number, v: number, w: number): number {
+export function triVal(
+  complex: ImplicitRipsComplex,
+  u: number,
+  v: number,
+  w: number
+): number {
   const edgeUV = complex._getEdgeIndex(u, v);
   const edgeUW = complex._getEdgeIndex(u, w);
   const edgeVW = complex._getEdgeIndex(v, w);
   const duv = complex._edgeVals[edgeUV]!;
   const duw = complex._edgeVals[edgeUW]!;
   const dvw = complex._edgeVals[edgeVW]!;
-  return duv >= duw ? (duv >= dvw ? duv : dvw) : duw >= dvw ? duw : dvw;
+  return Math.max(duv, duw, dvw);
 }
 
-export function triValByRank(complex: ImplicitRipsComplex, rank: number): number {
+export function triValByRank(
+  complex: ImplicitRipsComplex,
+  rank: number
+): number {
   const [u, v, w] = complex._combinatorialIndex.unrank(rank);
   return triVal(complex, u, v, w);
 }
 
-export function tetVal(complex: ImplicitRipsComplex, a: number, b: number, c: number, d: number): number {
+export function tetVal(
+  complex: ImplicitRipsComplex,
+  a: number,
+  b: number,
+  c: number,
+  d: number
+): number {
   const dab = complex._edgeVals[complex._getEdgeIndex(a, b)]!;
   const dac = complex._edgeVals[complex._getEdgeIndex(a, c)]!;
   const dad = complex._edgeVals[complex._getEdgeIndex(a, d)]!;
@@ -202,22 +217,24 @@ export function tetVal(complex: ImplicitRipsComplex, a: number, b: number, c: nu
   return m12 >= m3 ? m12 : m3;
 }
 
-export function tetValByRank(complex: ImplicitRipsComplex, rank: number): number {
+export function tetValByRank(
+  complex: ImplicitRipsComplex,
+  rank: number
+): number {
   const [a, b, c, d] = complex._combinatorialIndex.unrank4(rank);
   return tetVal(complex, a, b, c, d);
 }
 
 export function countImplicitTriangles(
   complex: ImplicitRipsComplex,
-  filterMaxDist?: number,
+  filterMaxDist?: number
 ): number {
   const { adjBits, edges, n } = complex;
   const maxDist = filterMaxDist ?? complex.maxDist;
   const words = Math.ceil(n / 32);
   let count = 0;
 
-  for (let ei = 0; ei < edges.length; ei++) {
-    const { u, v } = edges[ei]!;
+  for (const { u, v } of edges) {
     const bu = adjBits[u]!;
     const bv = adjBits[v]!;
     const startWord = (v + 1) >>> 5;
@@ -247,14 +264,13 @@ export function countImplicitTriangles(
 export function forEachImplicitTriangle(
   complex: ImplicitRipsComplex,
   fn: (u: number, v: number, w: number, val: number) => void,
-  filterMaxDist?: number,
+  filterMaxDist?: number
 ): void {
   const { adjBits, edges, n } = complex;
   const maxDist = filterMaxDist ?? complex.maxDist;
   const words = Math.ceil(n / 32);
 
-  for (let ei = 0; ei < edges.length; ei++) {
-    const { u, v } = edges[ei]!;
+  for (const { u, v } of edges) {
     const bu = adjBits[u]!;
     const bv = adjBits[v]!;
     const startWord = (v + 1) >>> 5;

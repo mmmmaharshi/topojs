@@ -7,18 +7,18 @@
  * fastest correct result without picking an engine.
  */
 
-import type { Points } from "./distance.ts";
-import { computePersistentHomologyCohomologyImplicit } from "./homology-cohom-implicit.ts";
-import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
-import { computePersistentHomologyFast } from "./homology-fast.ts";
-import { computePersistentHomologyReduced } from "./homology-reduced.ts";
-import type { HomologyResult } from "./homology.ts";
-import { computePersistentHomology as computeStandard } from "./homology.ts";
 import {
   buildImplicitRipsComplex,
   countImplicitTriangles,
 } from "./complex-implicit.ts";
+import type { Points } from "./distance.ts";
+import { computePersistentHomologyCohomologyImplicit } from "./homology-cohom-implicit.ts";
+import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
+import { computePersistentHomologyFast } from "./homology-fast.ts";
 import { computePersistentHomologyImplicitFromComplex } from "./homology-implicit.ts";
+import { computePersistentHomologyReduced } from "./homology-reduced.ts";
+import type { HomologyResult } from "./homology.ts";
+import { computePersistentHomology as computeStandard } from "./homology.ts";
 
 export { computePersistentHomologyCohomologyFromComplex } from "./homology-cohom-implicit.ts";
 
@@ -106,9 +106,7 @@ export function computePersistentHomology(
   // Auto-select engine
   let resolved: HomologyEngine = engine;
   if (resolved === "auto") {
-    if (epsilon !== undefined) {
-      resolved = "implicit";
-    } else {
+    if (epsilon === undefined) {
       // Build the implicit complex once and count triangles to decide.
       // On fallback the cohomology engine rebuilds edges from scratch
       // (double O(n²) edge enumeration), accepted for now because the
@@ -123,15 +121,15 @@ export function computePersistentHomology(
         if (triCount >= 8000) {
           return computePersistentHomologyImplicitFromComplex(complex, maxDim);
         }
-      } else {
+      } else if (triCount >= 60_000) {
         // H₁ only: the implicit engine wins by avoiding triangle
         // materialisation, but its bitset scanning overhead dominates
         // below ~60K triangles (measured on the same sweeps).
-        if (triCount >= 60000) {
-          return computePersistentHomologyImplicitFromComplex(complex, maxDim);
-        }
+        return computePersistentHomologyImplicitFromComplex(complex, maxDim);
       }
       resolved = "cohomology";
+    } else {
+      resolved = "implicit";
     }
   }
 
@@ -151,7 +149,7 @@ export function computePersistentHomology(
     case "implicit-full": {
       return computePersistentHomologyImplicitFromComplex(
         buildImplicitRipsComplex(points, dims, maxDist),
-        maxDim,
+        maxDim
       );
     }
     case "standard": {

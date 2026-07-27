@@ -13,5 +13,5 @@
     "rootDir": ".",
     "skipLibCheck": true
   },
-  "exclude": ["oxlint.config.ts"]
+  "exclude": ["dist", "bench", "demo", "test", "oxlint.config.ts"]
 }

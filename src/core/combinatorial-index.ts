@@ -6,7 +6,7 @@ export class CombinatorialIndex {
   constructor(n: number) {
     if (n >= 2300) {
       throw new Error(
-        `CombinatorialIndex n=${n} exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage)`,
+        `CombinatorialIndex n=${n} exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage)`
       );
     }
     this.n = n;
@@ -17,10 +17,10 @@ export class CombinatorialIndex {
       this.binom[base + 1] = i;
       this.binom[base + 2] = i <= 1 ? 0 : (i * (i - 1)) / 2;
       this.binom[base + 3] = i <= 2 ? 0 : (i * (i - 1) * (i - 2)) / 6;
-      this.binom[base + 4] = i <= 3 ? 0 : (i * (i - 1) * (i - 2) * (i - 3)) / 24;
+      this.binom[base + 4] =
+        i <= 3 ? 0 : (i * (i - 1) * (i - 2) * (i - 3)) / 24;
     }
-    this.maxRank =
-      n < 3 ? 0 : (n * (n - 1) * (n - 2)) / 6;
+    this.maxRank = n < 3 ? 0 : (n * (n - 1) * (n - 2)) / 6;
   }
 
   rank(u: number, v: number, w: number): number {
@@ -28,7 +28,12 @@ export class CombinatorialIndex {
   }
 
   rank4(a: number, b: number, c: number, d: number): number {
-    return this.binom[d * 5 + 4]! + this.binom[c * 5 + 3]! + this.binom[b * 5 + 2]! + a;
+    return (
+      this.binom[d * 5 + 4]! +
+      this.binom[c * 5 + 3]! +
+      this.binom[b * 5 + 2]! +
+      a
+    );
   }
 
   unrank4(r: number): [number, number, number, number] {

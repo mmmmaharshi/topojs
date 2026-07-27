@@ -33,12 +33,6 @@
  * when `x` fell below `u`, between `u` and `v`, or between `v` and `w`.
  */
 
-import type { Points } from "./distance.ts";
-import type { PersistencePair } from "./h0.ts";
-import { computeH0Phase } from "./h0.ts";
-import type { HomologyResult } from "./homology.ts";
-import { ColumnStore } from "./reduction.ts";
-import { HeapColumn } from "./heap-column.ts";
 import {
   buildImplicitRipsComplex,
   triValByRank,
@@ -46,28 +40,38 @@ import {
   countImplicitTriangles,
 } from "./complex-implicit.ts";
 import type { ImplicitRipsComplex } from "./complex-implicit.ts";
+import type { Points } from "./distance.ts";
+import type { PersistencePair } from "./h0.ts";
+import { computeH0Phase } from "./h0.ts";
+import { HeapColumn } from "./heap-column.ts";
+import type { HomologyResult } from "./homology.ts";
+import { ColumnStore } from "./reduction.ts";
 
 export function computePersistentHomologyImplicit(
   points: Points,
   dims: number,
   maxDist = Infinity,
-  maxDim = 2,
+  maxDim = 2
 ): HomologyResult {
   return computePersistentHomologyImplicitFromComplex(
     buildImplicitRipsComplex(points, dims, maxDist),
-    maxDim,
+    maxDim
   );
 }
 
 export function computePersistentHomologyImplicitFromComplex(
   complex: ImplicitRipsComplex,
-  maxDim: number,
+  maxDim: number
 ): HomologyResult {
   const { edges, n } = complex;
 
   const { h0Pairs, cycleEdges } = computeH0Phase(n, edges);
 
-  const { h1Pairs, triPivotOwner } = computeH1ImplicitAndPivots(complex, edges, cycleEdges);
+  const { h1Pairs, triPivotOwner } = computeH1ImplicitAndPivots(
+    complex,
+    edges,
+    cycleEdges
+  );
 
   let h2Pairs: PersistencePair[] = [];
   if (maxDim >= 3) {
@@ -90,7 +94,7 @@ export function computePersistentHomologyImplicitFromComplex(
 function computeH1ImplicitAndPivots(
   complex: ImplicitRipsComplex,
   edges: { u: number; v: number; val: number }[],
-  cycleEdges: Uint8Array,
+  cycleEdges: Uint8Array
 ): { h1Pairs: PersistencePair[]; triPivotOwner: Map<number, number> } {
   const { adjBits, n } = complex;
   const h1Pairs: PersistencePair[] = [];
@@ -100,7 +104,7 @@ function computeH1ImplicitAndPivots(
   const edgeReducedCol = new ColumnStore(edges.length);
   const w = new HeapColumn(
     (rank: number) => triValByRank(complex, rank),
-    "min",
+    "min"
   );
 
   for (let ei = edges.length - 1; ei >= 0; ei--) {
@@ -121,11 +125,23 @@ function computeH1ImplicitAndPivots(
         const k = (wd << 5) + bit;
         bits ^= lsb;
 
-        if (k === u || k === v) { continue; }
+        if (k === u || k === v) {
+          continue;
+        }
         let a: number, b: number, c: number;
-        if (k < u) { a = k; b = u; c = v; }
-        else if (k < v) { a = u; b = k; c = v; }
-        else { a = u; b = v; c = k; }
+        if (k < u) {
+          a = k;
+          b = u;
+          c = v;
+        } else if (k < v) {
+          a = u;
+          b = k;
+          c = v;
+        } else {
+          a = u;
+          b = v;
+          c = k;
+        }
 
         const rank = complex._combinatorialIndex.rank(a, b, c);
         coboundary.push(rank);
@@ -172,9 +188,15 @@ function computeH1ImplicitAndPivots(
 
 function computeH2Implicit(
   complex: ImplicitRipsComplex,
-  triPivotOwner: Map<number, number>,
+  triPivotOwner: Map<number, number>
 ): PersistencePair[] {
-  const { adjBits, n, edges, _edgeVals: edgeVals, _combinatorialIndex: ci } = complex;
+  const {
+    adjBits,
+    n,
+    edges,
+    _edgeVals: edgeVals,
+    _combinatorialIndex: ci,
+  } = complex;
   const words = Math.ceil(n / 32);
   const h2Pairs: PersistencePair[] = [];
 
@@ -182,7 +204,7 @@ function computeH2Implicit(
   const triReducedCol = new Map<number, Int32Array>();
   const w2 = new HeapColumn(
     (rank: number) => tetValByRank(complex, rank),
-    "min",
+    "min"
   );
 
   for (let ei = edges.length - 1; ei >= 0; ei--) {
@@ -200,22 +222,43 @@ function computeH2Implicit(
 
         let a: number, b: number, c: number;
         let pos: 0 | 1 | 2;
-        if (k < u) { a = k; b = u; c = v; pos = 2; }
-        else if (k < v) { a = u; b = k; c = v; pos = 1; }
-        else { a = u; b = v; c = k; pos = 0; }
+        if (k < u) {
+          a = k;
+          b = u;
+          c = v;
+          pos = 2;
+        } else if (k < v) {
+          a = u;
+          b = k;
+          c = v;
+          pos = 1;
+        } else {
+          a = u;
+          b = v;
+          c = k;
+          pos = 0;
+        }
 
         const dab = edgeVals[complex._getEdgeIndex(a, b)]!;
         const dac = edgeVals[complex._getEdgeIndex(a, c)]!;
         const dbc = edgeVals[complex._getEdgeIndex(b, c)]!;
 
         let isCanonical: boolean;
-        if (pos === 0) { isCanonical = dab >= dac && dab >= dbc; }
-        else if (pos === 1) { isCanonical = dac > dab && dac >= dbc; }
-        else { isCanonical = dbc > dab && dbc > dac; }
-        if (!isCanonical) { continue; }
+        if (pos === 0) {
+          isCanonical = dab >= dac && dab >= dbc;
+        } else if (pos === 1) {
+          isCanonical = dac > dab && dac >= dbc;
+        } else {
+          isCanonical = dbc > dab && dbc > dac;
+        }
+        if (!isCanonical) {
+          continue;
+        }
 
         const triRank = ci.rank(a, b, c);
-        if (triPivotOwner.has(triRank)) { continue; }
+        if (triPivotOwner.has(triRank)) {
+          continue;
+        }
 
         const bk = adjBits[k]!;
         const coboundary: number[] = [];
@@ -229,10 +272,27 @@ function computeH2Implicit(
             xbits ^= xlsb;
 
             let p: number, q: number, r: number, s: number;
-            if (x < a) { p = x; q = a; r = b; s = c; }
-            else if (x < b) { p = a; q = x; r = b; s = c; }
-            else if (x < c) { p = a; q = b; r = x; s = c; }
-            else { p = a; q = b; r = c; s = x; }
+            if (x < a) {
+              p = x;
+              q = a;
+              r = b;
+              s = c;
+            } else if (x < b) {
+              p = a;
+              q = x;
+              r = b;
+              s = c;
+            } else if (x < c) {
+              p = a;
+              q = b;
+              r = x;
+              s = c;
+            } else {
+              p = a;
+              q = b;
+              r = c;
+              s = x;
+            }
             coboundary.push(ci.rank4(p, q, r, s));
           }
         }
@@ -262,7 +322,9 @@ function computeH2Implicit(
             break;
           }
           const prevCol = triReducedCol.get(ownerTriRank);
-          if (prevCol === undefined) { break; }
+          if (prevCol === undefined) {
+            break;
+          }
           w2.xorSparse(prevCol);
         }
       }

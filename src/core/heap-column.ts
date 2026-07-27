@@ -1,4 +1,4 @@
-import { ColumnStore } from "./reduction.ts";
+import type { ColumnStore } from "./reduction.ts";
 
 export type HeapDirection = "max" | "min";
 
@@ -7,7 +7,9 @@ interface HeapEntry {
   val: number;
 }
 
-function makeHeapCmp(dir: HeapDirection): (a: HeapEntry, b: HeapEntry) => boolean {
+function makeHeapCmp(
+  dir: HeapDirection
+): (a: HeapEntry, b: HeapEntry) => boolean {
   if (dir === "max") {
     return (a, b) => a.val > b.val || (a.val === b.val && a.rank > b.rank);
   }
@@ -45,7 +47,7 @@ export class HeapColumn {
 
   constructor(
     getVal: (rank: number) => number,
-    direction: HeapDirection = "max",
+    direction: HeapDirection = "max"
   ) {
     this.getVal = getVal;
     this.cmp = makeHeapCmp(direction);
@@ -61,8 +63,7 @@ export class HeapColumn {
   loadFromArray(arr: Int32Array): void {
     this.entries.clear();
     this.heap = [];
-    for (let i = 0; i < arr.length; i++) {
-      const rank = arr[i]!;
+    for (const rank of arr) {
       const val = this.getVal(rank);
       this.entries.set(rank, val);
       this.heapPush({ rank, val });
@@ -80,8 +81,7 @@ export class HeapColumn {
   }
 
   xorSparse(col: Int32Array): void {
-    for (let i = 0; i < col.length; i++) {
-      const rank = col[i]!;
+    for (const rank of col) {
       if (this.entries.has(rank)) {
         this.entries.delete(rank);
       } else {
@@ -110,7 +110,7 @@ export class HeapColumn {
   }
 
   toSparse(): Int32Array {
-    const sorted = [...this.entries.keys()].sort((a, b) => a - b);
+    const sorted = [...this.entries.keys()].toSorted((a, b) => a - b);
     const result = new Int32Array(sorted.length);
     for (let i = 0; i < sorted.length; i++) {
       result[i] = sorted[i]!;

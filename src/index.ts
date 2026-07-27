@@ -1,7 +1,7 @@
 /**
  * TopoJS — public entry point.
  *
- * Everything importable as `import { ... } from 'topojs'` is re-exported
+ * Everything importable as `import { ... } from '@manohar_maharshi/topojs'` is re-exported
  * from here. Internal modules under src/core, src/export, and src/data are
  * implementation detail and not part of the public API contract (they may
  * be reorganized without a semver-major bump).

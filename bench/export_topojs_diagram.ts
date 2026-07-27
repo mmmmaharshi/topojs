@@ -38,13 +38,18 @@ lines.forEach((line, i) => {
   }
 });
 
-const compute =
-  engineArg === "cohom"
-    ? computePersistentHomologyCohomology
-    : engineArg === "impl"
-      ? computePersistentHomologyImplicit
-      : computePersistentHomology;
-const engine = engineArg === "cohom" ? "cohom" : engineArg === "impl" ? "impl" : "plain";
+let compute: typeof computePersistentHomology;
+let engine: string;
+if (engineArg === "cohom") {
+  compute = computePersistentHomologyCohomology;
+  engine = "cohom";
+} else if (engineArg === "impl") {
+  compute = computePersistentHomologyImplicit;
+  engine = "impl";
+} else {
+  compute = computePersistentHomology;
+  engine = "plain";
+}
 const t0 = performance.now();
 const result = compute(flat, dims, maxDist, maxDim);
 const ms = performance.now() - t0;
