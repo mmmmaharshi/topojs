@@ -9,3 +9,4 @@ bench/_tmp_*
 docs/
 .agents/
 github-research-output/
+.opencode/
