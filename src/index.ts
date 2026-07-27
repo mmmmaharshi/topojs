@@ -12,6 +12,7 @@ export {
   computePersistentHomology,
   computePersistentHomologyCohomologyFromComplex,
 } from "./core/homology-unified.ts";
+export { computePersistentHomologyImplicit } from "./core/homology-implicit.ts";
 export type {
   HomologyResult,
   HomologyOptions,

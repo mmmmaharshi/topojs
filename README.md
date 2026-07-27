@@ -69,7 +69,8 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with auto engine selection. Options object for `engine: "reduced"` (faster on dense complexes, H₀+H₁ only) or custom `epsilon`. |
+| `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with auto engine selection. Options object for `engine` (`"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`), or `epsilon` (Sheehy sparsification). Auto mode picks `"implicit-full"` above 8K triangles (H₂) or 60K triangles (H₁ only); falls back to `"cohomology"`; `"implicit"` selected for Sheehy complexes. |
+| `computePersistentHomologyImplicit(points, dims, maxDist, maxDim?)` | Fully implicit reduction (`"implicit-full"` engine); avoids all simplex materialisation. H₂ crossover ~8K triangles, H₁ crossover ~60K triangles. |
 | `computePersistentHomologyCohomologyFromComplex(complex, maxDim?)` | Cohomology on a pre-built `RipsComplex`. |
 | `computeCubicalHomology(image, height, width, maxDim)` | H₀+H₁ on 2D grayscale images. |
 

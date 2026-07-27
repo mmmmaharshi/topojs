@@ -1,4 +1,5 @@
 export { computePersistentHomology } from "../src/core/homology-unified.ts";
+export { computePersistentHomologyImplicit } from "../src/core/homology-implicit.ts";
 export { computePairwiseDistances } from "../src/core/distance.ts";
 export { bottleneckDistance } from "../src/core/bottleneck.ts";
 export { computeCubicalHomology } from "../src/core/cubical.ts";
