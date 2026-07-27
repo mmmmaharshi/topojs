@@ -1,15 +1,18 @@
 # TopoJS — Pure-JavaScript Persistent Homology
 
+[![npm version](https://img.shields.io/npm/v/@manohar_maharshi/topojs)](https://www.npmjs.com/package/@manohar_maharshi/topojs)
+[![JSR](https://jsr.io/badges/@mmmmaharshi/topojs)](https://jsr.io/@mmmmaharshi/topojs)
+
 TopoJS computes persistent homology for point clouds (Vietoris–Rips, H₀–H₂) and 2D grayscale images (cubical complexes, H₀–H₁). Zero dependencies, pure TypeScript — no WASM, WebGL, WebGPU, or server. The demo bundle is ~4 KB gzipped.
 
 ```sh
-npm install topojs
+npm install @manohar_maharshi/topojs
 ```
 
 ## Quick Start
 
 ```js
-import { computePersistentHomology, computeCubicalHomology } from "topojs";
+import { computePersistentHomology, computeCubicalHomology } from "@manohar_maharshi/topojs";
 
 // Rips persistence: 3 points forming a triangle, maxDist=1, maxDim=2 (H₀+H₁+H₂)
 const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
@@ -38,7 +41,7 @@ Example: `{birth: 0.3, death: 0.8, dim: 1}` means a loop formed at distance 0.3 
 ## Worked example: Iris dataset
 
 ```js
-import { loadIrisDataset, computePersistentHomology, summarize } from "topojs";
+import { loadIrisDataset, computePersistentHomology, summarize } from "@manohar_maharshi/topojs";
 
 const data = loadIrisDataset(); // Float64Array, 150 points × 4 dimensions
 const result = computePersistentHomology(data, 4, 1.5, 2);
