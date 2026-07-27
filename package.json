@@ -1,6 +1,6 @@
 {
   "name": "@manohar_maharshi/topojs",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": false,
   "description": "Pure-JavaScript persistent homology library (H0, H1, H2, cubical). No WASM, WebGL, WebGPU, or server required.",
   "keywords": [
