@@ -10,3 +10,4 @@ docs/
 .agents/
 github-research-output/
 .opencode/
+package-lock.json
