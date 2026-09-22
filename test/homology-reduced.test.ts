@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 
 import { computePersistentHomologyReduced } from "../src/core/homology-reduced.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { circlePoints, generatePoints, mulberry32 } from "./helpers.ts";
+import {
+  bruteForceEdgeCount,
+  bruteForceTriangleCount,
+  circlePoints,
+  generatePoints,
+  mulberry32,
+} from "./helpers.ts";
 
 /**
  * Canonicalize pairs before comparing: computePersistentHomologyReduced
@@ -33,7 +39,14 @@ function checkMatches(points: Float64Array, maxDist: number, dims = 2): void {
   const expectedFull = computePersistentHomology(points, dims, maxDist, 1);
   const actual = computePersistentHomologyReduced(points, dims, maxDist);
   expect(actual.complex.numVertices).toBe(expectedFull.complex.numVertices);
-  expect(actual.complex.numEdges).toBe(expectedFull.complex.numEdges);
+  // The reduced engine keeps the FULL uncollapsed 1-skeleton (edge-collapse
+  // is a flag-filtration optimization and does not transfer to its
+  // metric-dependent lune construction), while the standard path collapses
+  // -- so numEdges is checked against an independent brute-force count,
+  // and only the barcode (canon) is compared across engines.
+  expect(actual.complex.numEdges).toBe(
+    bruteForceEdgeCount(points, dims, maxDist)
+  );
   expect(canon(actual.pairs)).toBe(
     canon(expectedFull.pairs.filter((p) => p.dim <= 1))
   );
@@ -195,20 +208,26 @@ describe("computePersistentHomologyReduced (reduced VR complex) vs. computePersi
       flat,
       2,
       Number.POSITIVE_INFINITY,
-      1
+      2 // H1 (not 1): the maxDim<2 cost gate skips collapse, which would make
+      // numTriangles the uncollapsed count and void the comparison below
     );
+    // The collapsed builder no longer reports the full triangle count, so
+    // the reduced construction is measured against an independent
+    // brute-force count of the uncollapsed flag complex's triangles.
+    const fullTriangles = bruteForceTriangleCount(
+      flat,
+      2,
+      Number.POSITIVE_INFINITY
+    );
+    expect(fullTriangles).toBeGreaterThan(full.complex.numTriangles);
     const reduced = computePersistentHomologyReduced(
       flat,
       2,
       Number.POSITIVE_INFINITY
     );
-    expect(reduced.complex.numTriangles).toBeLessThan(
-      full.complex.numTriangles
-    );
+    expect(reduced.complex.numTriangles).toBeLessThan(fullTriangles);
     // Not a tight bound (Lemma 3.9's 4^D is famously crude), just a sanity
     // check that the reduction is substantial, not marginal, at this n/D.
-    expect(reduced.complex.numTriangles).toBeLessThan(
-      full.complex.numTriangles * 0.5
-    );
+    expect(reduced.complex.numTriangles).toBeLessThan(fullTriangles * 0.5);
   });
 });

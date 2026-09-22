@@ -2,6 +2,7 @@ import { CombinatorialIndex } from "./combinatorial-index.ts";
 import type { SheehyInfo } from "./complex.ts";
 import { enclosingRadius } from "./distance.ts";
 import type { Points } from "./distance.ts";
+import { collapseDominatedEdges } from "./edge-collapse.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
@@ -143,13 +144,27 @@ export function buildImplicitRipsComplex(
     }
   }
 
-  tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
+  // Sort by (val, u, v): total order derived from the edge set alone, so
+  // grid and brute-force collection paths feed edge-collapse identical
+  // input (see complex.ts for why origIdx must NOT break ties here).
+  tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
 
-  const edges: EdgeEntry[] = tempEdges.map((e) => ({
-    u: e.u,
-    v: e.v,
-    val: e.val,
-  }));
+  // Edge-collapse preprocessing (src/core/edge-collapse.ts): shrink the
+  // 1-skeleton to a diagram-equivalent subset. `adj` (built incrementally
+  // above) is rebuilt from the survivors so edgeIndex/adjBits below stay
+  // consistent; coface values derived via triVal/tetVal (max of edge vals)
+  // are unaffected structurally.
+  const edges: EdgeEntry[] = collapseDominatedEdges(
+    n,
+    tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val }))
+  );
+  for (let i = 0; i < n; i++) {
+    adj[i]!.length = 0;
+  }
+  for (const e of edges) {
+    adj[e.u]!.push(e.v);
+    adj[e.v]!.push(e.u);
+  }
 
   const edgeIndexDense: Int32Array | null =
     n < EDGE_INDEX_DENSE_MAX_N ? new Int32Array(n * n).fill(-1) : null;

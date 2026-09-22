@@ -1,4 +1,5 @@
 import type { Points } from "../src/core/distance.ts";
+import { enclosingRadius } from "../src/core/distance.ts";
 
 /** Build a flattened Points array from an array of [x, y] tuples. */
 export function generatePoints(pts: [number, number][]): Points {
@@ -40,6 +41,149 @@ export function mulberry32(seed: number): () => number {
 
 export function countByDim(pairs: { dim: number }[], dim: number): number {
   return pairs.filter((p) => p.dim === dim).length;
+}
+
+/**
+ * Independent brute-force TETRAHEDRA count of the full flag complex:
+ * 4-tuples with all six pairs within the effective threshold (same
+ * squared-domain predicate and enclosing-radius cap as above). For the
+ * incremental engine's uncollapsed complex stats.
+ */
+export function bruteForceTetraCount(
+  points: Points,
+  dims: number,
+  maxDist: number
+): number {
+  const n = points.length / dims;
+  let effectiveMaxDist = maxDist;
+  if (maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
+  const sqDist = (i: number, j: number): number => {
+    const bi = i * dims;
+    const bj = j * dims;
+    let sq = 0;
+    for (let d = 0; d < dims; d++) {
+      const diff = points[bi + d]! - points[bj + d]!;
+      sq += diff * diff;
+    }
+    return sq;
+  };
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (sqDist(i, j) > maxDistSq) {
+        continue;
+      }
+      for (let k = j + 1; k < n; k++) {
+        if (sqDist(i, k) > maxDistSq || sqDist(j, k) > maxDistSq) {
+          continue;
+        }
+        for (let l = k + 1; l < n; l++) {
+          if (
+            sqDist(i, l) <= maxDistSq &&
+            sqDist(j, l) <= maxDistSq &&
+            sqDist(k, l) <= maxDistSq
+          ) {
+            count++;
+          }
+        }
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Independent brute-force TRIANGLE count of the full flag complex: triples
+ * with all three pairs within the effective threshold (same squared-domain
+ * predicate and enclosing-radius cap as bruteForceEdgeCount). Lets tests
+ * compare reduced/incremental-engine triangle counts against the
+ * uncollapsed full complex, which the collapsed builders no longer report.
+ */
+export function bruteForceTriangleCount(
+  points: Points,
+  dims: number,
+  maxDist: number
+): number {
+  const n = points.length / dims;
+  let effectiveMaxDist = maxDist;
+  if (maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
+  const sqDist = (i: number, j: number): number => {
+    const bi = i * dims;
+    const bj = j * dims;
+    let sq = 0;
+    for (let d = 0; d < dims; d++) {
+      const diff = points[bi + d]! - points[bj + d]!;
+      sq += diff * diff;
+    }
+    return sq;
+  };
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (sqDist(i, j) > maxDistSq) {
+        continue;
+      }
+      for (let k = j + 1; k < n; k++) {
+        if (sqDist(i, k) <= maxDistSq && sqDist(j, k) <= maxDistSq) {
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Independent brute-force edge count replicating the builders' threshold
+ * predicate EXACTLY (squared-domain compare against the effective maxDist,
+ * including the enclosing-radius cap for unbounded maxDist), but WITHOUT
+ * edge-collapse. Engines that keep the full 1-skeleton (reduced,
+ * incremental) report this count, while the collapsed builders report
+ * fewer -- both are correct; this helper lets differential tests compare
+ * each side against its own expected value.
+ */
+export function bruteForceEdgeCount(
+  points: Points,
+  dims: number,
+  maxDist: number
+): number {
+  const n = points.length / dims;
+  let effectiveMaxDist = maxDist;
+  if (maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const bi = i * dims;
+      const bj = j * dims;
+      let sq = 0;
+      for (let d = 0; d < dims; d++) {
+        const diff = points[bi + d]! - points[bj + d]!;
+        sq += diff * diff;
+      }
+      if (sq <= maxDistSq) {
+        count++;
+      }
+    }
+  }
+  return count;
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { Points } from "./distance.ts";
 import { enclosingRadius } from "./distance.ts";
+import { collapseDominatedEdges } from "./edge-collapse.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { stableSortByVal } from "./radix-sort.ts";
 
@@ -148,12 +149,25 @@ export function buildGeneralRipsComplex(
       }
     }
   }
-  tempEdges.sort((a, b) => a.val - b.val || a.origIdx - b.origIdx);
-  const edgeLevel: EdgeEntry[] = tempEdges.map((e) => ({
-    u: e.u,
-    v: e.v,
-    val: e.val,
-  }));
+  // Sort by (val, u, v): total order derived from the edge set alone
+  // (see complex.ts -- origIdx must not break ties before collapse).
+  tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
+  // Edge-collapse preprocessing (src/core/edge-collapse.ts): shrink the
+  // 1-skeleton to a diagram-equivalent subset before level extension.
+  // `adj` (built incrementally above) is rebuilt from the survivors so
+  // edgeIndex/adjBits below stay consistent.
+  const edgeLevel: EdgeEntry[] = collapseDominatedEdges(
+    n,
+    tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val })),
+    { maxDim: maxSimplexDim }
+  );
+  for (let i = 0; i < n; i++) {
+    adj[i]!.length = 0;
+  }
+  for (const e of edgeLevel) {
+    adj[e.u]!.push(e.v);
+    adj[e.v]!.push(e.u);
+  }
 
   const edgeIndex = new Map<bigint, number>();
   for (let i = 0; i < edgeLevel.length; i++) {

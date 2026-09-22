@@ -45,6 +45,10 @@ export type { Points, DistanceMatrix } from "./core/distance.ts";
 // ── Bottleneck distance ──
 export { bottleneckDistance } from "./core/bottleneck.ts";
 
+// ── Edge-collapse preprocessing (diagram-preserving 1-skeleton shrink) ──
+export { collapseDominatedEdges } from "./core/edge-collapse.ts";
+export type { CollapseOptions } from "./core/edge-collapse.ts";
+
 // ── Core types ──
 export type { PersistencePair, EdgeEntry } from "./core/h0.ts";
 export type {

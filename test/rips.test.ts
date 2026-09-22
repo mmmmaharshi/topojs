@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import { computePersistentHomology } from "../src/core/homology.ts";
 import {
+  bruteForceTriangleCount,
   generatePoints,
   circlePoints,
   mulberry32,
@@ -32,7 +33,12 @@ describe("rips: known geometric ground truths", () => {
     ]);
     const res = computePersistentHomology(pts, 2, 5);
     expect(countByDim(res.pairs, 0)).toBe(3);
-    expect(res.complex.numTriangles).toBeGreaterThanOrEqual(1);
+    // Full flag triangle count is 1, but edge collapse trims the diameter
+    // (its link is the square, a cone on the opposite vertex), so the
+    // collapsed builder reports 0. The barcode is unaffected (the trimmed
+    // triangle was a zero-persistence pair).
+    expect(res.complex.numTriangles).toBe(0);
+    expect(bruteForceTriangleCount(pts, 2, 5)).toBe(1);
     const significantH1 = res.pairs.filter(
       (p) => p.dim === 1 && p.death - p.birth > 1e-10
     );
@@ -55,7 +61,12 @@ describe("rips: known geometric ground truths", () => {
     const chord = 2 * Math.sin(Math.PI / 12);
     const nextChord = 2 * Math.sin((2 * Math.PI) / 12);
     const res = computePersistentHomology(pts, 2, nextChord + 0.05);
-    expect(res.complex.numTriangles).toBeGreaterThan(0);
+    // Edge collapse trims most 2-chords (each sits in exactly one triangle,
+    // coned by the vertex between its endpoints), so the collapsed count is
+    // far below the full flag count — but the H1 death below is unchanged.
+    expect(res.complex.numTriangles).toBeLessThan(
+      bruteForceTriangleCount(pts, 2, nextChord + 0.05)
+    );
     const significant = res.pairs.filter(
       (p) => p.dim === 1 && (p.death < 0 || p.death - p.birth > 0.1)
     );

@@ -3,7 +3,13 @@ import { describe, it, expect } from "vitest";
 
 import { computePersistentHomology } from "../src/core/homology.ts";
 import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
-import { mulberry32, circlePoints } from "./helpers.ts";
+import {
+  bruteForceEdgeCount,
+  bruteForceTetraCount,
+  bruteForceTriangleCount,
+  circlePoints,
+  mulberry32,
+} from "./helpers.ts";
 
 /**
  * Sort pairs into a canonical order before comparing. The incremental
@@ -75,11 +81,19 @@ function runDifferentialTrial(
       }
     });
 
-    // H0+H1: exact match against a maxDim=2 reference
+    // H0+H1: exact barcode match against a maxDim=2 reference. Counts are
+    // compared against the FULL (uncollapsed) flag complex: the incremental
+    // engine keeps its own complete 1-skeleton (edge collapse is a batch
+    // flag-filtration optimization and does not transfer to its prefix-
+    // stable reduction), while the batch reference builders collapse.
     const expectedH01 = computePersistentHomology(flat, dims, maxDist, 2);
     expect(update.windowSize).toBe(windowPts.length);
-    expect(update.complex.numEdges).toBe(expectedH01.complex.numEdges);
-    expect(update.complex.numTriangles).toBe(expectedH01.complex.numTriangles);
+    expect(update.complex.numEdges).toBe(
+      bruteForceEdgeCount(flat, dims, maxDist)
+    );
+    expect(update.complex.numTriangles).toBe(
+      bruteForceTriangleCount(flat, dims, maxDist)
+    );
     const incH01 = update.pairs.filter((p) => p.dim < 2);
     expect(canon(incH01)).toBe(canon(expectedH01.pairs));
 
@@ -521,9 +535,13 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
       flat[idx * 3 + 2] = p[2]!;
     });
     const expected = computePersistentHomology(flat, 3, 0.8, 3);
-    expect(lu.complex.numEdges).toBe(expected.complex.numEdges);
-    expect(lu.complex.numTriangles).toBe(expected.complex.numTriangles);
-    expect(lu.complex.numTetrahedra).toBe(expected.complex.numTetrahedra);
+    // Full-complex counts (see runDifferentialTrial note: the incremental
+    // engine does not collapse its 1-skeleton).
+    expect(lu.complex.numEdges).toBe(bruteForceEdgeCount(flat, 3, 0.8));
+    expect(lu.complex.numTriangles).toBe(
+      bruteForceTriangleCount(flat, 3, 0.8)
+    );
+    expect(lu.complex.numTetrahedra).toBe(bruteForceTetraCount(flat, 3, 0.8));
     const incH01 = lu.pairs.filter((p) => p.dim < 2);
     const refH01 = expected.pairs.filter((p) => p.dim < 2);
     expect(canon(incH01)).toBe(canon(refH01));
