@@ -11,50 +11,14 @@
 // the same time) and no essential-pair emission for surviving cycle edges.
 // Since they were unreachable, fixing them to parity would have meant
 // maintaining a second, untested H1 implementation with no consumer;
-// deleting was the lower-risk choice. xorSparse and DenseWorkingCol below
-// ARE live (used by cubical.ts, homology.ts, homology-fast.ts,
-// homology-cohom.ts, incremental-h1.ts) and were untouched.
+// deleting was the lower-risk choice. DenseWorkingCol below IS live (used
+// by cubical.ts, homology.ts, homology-fast.ts, homology-cohom.ts,
+// incremental-h1.ts) and was untouched. (A standalone xorSparse(a, b)
+// sorted-array helper lived here too until a 2026-09 audit found zero
+// callers outside its own test block -- in-place column XOR via
+// DenseWorkingCol.xorSparse/HeapColumn.xorSparse is what every engine uses.)
 
 /* eslint-disable max-classes-per-file */
-/**
- * XOR two sorted Int32Arrays (symmetric difference of sorted index lists).
- *
- * Used for column operations in the boundary matrix reduction:
- *   col ← col ⊕ pivotCol  (eliminates the pivot edge from col).
- *
- * Time: O(|a| + |b|) — single pass merge, no sorting needed.
- * Space: O(|a| + |b|) for the result array.
- */
-export function xorSparse(a: Int32Array, b: Int32Array): Int32Array {
-  const tmp: number[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < a.length && j < b.length) {
-    const va = a[i]!;
-    const vb = b[j]!;
-    if (va < vb) {
-      tmp.push(va);
-      i++;
-    } else if (vb < va) {
-      tmp.push(vb);
-      j++;
-    } else {
-      i++;
-      j++;
-    }
-  }
-  while (i < a.length) {
-    tmp.push(a[i++]!);
-  }
-  while (j < b.length) {
-    tmp.push(b[j++]!);
-  }
-  const result = new Int32Array(tmp.length);
-  for (let k = 0; k < tmp.length; k++) {
-    result[k] = tmp[k]!;
-  }
-  return result;
-}
 
 /**
  * Column store — fixed-block-backed map from slot index to sparse column.

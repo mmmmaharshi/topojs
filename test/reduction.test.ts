@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { DenseWorkingCol, xorSparse } from "../src/core/reduction.ts";
+import { DenseWorkingCol } from "../src/core/reduction.ts";
 
 /**
  * DenseWorkingCol is the bit-vector column primitive every homology engine
@@ -178,41 +178,5 @@ describe(DenseWorkingCol, () => {
       col.loadFromNumbers([1]);
       expect([...col.toSparse()]).toStrictEqual([1]);
     });
-  });
-});
-
-describe("xorSparse (standalone sorted-array symmetric difference)", () => {
-  it("computes symmetric difference of two sorted arrays", () => {
-    const a = new Int32Array([1, 2, 3, 5]);
-    const b = new Int32Array([2, 3, 4]);
-    expect([...xorSparse(a, b)]).toStrictEqual([1, 4, 5]);
-  });
-
-  it("is its own inverse: xorSparse(xorSparse(a,b), b) recovers a", () => {
-    const a = new Int32Array([1, 4, 7, 9]);
-    const b = new Int32Array([2, 4, 6, 9, 10]);
-    const once = xorSparse(a, b);
-    const twice = xorSparse(once, b);
-    expect([...twice]).toStrictEqual([...a]);
-  });
-
-  it("empty inputs behave as identity", () => {
-    const a = new Int32Array([1, 2, 3]);
-    const empty = new Int32Array([]);
-    expect([...xorSparse(a, empty)]).toStrictEqual([1, 2, 3]);
-    expect([...xorSparse(empty, a)]).toStrictEqual([1, 2, 3]);
-    expect([...xorSparse(empty, empty)]).toStrictEqual([]);
-  });
-
-  it("identical arrays cancel completely", () => {
-    const a = new Int32Array([2, 4, 6]);
-    expect([...xorSparse(a, a)]).toStrictEqual([]);
-  });
-
-  it("result stays sorted for interleaved inputs", () => {
-    const a = new Int32Array([1, 3, 5, 7, 9]);
-    const b = new Int32Array([0, 2, 4, 6, 8]);
-    // fully disjoint, interleaved -- result should be the merge of both, sorted
-    expect([...xorSparse(a, b)]).toStrictEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 });
