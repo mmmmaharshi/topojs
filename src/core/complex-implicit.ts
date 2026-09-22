@@ -1,5 +1,4 @@
 import { CombinatorialIndex } from "./combinatorial-index.ts";
-import type { SheehyInfo } from "./complex.ts";
 import { enclosingRadius } from "./distance.ts";
 import type { Points } from "./distance.ts";
 import { collapseDominatedEdges } from "./edge-collapse.ts";
@@ -15,7 +14,6 @@ export interface ImplicitRipsComplex {
   maxDist: number;
   edges: EdgeEntry[];
   adjBits: Uint32Array[];
-  sheehy?: SheehyInfo;
   _edgeVals: Float64Array;
   _getEdgeIndex: (u: number, v: number) => number;
   _combinatorialIndex: CombinatorialIndex;
@@ -62,7 +60,6 @@ export function buildImplicitRipsComplex(
   let perm: Int32Array | null = null;
   let radii: Float64Array | null = null;
   let activeCount = n;
-  let sheehy: SheehyInfo | undefined = undefined;
   if (epsilon !== undefined && epsilon > 0 && Number.isFinite(epsilon)) {
     const lm = selectLandmarks(points, dims, n, n, 0);
     perm = lm.landmarkIndices;
@@ -74,19 +71,6 @@ export function buildImplicitRipsComplex(
       inactivePrefix++;
     }
     activeCount = n - inactivePrefix;
-    let maxCovering = 0;
-    for (let i = 1; i <= inactivePrefix; i++) {
-      if (radii[i]! > maxCovering) {
-        maxCovering = radii[i]!;
-      }
-    }
-    sheehy = {
-      activeCount,
-      coveringRadius: maxCovering,
-      epsilon,
-      perm,
-      radii,
-    };
   }
 
   const tempEdges: { u: number; v: number; val: number; origIdx: number }[] =
@@ -215,7 +199,6 @@ export function buildImplicitRipsComplex(
     edges,
     maxDist: effectiveMaxDist,
     n,
-    sheehy,
   };
 }
 

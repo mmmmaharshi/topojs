@@ -272,7 +272,6 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
       const maxDist = 0.4;
       const full = buildRipsComplex(flat, 2, maxDist, 2);
       const zero = buildRipsComplex(flat, 2, maxDist, 2, 0);
-      expect(zero.sheehy).toBeUndefined();
       expect(zero.edges).toHaveLength(full.edges.length);
       expect(zero.triangles).toHaveLength(full.triangles.length);
     }
@@ -288,9 +287,7 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
     const maxDist = 0.35;
     const full = buildRipsComplex(flat, 2, maxDist, 2);
     const sparse = buildRipsComplex(flat, 2, maxDist, 2, 0.3);
-    // Should produce at most the same number of simplices as the full complex
-    // (active point count is part of the Sheehy metadata)
-    expect(sparse.sheehy!.activeCount).toBeLessThanOrEqual(60);
+    // Should produce at most the same number of simplices as the full complex.
     expect(sparse.edges.length).toBeLessThanOrEqual(full.edges.length);
     expect(sparse.triangles.length).toBeLessThanOrEqual(full.triangles.length);
   });
@@ -315,9 +312,6 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
       );
 
       expect(sparse.pairs.length).toBeGreaterThan(0);
-      // Sheehy metadata should be present
-      expect(sparseComplex.sheehy!.epsilon).toBe(epsilon);
-      expect(sparseComplex.sheehy!.activeCount).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -334,7 +328,6 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
     const maxDist = 2;
     const exact = computePersistentHomology(flat, 2, maxDist, 2);
     const sparseComplex = buildRipsComplex(flat, 2, maxDist, 2, 1);
-    expect(sparseComplex.sheehy!.activeCount).toBe(20);
     const sparse = computePersistentHomologyCohomologyFromComplex(
       sparseComplex,
       2

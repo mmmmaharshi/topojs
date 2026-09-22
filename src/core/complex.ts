@@ -22,23 +22,6 @@ function squaredEuclidean(
   return sq;
 }
 
-/**
- * Metadata for the Sheehy sparse Rips construction.
- * (1+epsilon)-interleaving guarantee with the full Rips filtration.
- */
-export interface SheehyInfo {
-  /** Permutation of point indices (greedy permutation order). */
-  perm: Int32Array;
-  /** Insertion radius of each point in the permutation (radii[0] = 0). */
-  radii: Float64Array;
-  /** Approximation parameter. */
-  epsilon: number;
-  /** Number of active points at the given maxDist. */
-  activeCount: number;
-  /** The covering radius (largest insertion radius of any non-active point). */
-  coveringRadius: number;
-}
-
 /** A triangle (2-simplex) in the Rips complex. */
 export interface TriangleEntry {
   /** Indices of the 3 edges in the edge array. */
@@ -154,8 +137,6 @@ export interface RipsComplex {
   adjBits?: Uint32Array[];
   /** Maps packed vertex-key (u*n+v)*n+w → triangle index. */
   triMap?: Map<number, number>;
-  /** Sheehy sparse Rips metadata, present when `epsilon` was provided. */
-  sheehy?: SheehyInfo;
 }
 
 function triKey(u: number, v: number, w: number, n: number): number {
@@ -226,7 +207,6 @@ export function buildRipsComplex(
   let perm: Int32Array | null = null;
   let radii: Float64Array | null = null;
   let activeCount = n;
-  let sheehy: SheehyInfo | undefined = undefined;
   if (epsilon !== undefined && epsilon > 0 && Number.isFinite(epsilon)) {
     const lm = selectLandmarks(points, dims, n, n, 0);
     perm = lm.landmarkIndices;
@@ -243,19 +223,6 @@ export function buildRipsComplex(
       inactivePrefix++;
     }
     activeCount = n - inactivePrefix;
-    let maxCovering = 0;
-    for (let i = 1; i <= inactivePrefix; i++) {
-      if (radii[i]! > maxCovering) {
-        maxCovering = radii[i]!;
-      }
-    }
-    sheehy = {
-      activeCount,
-      coveringRadius: maxCovering,
-      epsilon,
-      perm,
-      radii,
-    };
   }
 
   // ── Build edges ──
@@ -515,7 +482,6 @@ export function buildRipsComplex(
     adjBits,
     edges,
     n,
-    sheehy,
     tetrahedra,
     triMap: triMapExposed,
     triangles,

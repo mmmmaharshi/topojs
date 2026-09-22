@@ -55,7 +55,6 @@ export type {
   TriangleEntry,
   TetraEntry,
   RipsComplex,
-  SheehyInfo,
 } from "./core/complex.ts";
 
 // ── Export / serialization ──
