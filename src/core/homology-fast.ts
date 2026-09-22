@@ -66,9 +66,28 @@ import { DenseWorkingCol } from "./reduction.ts";
  * silently corrupt the referee everything else is checked against.
  *
  * H0 and H2 are computed identically to computePersistentHomology (H0 via
- * union-find is already cheap; H2 apparent-pairs is not implemented here --
- * scope is H1 only, matching where the streaming module's bottleneck was
- * measured to be).
+ * union-find is already cheap). H2 has NO apparent-pairs pre-pass, and this
+ * is structural, not a scope gap -- see WHY below. (The repo's working H2
+ * acceleration is the implicit engine's fresh-claim shortcut
+ * (homology-implicit.ts); the cohomology-directional analogue here would be
+ * the subtler emergent-pairs rule, future work.)
+ *
+ * WHY H1-STYLE APPARENT PAIRS CANNOT EXIST FOR TETRAHEDRA (nor any higher
+ * dimension) IN A FLAG COMPLEX. H1's rule needs a triangle t with a UNIQUE
+ * maximal-value edge facet -- possible, since t's max edge lies in exactly
+ * one of its 3 edge-facets (given distinct values). Lift this to H2: a
+ * tetrahedron T would need a UNIQUE maximal-value triangle face. But T's
+ * maximal-value EDGE e* lies in exactly TWO of T's four faces, and both of
+ * those faces have value exactly val(e*) (their max is at least val(e*),
+ * and nothing in T exceeds it) -- so T's faces tie 2-ways at the top,
+ * ALWAYS, for every tetrahedron, regardless of values. Formally
+ * tieCountForTet >= 2 structurally, so a unique-max-face pre-pass can never
+ * fire. In general a k-simplex's max edge sits in (k-1) faces, so
+ * homology-direction apparent pairs exist only for H1 (k=2). An H2
+ * pre-pass WAS implemented here (Steps A2/B2 mirroring H1) and empirically
+ * confirmed vacuous -- zero firings across 26 differential configs
+ * including ~14,000-tetrahedron complexes -- then removed; this note stays
+ * so nobody re-attempts the lift.
  */
 
 /** HomologyResult plus apparent-pairs diagnostics (how much reduction was actually skipped). */
@@ -202,7 +221,9 @@ export function computePersistentHomologyFast(
     }
   }
 
-  // ── Phase 3: H2 (identical to computePersistentHomology; not accelerated) ──
+  // ── Phase 3: H2 (identical to computePersistentHomology; not accelerated --
+  // see this file's top docstring for the proof that H1-style apparent
+  // pairs cannot exist for tetrahedra in a flag complex) ──
   const h2Pairs: PersistencePair[] = [];
 
   if (maxDim >= 3) {
