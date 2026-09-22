@@ -44,7 +44,6 @@ interface TempEdge {
   u: number;
   v: number;
   val: number;
-  origIdx: number;
 }
 
 /**
@@ -272,7 +271,7 @@ export function buildRipsComplex(
       const sq = squaredEuclidean(points, dims, i, j);
       if (sq <= maxDistSq) {
         const d = Math.sqrt(sq);
-        tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
+        tempEdges.push({ u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
       }
@@ -288,13 +287,11 @@ export function buildRipsComplex(
     }
   }
 
-  // Sort by (val, u, v) -- a TOTAL order derived from the edge SET alone,
-  // so grid-accelerated and brute-force collection paths (which find the
-  // same edges in different orders) feed edge-collapse byte-identical
-  // input and produce byte-identical output. (Sorting by collection
-  // origIdx instead would make collapse's tie-breaking -- hence its
-  // surviving edge set on tie-heavy inputs -- depend on which path found
-  // the edges first.)
+  // Sort by (val, u, v) -- a TOTAL order derived from the edge SET alone
+  // (no collection-order field: there are no duplicate pairs, so this is
+  // total), so grid-accelerated and brute-force collection paths (which
+  // find the same edges in different orders) feed edge-collapse
+  // byte-identical input and produce byte-identical output.
   tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
 
   // Edge-collapse preprocessing (src/core/edge-collapse.ts): shrink the

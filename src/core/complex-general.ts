@@ -135,22 +135,20 @@ export function buildGeneralRipsComplex(
   // ── Level 1: edges (brute force -- see this file's SCOPE note) ──
   // Squared-distance filter: sqrt only for kept edges.
   const maxDistSq = effectiveMaxDist * effectiveMaxDist;
-  const tempEdges: { u: number; v: number; val: number; origIdx: number }[] =
-    [];
+  const tempEdges: { u: number; v: number; val: number }[] = [];
   const adj: number[][] = Array.from({ length: n }, () => []);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const sq = squaredEuclidean(points, dims, i, j);
       if (sq <= maxDistSq) {
         const d = Math.sqrt(sq);
-        tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
+        tempEdges.push({ u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
       }
     }
   }
-  // Sort by (val, u, v): total order derived from the edge set alone
-  // (see complex.ts -- origIdx must not break ties before collapse).
+  // Sort by (val, u, v): total order derived from the edge set alone.
   tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
   // Edge-collapse preprocessing (src/core/edge-collapse.ts): shrink the
   // 1-skeleton to a diagram-equivalent subset before level extension.

@@ -73,8 +73,7 @@ export function buildImplicitRipsComplex(
     activeCount = n - inactivePrefix;
   }
 
-  const tempEdges: { u: number; v: number; val: number; origIdx: number }[] =
-    [];
+  const tempEdges: { u: number; v: number; val: number }[] = [];
   const adj: number[][] = Array.from({ length: n }, () => []);
 
   const permRank: Int32Array | null = perm ? new Int32Array(n) : null;
@@ -112,7 +111,7 @@ export function buildImplicitRipsComplex(
       const sq = squaredEuclidean(points, dims, i, j);
       if (sq <= maxDistSq) {
         const d = Math.sqrt(sq);
-        tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
+        tempEdges.push({ u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
       }
@@ -130,7 +129,7 @@ export function buildImplicitRipsComplex(
 
   // Sort by (val, u, v): total order derived from the edge set alone, so
   // grid and brute-force collection paths feed edge-collapse identical
-  // input (see complex.ts for why origIdx must NOT break ties here).
+  // input.
   tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
 
   // Edge-collapse preprocessing (src/core/edge-collapse.ts): shrink the

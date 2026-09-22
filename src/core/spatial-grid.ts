@@ -158,11 +158,11 @@ export class SpatialGrid {
    * caller (this class never computes or compares actual distances, only
    * cell membership).
    *
-   * Ascending order is not just cosmetic: buildRipsComplex relies on it to
-   * reproduce the exact same edge insertion order (and therefore the exact
-   * same origIdx tie-break values) as the original brute-force `for j in
-   * i+1..n-1` loop, so switching to the grid changes performance only, not
-   * output (see complex.ts and its differential tests).
+   * Ascending order is not just cosmetic: it keeps grid collection
+   * deterministic, enumerating candidates in the same j-order as the
+   * original brute-force `for j in i+1..n-1` loop, so switching to the
+   * grid changes performance only, not output (see complex.ts and its
+   * differential tests).
    */
   candidatesAfter(points: Points, i: number): number[] {
     const base = i * this.dims;
