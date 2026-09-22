@@ -20,7 +20,8 @@ import {
 const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
 const result = computePersistentHomology(points, 2, 1.0, 2);
 console.log(result.pairs);
-// [{birth: 0, death: -1, dim: 0}] — one connected component, no loops
+// [{birth: 0, death: 1, dim: 0}, {birth: 0, death: 1, dim: 0},
+//  {birth: 0, death: -1, dim: 0}] — two merges, then one lasting component
 
 // Cubical persistence: 3×3 grayscale image
 const img = new Float64Array([0.1, 0.5, 0.9, 0.3, 0.2, 0.8, 0.7, 0.4, 0.6]);
@@ -63,7 +64,7 @@ console.log("Summary:", summarize(result.pairs));
 | Need H_k for any k (k > 2) | `computePersistentHomologyGeneral(points, dims, maxDist, maxHomologyDim)` |
 | Streaming sensor feed | `IncrementalH1` or `StreamingHomology` (see streaming API) |
 | 2D grayscale image | `computeCubicalHomology(image, height, width, maxDim)` |
-| Just distances or diagram comparison | `computePairwiseDistances` / `bottleneckDistance` |
+| Just diagram comparison | `bottleneckDistance` |
 | Export to Gudhi/JSON/CSV | `toGudhi` / `toJSON` / `toCSV` |
 
 ## API
@@ -95,9 +96,14 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `computePairwiseDistances(points, dims, n)` | Euclidean distance matrix. |
-| `lookupDist(matrix, i, j)` | O(1) pairwise distance lookup. |
 | `bottleneckDistance(dg1, dg2, dim?, maxEps?, tol?)` | L∞ bottleneck distance between diagrams. Cross-validated against brute force. |
+
+### Preprocessing
+
+| Function | Description |
+| --- | --- |
+| `enclosingRadius(points, dims)` | min_i max_j d(i,j) — Ripser-style default threshold cap for unbounded `maxDist`. |
+| `collapseDominatedEdges(n, edges)` | Diagram-preserving edge-collapse shrink of the 1-skeleton (also applied automatically inside the Rips builders). |
 
 ### Export / serialization
 
