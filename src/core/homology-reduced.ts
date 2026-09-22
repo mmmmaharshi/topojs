@@ -8,7 +8,17 @@ import type { EdgeEntry, PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
 import { ColumnStore, DenseWorkingCol } from "./reduction.ts";
+import { SpatialGrid } from "./spatial-grid.ts";
 import { UnionFind } from "./unionfind.ts";
+
+// Grid-vs-brute-force crossover for the 1-skeleton build below: mirrors
+// complex.ts's GRID_MIN_N (same operation -- fixed-radius edge enumeration
+// -- so the same measured crossover applies; see complex.ts's docstring).
+// Gated on the ORIGINAL maxDist being finite: when maxDist is unbounded the
+// enclosing-radius cap still leaves a dense ~complete graph, where the grid
+// would return ~all pairs per query plus hashing/sorting overhead (pure
+// loss), so brute force stays optimal there.
+const GRID_MIN_N = 700;
 
 /**
  * Persistent homology (H0+H1 only) of the REDUCED Vietoris-Rips complex
@@ -125,23 +135,36 @@ export function computePersistentHomologyReduced(
   const maxDistSq = effectiveMaxDist * effectiveMaxDist;
 
   // ── Build the full 1-skeleton (every edge within maxDist) ──
-  // Brute force (O(n^2) pair checks): the reduced complex's whole point is
-  // cutting down the TRIANGLE count, not the edge count, so this doesn't
-  // reuse buildRipsComplex's spatial-grid edge-building optimization (see
-  // complex.ts's docstring for that optimization's own crossover point --
-  // it would be a legitimate follow-up for this engine's large-n regime,
-  // not attempted here to keep this change's scope contained).
+  // Grid-accelerated when maxDist is finite and n is large (same SpatialGrid
+  // + exact-squared-recheck pattern as buildRipsComplex in complex.ts; the
+  // grid returns an ascending candidate superset and the recheck keeps the
+  // identical edge SET, so the (val,u,v) sort below yields byte-identical
+  // output either way). Brute force otherwise: for dense/unbounded inputs
+  // ~every pair is kept, where the grid's hashing/sorting is pure overhead.
   interface TempEdge {
     u: number;
     v: number;
     val: number;
   }
+  const useGrid =
+    Number.isFinite(maxDist) && maxDist > 0 && n >= GRID_MIN_N;
+  const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
   const tempEdges: TempEdge[] = [];
   for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const sq = lookupSq(dist, i, j);
-      if (sq <= maxDistSq) {
-        tempEdges.push({ u: i, v: j, val: Math.sqrt(sq) });
+    const candidates = grid ? grid.candidatesAfter(points, i) : null;
+    if (candidates) {
+      for (const j of candidates) {
+        const sq = lookupSq(dist, i, j);
+        if (sq <= maxDistSq) {
+          tempEdges.push({ u: i, v: j, val: Math.sqrt(sq) });
+        }
+      }
+    } else {
+      for (let j = i + 1; j < n; j++) {
+        const sq = lookupSq(dist, i, j);
+        if (sq <= maxDistSq) {
+          tempEdges.push({ u: i, v: j, val: Math.sqrt(sq) });
+        }
       }
     }
   }
@@ -171,6 +194,21 @@ export function computePersistentHomologyReduced(
     return edgeIdx[u * n + v]!;
   };
 
+  // Adjacency bitsets: adjBits[v*W+w] has bit (x&31) set iff edge (v,x)
+  // exists (within maxDist). O(E) scatter, n²/8 bytes (1/32 of edgeIdx).
+  // Lets each lune query intersect y's and z's neighborhoods word-wise
+  // (O(n/32)) instead of scanning all n points, and the AND output is
+  // exactly the common-neighbor superset the filtration-order mask below
+  // filters -- correctness identical, work proportional to intersections
+  // rather than n (Koyama et al. Lemma 3.9: the inner loop is small, the
+  // scan to find it is the cost).
+  const adjWords = Math.ceil(n / 32);
+  const adjBits = new Uint32Array(n * adjWords);
+  for (const e of edges) {
+    adjBits[e.u * adjWords + (e.v >>> 5)]! |= 1 << (e.v & 31);
+    adjBits[e.v * adjWords + (e.u >>> 5)]! |= 1 << (e.u & 31);
+  }
+
   // ── Phase 1: H0 (identical machinery to every other engine, see h0.ts) ──
   const { h0Pairs, cycleEdges } = computeH0Phase(n, edges);
 
@@ -192,15 +230,27 @@ export function computePersistentHomologyReduced(
     // lune(<y,z>) = points x with <yx> < <yz> AND <zx> < <yz> in filtration
     // order (edgeOrder(x,y) < ei and edgeOrder(x,z) < ei) -- strictly
     // earlier than <y,z> itself, matching Definition 3.1 exactly.
+    // Bitset path: x must first be adjacent to BOTH y and z, so AND the two
+    // rows word-wise and only order-test the set bits (common neighbors),
+    // instead of order-testing all n points. Set bits iterate ascending,
+    // so lunePts stays sorted exactly as the old full scan produced it.
     const lunePts: number[] = [];
-    for (let x = 0; x < n; x++) {
-      if (x === y || x === z) {
-        continue;
-      }
-      const oxy = edgeOrder(x, y);
-      const oxz = edgeOrder(x, z);
-      if (oxy >= 0 && oxz >= 0 && oxy < ei && oxz < ei) {
-        lunePts.push(x);
+    const yBase = y * adjWords;
+    const zBase = z * adjWords;
+    for (let w = 0; w < adjWords; w++) {
+      let word = adjBits[yBase + w]! & adjBits[zBase + w]!;
+      while (word) {
+        const lsb = word & -word;
+        const x = (w << 5) + (Math.clz32(lsb) ^ 31);
+        word ^= lsb;
+        if (x === y || x === z || x >= n) {
+          continue;
+        }
+        const oxy = edgeOrder(x, y);
+        const oxz = edgeOrder(x, z);
+        if (oxy >= 0 && oxz >= 0 && oxy < ei && oxz < ei) {
+          lunePts.push(x);
+        }
       }
     }
     if (lunePts.length === 0) {
@@ -208,16 +258,20 @@ export function computePersistentHomologyReduced(
     }
 
     // Connected components of lune(<y,z>): union lune points p,q whenever
-    // <pq> < <yz> (Definition 3.3). O(|lune|^2) pairwise checks -- fine in
-    // practice since Lemma 3.9 bounds a Euclidean lune's component count by
-    // a dimension-dependent constant, but the lune itself (before splitting
-    // into components) can still hold many points for a dense cloud.
+    // <pq> < <yz> (Definition 3.3). O(|lune|^2) pairwise edgeOrder lookups
+    // (each O(1)) -- fine in practice since Lemma 3.9 bounds a Euclidean
+    // lune's component count by a dimension-dependent constant, but the lune
+    // itself (before splitting into components) can still hold many points
+    // for a dense cloud. Early exit once a single component remains: further
+    // unions are no-ops by definition, which skips most of the quadratic
+    // tail on dense inputs whose lunes are highly connected.
     const uf = new UnionFind(lunePts.length);
-    for (let a = 0; a < lunePts.length; a++) {
+    let components = lunePts.length;
+    for (let a = 0; a < lunePts.length && components > 1; a++) {
       for (let b = a + 1; b < lunePts.length; b++) {
         const opq = edgeOrder(lunePts[a]!, lunePts[b]!);
-        if (opq >= 0 && opq < ei) {
-          uf.union(a, b);
+        if (opq >= 0 && opq < ei && uf.union(a, b) && --components === 1) {
+          break;
         }
       }
     }
