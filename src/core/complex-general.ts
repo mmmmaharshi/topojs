@@ -1,6 +1,7 @@
 import type { Points } from "./distance.ts";
 import { enclosingRadius } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
+import { stableSortByVal } from "./radix-sort.ts";
 
 function squaredEuclidean(
   points: Points,
@@ -268,7 +269,7 @@ export function buildGeneralRipsComplex(
       }
     }
 
-    thisLevel.sort((a, b) => a.val - b.val);
+    stableSortByVal(thisLevel);
     higherLevels.push(thisLevel);
 
     // Build this level's index for the NEXT iteration's face lookups.

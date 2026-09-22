@@ -2,6 +2,7 @@ import type { Points } from "./distance.ts";
 import { enclosingRadius } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
+import { stableSortByVal } from "./radix-sort.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
 
 function squaredEuclidean(
@@ -429,7 +430,7 @@ export function buildRipsComplex(
     }
   }
 
-  triangles.sort((a, b) => a.val - b.val);
+  stableSortByVal(triangles);
 
   // ── Build vertex→triangle index map ──
   // Exposed as an optional return field for the implicit-matrix cohomology
@@ -488,7 +489,7 @@ export function buildRipsComplex(
       }
     }
 
-    tetrahedra.sort((a, b) => a.val - b.val);
+    stableSortByVal(tetrahedra);
   }
 
   return {

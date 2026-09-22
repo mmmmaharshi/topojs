@@ -8,6 +8,7 @@ import type { EdgeEntry, PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
 import { ColumnStore, DenseWorkingCol } from "./reduction.ts";
+import { stableSortByVal } from "./radix-sort.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
 import { UnionFind } from "./unionfind.ts";
 
@@ -300,7 +301,7 @@ export function computePersistentHomologyReduced(
     }
   }
 
-  triangles.sort((a, b) => a.val - b.val);
+  stableSortByVal(triangles);
 
   // ── Phase 2: H1 via standard boundary-direction reduction (triangle
   // columns, edge pivots) -- IDENTICAL convention to computePersistentHomology's
