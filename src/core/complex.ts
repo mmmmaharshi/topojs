@@ -4,7 +4,12 @@ import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
 
-function euclidean(points: Points, dims: number, i: number, j: number): number {
+function squaredEuclidean(
+  points: Points,
+  dims: number,
+  i: number,
+  j: number
+): number {
   const bi = i * dims;
   const bj = j * dims;
   let sq = 0;
@@ -12,7 +17,7 @@ function euclidean(points: Points, dims: number, i: number, j: number): number {
     const diff = points[bi + d]! - points[bj + d]!;
     sq += diff * diff;
   }
-  return Math.sqrt(sq);
+  return sq;
 }
 
 /**
@@ -284,6 +289,8 @@ export function buildRipsComplex(
     ? new SpatialGrid(points, dims, n, effectiveMaxDist)
     : null;
 
+  // Squared-distance filter (see complex-implicit.ts): sqrt only for kept edges.
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
   for (let i = 0; i < n; i++) {
     if (!isActive(i)) {
       continue;
@@ -293,8 +300,9 @@ export function buildRipsComplex(
       if (!isActive(j)) {
         return;
       }
-      const d = euclidean(points, dims, i, j);
-      if (d <= effectiveMaxDist) {
+      const sq = squaredEuclidean(points, dims, i, j);
+      if (sq <= maxDistSq) {
+        const d = Math.sqrt(sq);
         tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);

@@ -2,7 +2,12 @@ import type { Points } from "./distance.ts";
 import { enclosingRadius } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
 
-function euclidean(points: Points, dims: number, i: number, j: number): number {
+function squaredEuclidean(
+  points: Points,
+  dims: number,
+  i: number,
+  j: number
+): number {
   const bi = i * dims;
   const bj = j * dims;
   let sq = 0;
@@ -10,7 +15,7 @@ function euclidean(points: Points, dims: number, i: number, j: number): number {
     const diff = points[bi + d]! - points[bj + d]!;
     sq += diff * diff;
   }
-  return Math.sqrt(sq);
+  return sq;
 }
 
 /**
@@ -126,13 +131,16 @@ export function buildGeneralRipsComplex(
   }
 
   // ── Level 1: edges (brute force -- see this file's SCOPE note) ──
+  // Squared-distance filter: sqrt only for kept edges.
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
   const tempEdges: { u: number; v: number; val: number; origIdx: number }[] =
     [];
   const adj: number[][] = Array.from({ length: n }, () => []);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const d = euclidean(points, dims, i, j);
-      if (d <= effectiveMaxDist) {
+      const sq = squaredEuclidean(points, dims, i, j);
+      if (sq <= maxDistSq) {
+        const d = Math.sqrt(sq);
         tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
@@ -222,11 +230,15 @@ export function buildGeneralRipsComplex(
 
           // New edges introduced by x: (verts[i], x) for every existing
           // vertex -- val is the max of the parent's own val and these.
+          // Squared-domain max with sqrt only on exceed: keeps parent.val
+          // bit-identical when no new edge exceeds it.
           let { val } = parent;
+          let bestSq = val * val;
           for (const pvi of pv) {
-            const d = euclidean(points, dims, pvi, x);
-            if (d > val) {
-              val = d;
+            const sq = squaredEuclidean(points, dims, pvi, x);
+            if (sq > bestSq) {
+              bestSq = sq;
+              val = Math.sqrt(sq);
             }
           }
 

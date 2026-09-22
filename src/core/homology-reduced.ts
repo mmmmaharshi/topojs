@@ -1,7 +1,7 @@
 import {
-  computePairwiseDistances,
+  computeSquaredPairwiseDistances,
   enclosingRadius,
-  lookupDist,
+  lookupSq,
 } from "./distance.ts";
 import type { Points } from "./distance.ts";
 import type { EdgeEntry, PersistencePair } from "./h0.ts";
@@ -118,7 +118,11 @@ export function computePersistentHomologyReduced(
       effectiveMaxDist = r;
     }
   }
-  const dist = computePairwiseDistances(points, dims, n);
+  const dist = computeSquaredPairwiseDistances(points, dims, n);
+  // Squared-domain threshold: identical predicate to the other engines'
+  // `sq <= maxDist²` filter (same raw sums, same bits); sqrt only for kept
+  // edges so emitted vals stay real distances.
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
 
   // ── Build the full 1-skeleton (every edge within maxDist) ──
   // Brute force (O(n^2) pair checks): the reduced complex's whole point is
@@ -135,9 +139,9 @@ export function computePersistentHomologyReduced(
   const tempEdges: TempEdge[] = [];
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const d = lookupDist(dist, i, j);
-      if (d <= effectiveMaxDist) {
-        tempEdges.push({ u: i, v: j, val: d });
+      const sq = lookupSq(dist, i, j);
+      if (sq <= maxDistSq) {
+        tempEdges.push({ u: i, v: j, val: Math.sqrt(sq) });
       }
     }
   }
@@ -233,8 +237,8 @@ export function computePersistentHomologyReduced(
     }
 
     for (const x of repForRoot.values()) {
-      const dxy = lookupDist(dist, x, y);
-      const dxz = lookupDist(dist, x, z);
+      const dxy = Math.sqrt(lookupSq(dist, x, y));
+      const dxz = Math.sqrt(lookupSq(dist, x, z));
       const val = Math.max(dyz, dxy, dxz);
       if (val <= effectiveMaxDist) {
         triangles.push({ val, x, y, z });

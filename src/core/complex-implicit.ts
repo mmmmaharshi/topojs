@@ -20,7 +20,12 @@ export interface ImplicitRipsComplex {
   _combinatorialIndex: CombinatorialIndex;
 }
 
-function euclidean(points: Points, dims: number, i: number, j: number): number {
+function squaredEuclidean(
+  points: Points,
+  dims: number,
+  i: number,
+  j: number
+): number {
   const bi = i * dims;
   const bj = j * dims;
   let sq = 0;
@@ -28,7 +33,7 @@ function euclidean(points: Points, dims: number, i: number, j: number): number {
     const diff = points[bi + d]! - points[bj + d]!;
     sq += diff * diff;
   }
-  return Math.sqrt(sq);
+  return sq;
 }
 
 export function buildImplicitRipsComplex(
@@ -106,6 +111,10 @@ export function buildImplicitRipsComplex(
     ? new SpatialGrid(points, dims, n, effectiveMaxDist)
     : null;
 
+  // Squared-distance filter: compare sq <= maxDist² and take ONE sqrt per
+  // KEPT edge. Rejected candidates (the majority in sparse regimes) never
+  // pay for sqrt; sort order on kept vals is unchanged (sqrt is monotone).
+  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
   for (let i = 0; i < n; i++) {
     if (!isActive(i)) {
       continue;
@@ -115,8 +124,9 @@ export function buildImplicitRipsComplex(
       if (!isActive(j)) {
         return;
       }
-      const d = euclidean(points, dims, i, j);
-      if (d <= effectiveMaxDist) {
+      const sq = squaredEuclidean(points, dims, i, j);
+      if (sq <= maxDistSq) {
+        const d = Math.sqrt(sq);
         tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);

@@ -649,8 +649,9 @@ export class IncrementalH1 {
         const diff = coords[d]! - this.flatPtCoords[base + d]!;
         s += diff * diff;
       }
-      const v = Math.sqrt(s);
-      if (v <= this.maxDist) {
+      // Squared-distance filter: sqrt only for neighbors kept in the window.
+      if (s <= this.maxDist * this.maxDist) {
+        const v = Math.sqrt(s);
         newNeighbors.add(otherId);
         newEdgeCandidates.push({
           idA: Math.min(newId, otherId),
