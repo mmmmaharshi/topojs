@@ -140,10 +140,19 @@ export class ColumnStore {
  * (via Math.clz32 on the highest non-zero word) and fast XOR of sparse
  * pivot columns (32 indices per word XOR).
  *
- * Key operations and their complexity (W = ceil(numRows / 32)):
- *   pivot()      — O(W) worst-case, O(1) average (early exit at high word)
+ * Key operations and their complexity (W = ceil(numRows / 32),
+ * D = number of touched ("dirty") words since the last load/clear):
+ *   pivot()      — O(D) worst-case, O(1) average (early exit at high word)
  *   xorSparse()  — O(|col|) — one word XOR per sparse entry
- *   toSparse()   — O(W × popcount) — extract set bits into Int32Array
+ *   toSparse()   — O(D log D + popcount) sparse / O(maxDirty) dense
+ *   load/clear   — O(D) instead of O(W) fill(0)
+ *
+ * Dirty-word tracking: every word index written since the last load/clear
+ * is recorded once in `dirty` (deduplicated via the `stamp` epoch array),
+ * so pivot()/extractBits()/clear() only visit touched words instead of all
+ * W. Class invariant: any nonzero word is dirty (zeroing on load/clear
+ * walks exactly the dirty list). Callers only use the public methods and
+ * never touch `bits` directly, so the invariant is maintained internally.
  *
  * Compared to a pure-sparse representation (Int32Array per column):
  *   - Pivot is O(1) vs. O(log |col|) for sparse
@@ -161,15 +170,57 @@ export class DenseWorkingCol {
   // write directly into a preallocated typed array instead of a boxed JS
   // array + push(). Reused across calls.
   private scratch: Int32Array;
+  // Dirty-word bookkeeping (see class docstring): `dirty[0..dirtyCount)`
+  // lists each touched word once per epoch; `stamp[w] === epoch` dedupes;
+  // `maxDirty` bounds the pivot scan. `epoch` starts at 1 so fresh-zero
+  // stamp arrays always read as clean.
+  private dirty: Int32Array;
+  private stamp: Int32Array;
+  private dirtyCount = 0;
+  private maxDirty = -1;
+  private epoch = 1;
 
   constructor(numEdges: number) {
     this.words = Math.ceil(numEdges / 32);
     this.bits = new Uint32Array(this.words);
     this.scratch = new Int32Array(numEdges);
+    this.dirty = new Int32Array(this.words);
+    this.stamp = new Int32Array(this.words);
+  }
+
+  /** Record word `w` as touched (deduplicated via epoch stamps). */
+  private touch(w: number): void {
+    if (this.stamp[w] !== this.epoch) {
+      this.stamp[w] = this.epoch;
+      this.dirty[this.dirtyCount++] = w;
+      if (w > this.maxDirty) {
+        this.maxDirty = w;
+      }
+    }
+  }
+
+  /**
+   * Zero exactly the dirty words and start a fresh epoch. Replaces the old
+   * `bits.fill(0)` (O(W)) with O(D) work; the class invariant (any nonzero
+   * word is dirty) makes zeroing only dirty words exact.
+   */
+  private reset(): void {
+    const { bits, dirty } = this;
+    for (let i = 0; i < this.dirtyCount; i++) {
+      bits[dirty[i]!] = 0;
+    }
+    this.dirtyCount = 0;
+    this.maxDirty = -1;
+    if (this.epoch === 2_147_483_647) {
+      this.stamp.fill(0);
+      this.epoch = 1;
+    } else {
+      this.epoch++;
+    }
   }
 
   clear(): void {
-    this.bits.fill(0);
+    this.reset();
   }
 
   /**
@@ -182,15 +233,21 @@ export class DenseWorkingCol {
    * audit found IncrementalH1.push() was doing exactly that (a third,
    * transient-per-push instance of the same "allocate per item" pattern
    * already fixed twice for its RETAINED state; see that class's docstring).
-   * Safe because `loadFromArray`/`loadFromNumbers` always `bits.fill(0)`
-   * before setting bits, so any extra high words left over from a previous,
-   * larger `numEdges` are harmlessly zero and skipped by `pivot()`.
+   * Safe because `loadFromArray`/`loadFromNumbers` always reset the dirty
+   * state before setting bits, so any extra high words left over from a
+   * previous, larger `numEdges` are harmlessly zero and skipped by `pivot()`.
    */
   ensureCapacity(numEdges: number): void {
     const words = Math.ceil(numEdges / 32);
     if (words > this.words) {
       this.words = words;
       this.bits = new Uint32Array(words);
+      // Fresh-zero stamps read as clean (epoch >= 1); fresh-zero bits keep
+      // the nonzero-implies-dirty invariant.
+      this.dirty = new Int32Array(words);
+      this.stamp = new Int32Array(words);
+      this.dirtyCount = 0;
+      this.maxDirty = -1;
     }
     if (numEdges > this.scratch.length) {
       this.scratch = new Int32Array(numEdges);
@@ -198,28 +255,40 @@ export class DenseWorkingCol {
   }
 
   loadFromArray(arr: Int32Array): void {
-    this.bits.fill(0);
+    this.reset();
+    const { bits } = this;
     for (const e of arr) {
-      this.bits[e >>> 5]! |= 1 << (e & 31);
+      const w = e >>> 5;
+      bits[w]! |= 1 << (e & 31);
+      this.touch(w);
     }
   }
 
   loadFromNumbers(arr: number[]): void {
-    this.bits.fill(0);
+    this.reset();
+    const { bits } = this;
     for (const e of arr) {
-      this.bits[e >>> 5]! |= 1 << (e & 31);
+      const w = e >>> 5;
+      bits[w]! |= 1 << (e & 31);
+      this.touch(w);
     }
   }
 
   xorSparse(col: Int32Array): void {
+    const { bits } = this;
     for (const e of col) {
-      this.bits[e >>> 5]! ^= 1 << (e & 31);
+      const w = e >>> 5;
+      bits[w]! ^= 1 << (e & 31);
+      this.touch(w);
     }
   }
 
   pivot(): number {
-    for (let w = this.words - 1; w >= 0; w--) {
-      const word = this.bits[w]!;
+    const { bits } = this;
+    // Bounded by maxDirty instead of words: clean words are zero by the
+    // class invariant, so skipping them only removes wasted reads.
+    for (let w = this.maxDirty; w >= 0; w--) {
+      const word = bits[w]!;
       if (word) {
         return (w << 5) + (31 - Math.clz32(word));
       }
@@ -229,10 +298,29 @@ export class DenseWorkingCol {
 
   /** Populate scratch with extracted bits and return count. */
   private extractBits(): number {
-    const { scratch } = this;
+    const { scratch, bits } = this;
     let count = 0;
-    for (let w = 0; w < this.words; w++) {
-      let word = this.bits[w]!;
+    if (this.dirtyCount > (this.words >>> 1)) {
+      // Dense column: bounded linear scan (ascending => sorted output).
+      for (let w = 0; w <= this.maxDirty; w++) {
+        let word = bits[w]!;
+        while (word) {
+          const lsb = word & -word;
+          const bit = Math.clz32(lsb) ^ 31;
+          scratch[count++] = (w << 5) + bit;
+          word ^= lsb;
+        }
+      }
+      return count;
+    }
+    // Sparse column: visit only dirty words, sorted ascending so the
+    // output matches the old full-scan order exactly (dedup guaranteed by
+    // the epoch stamps, so no row index is emitted twice). In-place sort is
+    // intentional: toSorted() would allocate on every toSparse/storeInto.
+    // eslint-disable-next-line unicorn/no-array-sort
+    const dirty = this.dirty.subarray(0, this.dirtyCount).sort();
+    for (const w of dirty) {
+      let word = bits[w]!;
       while (word) {
         const lsb = word & -word;
         const bit = Math.clz32(lsb) ^ 31;
