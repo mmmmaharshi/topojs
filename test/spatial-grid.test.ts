@@ -465,9 +465,12 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     const zero = buildRipsComplex(pts, 2, 0, 2);
     expect(zero.edges).toHaveLength(1);
     expect(zero.edges[0]!.val).toBe(0);
-    // maxDist=Infinity: complete graph (n choose 2 edges)
+    // maxDist=Infinity resolves to the enclosing-radius cutoff (Ripser
+    // default): min_i max_j = dist([1,1],[5,5]) = sqrt(32), so the two
+    // length-sqrt(50) edges are never built. Barcode is identical (cone
+    // beyond the cutoff), only the reported complex is smaller.
     const inf = buildRipsComplex(pts, 2, Infinity, 2);
-    expect(inf.edges).toHaveLength(6); // 4 choose 2
+    expect(inf.edges).toHaveLength(4);
   });
 
   it("still matches on the existing tie-heavy grid / circle ground-truth cases", () => {

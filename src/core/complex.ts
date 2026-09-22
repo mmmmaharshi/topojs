@@ -1,4 +1,5 @@
 import type { Points } from "./distance.ts";
+import { enclosingRadius } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
@@ -199,6 +200,16 @@ export function buildRipsComplex(
 ): RipsComplex {
   const n = points.length / dims;
 
+  // ── Enclosing-radius cutoff (see complex-implicit.ts): cap UNBOUNDED
+  // maxDist at min_i max_j d(i,j). Finite thresholds are respected exactly.
+  let effectiveMaxDist = maxDist;
+  if (epsilon === undefined && maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
+
   // ── Sheehy sparse Rips: compute greedy permutation and active subset ──
   // When epsilon is provided, only points whose insertion radius (distance
   // to nearest earlier point in the greedy permutation) is <= epsilon *
@@ -265,8 +276,13 @@ export function buildRipsComplex(
   // NOTE: when epsilon is provided (Sheehy sparse), skip the grid since the
   // active-point subset is typically small (the grid's overhead isn't worth it).
   const useGrid =
-    !epsilon && maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
-  const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
+    !epsilon &&
+    effectiveMaxDist > 0 &&
+    Number.isFinite(effectiveMaxDist) &&
+    n >= GRID_MIN_N;
+  const grid = useGrid
+    ? new SpatialGrid(points, dims, n, effectiveMaxDist)
+    : null;
 
   for (let i = 0; i < n; i++) {
     if (!isActive(i)) {
@@ -278,7 +294,7 @@ export function buildRipsComplex(
         return;
       }
       const d = euclidean(points, dims, i, j);
-      if (d <= maxDist) {
+      if (d <= effectiveMaxDist) {
         tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);

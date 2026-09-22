@@ -1,4 +1,5 @@
 import type { Points } from "./distance.ts";
+import { enclosingRadius } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
 
 function euclidean(points: Points, dims: number, i: number, j: number): number {
@@ -109,6 +110,17 @@ export function buildGeneralRipsComplex(
 ): GeneralRipsComplex {
   const n = points.length / dims;
 
+  // ── Enclosing-radius cutoff (Ripser default): cap UNBOUNDED maxDist at
+  // min_i max_j d(i,j). Cone beyond => same barcode. Finite thresholds
+  // are respected exactly.
+  let effectiveMaxDist = maxDist;
+  if (maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
+
   if (maxSimplexDim < 1) {
     throw new RangeError(`maxSimplexDim must be >= 1, got ${maxSimplexDim}`);
   }
@@ -120,7 +132,7 @@ export function buildGeneralRipsComplex(
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const d = euclidean(points, dims, i, j);
-      if (d <= maxDist) {
+      if (d <= effectiveMaxDist) {
         tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);

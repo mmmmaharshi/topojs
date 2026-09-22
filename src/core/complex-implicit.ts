@@ -1,5 +1,6 @@
 import { CombinatorialIndex } from "./combinatorial-index.ts";
 import type { SheehyInfo } from "./complex.ts";
+import { enclosingRadius } from "./distance.ts";
 import type { Points } from "./distance.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
@@ -37,6 +38,20 @@ export function buildImplicitRipsComplex(
   epsilon?: number
 ): ImplicitRipsComplex {
   const n = points.length / dims;
+
+  // ── Enclosing-radius cutoff (Ripser default threshold): when maxDist is
+  // unbounded, cap it at min_i max_j d(i,j) — beyond that scale the Rips
+  // complex is a cone, so the barcode is identical and triangle/tetrahedron
+  // enumeration (O(n³)/O(n⁴)) shrinks. Finite thresholds are respected
+  // exactly as requested (callers asserting complex sizes at finite maxDist
+  // must see the full thresholded complex).
+  let effectiveMaxDist = maxDist;
+  if (epsilon === undefined && maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
 
   let perm: Int32Array | null = null;
   let radii: Float64Array | null = null;
@@ -83,8 +98,13 @@ export function buildImplicitRipsComplex(
     permRank === null ? true : permRank[idx]! < activeCount;
 
   const useGrid =
-    !epsilon && maxDist > 0 && Number.isFinite(maxDist) && n >= GRID_MIN_N;
-  const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
+    !epsilon &&
+    effectiveMaxDist > 0 &&
+    Number.isFinite(effectiveMaxDist) &&
+    n >= GRID_MIN_N;
+  const grid = useGrid
+    ? new SpatialGrid(points, dims, n, effectiveMaxDist)
+    : null;
 
   for (let i = 0; i < n; i++) {
     if (!isActive(i)) {
@@ -96,7 +116,7 @@ export function buildImplicitRipsComplex(
         return;
       }
       const d = euclidean(points, dims, i, j);
-      if (d <= maxDist) {
+      if (d <= effectiveMaxDist) {
         tempEdges.push({ origIdx: adj[i]!.length, u: i, v: j, val: d });
         adj[i]!.push(j);
         adj[j]!.push(i);
@@ -168,7 +188,7 @@ export function buildImplicitRipsComplex(
     _getEdgeIndex: getEdgeIndex,
     adjBits,
     edges,
-    maxDist,
+    maxDist: effectiveMaxDist,
     n,
     sheehy,
   };

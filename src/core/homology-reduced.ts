@@ -1,4 +1,8 @@
-import { computePairwiseDistances, lookupDist } from "./distance.ts";
+import {
+  computePairwiseDistances,
+  enclosingRadius,
+  lookupDist,
+} from "./distance.ts";
 import type { Points } from "./distance.ts";
 import type { EdgeEntry, PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
@@ -105,6 +109,15 @@ export function computePersistentHomologyReduced(
   maxDist = Number.POSITIVE_INFINITY
 ): HomologyResult {
   const n = points.length / dims;
+  // ── Enclosing-radius cutoff (see complex-implicit.ts): cap UNBOUNDED
+  // maxDist so the 1-skeleton matches the other engines exactly.
+  let effectiveMaxDist = maxDist;
+  if (maxDist > 0 && !Number.isFinite(maxDist)) {
+    const r = enclosingRadius(points, dims);
+    if (r < effectiveMaxDist) {
+      effectiveMaxDist = r;
+    }
+  }
   const dist = computePairwiseDistances(points, dims, n);
 
   // ── Build the full 1-skeleton (every edge within maxDist) ──
@@ -123,7 +136,7 @@ export function computePersistentHomologyReduced(
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       const d = lookupDist(dist, i, j);
-      if (d <= maxDist) {
+      if (d <= effectiveMaxDist) {
         tempEdges.push({ u: i, v: j, val: d });
       }
     }
@@ -223,7 +236,7 @@ export function computePersistentHomologyReduced(
       const dxy = lookupDist(dist, x, y);
       const dxz = lookupDist(dist, x, z);
       const val = Math.max(dyz, dxy, dxz);
-      if (val <= maxDist) {
+      if (val <= effectiveMaxDist) {
         triangles.push({ val, x, y, z });
       }
     }
