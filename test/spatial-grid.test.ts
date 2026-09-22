@@ -100,6 +100,54 @@ describe(SpatialGrid, () => {
     }
   });
 
+  it("candidatesAfter never emits duplicates (hash-collision dedupe)", () => {
+    // The cell hash is deliberately lossy: two different enumerated neighbor
+    // cells can share a key, so the same bucket can be visited twice for one
+    // query. The stamp-array dedupe must collapse that to a single emission
+    // per point -- a duplicate candidate would become a DUPLICATE edge
+    // downstream. This uses the exact config (seed 42, [0,1)^3, n=2000,
+    // cellSize 0.08) that produced duplicate candidates under the previous
+    // FNV-1a hash (edge count 3920 vs 3919 brute-force truth) before the
+    // switch to MurmurHash3 -- i.e. this test fails on the weak hash without
+    // dedupe and passes with the current implementation.
+    const rng = mulberry32(42);
+    for (let trial = 0; trial < 3; trial++) {
+      const n = 2000;
+      const dims = 3;
+      const pts = new Float64Array(n * dims);
+      for (let k = 0; k < n * dims; k++) {
+        pts[k] = rng();
+      }
+      const cellSize = 0.08;
+      const grid = new SpatialGrid(pts, dims, n, cellSize);
+      const trueEdges = new Set(
+        bruteForceEdges(pts, dims, n, cellSize).map(([a, b]) => `${a},${b}`)
+      );
+      for (let i = 0; i < n; i++) {
+        const c = grid.candidatesAfter(pts, i);
+        expect(new Set(c).size, `trial ${trial} point ${i}: duplicates`).toBe(
+          c.length
+        );
+        for (const j of c) {
+          expect(j).toBeGreaterThan(i);
+        }
+        for (let k = 1; k < c.length; k++) {
+          expect(c[k]!).toBeGreaterThan(c[k - 1]!);
+        }
+      }
+      // Superset property still holds at this scale (no true edge lost to a
+      // collision -- collisions only ever ADD candidates).
+      const candidates = new Set(
+        gridCandidatePairs(pts, dims, n, cellSize).map(([a, b]) => `${a},${b}`)
+      );
+      for (const key of trueEdges) {
+        expect(
+          candidates.has(key),
+          `trial ${trial}: true edge ${key} missing`
+        ).toBeTruthy();
+      }
+    }
+  });
   it("handles points exactly on a cell boundary (classic bucket-grid edge case)", () => {
     // Points whose coordinates are exact multiples of cellSize land exactly
     // on a boundary between cells -- Math.floor()'s behavior there is well
