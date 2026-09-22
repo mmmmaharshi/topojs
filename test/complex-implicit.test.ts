@@ -5,7 +5,6 @@ import {
   buildImplicitRipsComplex,
   triValByRank,
   countImplicitTriangles,
-  forEachImplicitTriangle,
 } from "../src/core/complex-implicit.ts";
 import { buildRipsComplex } from "../src/core/complex.ts";
 import { mulberry32 } from "./helpers.ts";
@@ -74,39 +73,6 @@ describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
       for (let w = 0; w < ib.length; w++) {
         expect(ib[w]).toBe(mb[w]);
       }
-    }
-  });
-});
-
-describe(forEachImplicitTriangle, () => {
-  it("yields same triangles as materialized walk", () => {
-    const rng = mulberry32(99);
-    const pts = randomPoints(rng, 12, 3);
-    const maxDist = 2.5;
-
-    const materialized = buildRipsComplex(pts, 3, maxDist, 2);
-    const implicit = buildImplicitRipsComplex(pts, 3, maxDist);
-
-    const yielded: { u: number; v: number; w: number; val: number }[] = [];
-    forEachImplicitTriangle(implicit, (u, v, w, val) => {
-      yielded.push({ u, v, val, w });
-    });
-
-    expect(yielded).toHaveLength(materialized.triangles.length);
-
-    const ci = new CombinatorialIndex(implicit.n);
-    yielded.sort((a, b) => ci.rank(a.u, a.v, a.w) - ci.rank(b.u, b.v, b.w));
-    const materializedSorted = [...materialized.triangles].toSorted(
-      (a, b) =>
-        ci.rank(a.verts[0], a.verts[1], a.verts[2]) -
-        ci.rank(b.verts[0], b.verts[1], b.verts[2])
-    );
-
-    for (let i = 0; i < yielded.length; i++) {
-      expect(yielded[i]!.u).toBe(materializedSorted[i]!.verts[0]);
-      expect(yielded[i]!.v).toBe(materializedSorted[i]!.verts[1]);
-      expect(yielded[i]!.w).toBe(materializedSorted[i]!.verts[2]);
-      expect(yielded[i]!.val).toBe(materializedSorted[i]!.val);
     }
   });
 });

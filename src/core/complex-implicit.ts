@@ -288,38 +288,3 @@ export function countImplicitTriangles(
 
   return count;
 }
-
-export function forEachImplicitTriangle(
-  complex: ImplicitRipsComplex,
-  fn: (u: number, v: number, w: number, val: number) => void,
-  filterMaxDist?: number
-): void {
-  const { adjBits, edges, n } = complex;
-  const maxDist = filterMaxDist ?? complex.maxDist;
-  const words = Math.ceil(n / 32);
-
-  for (const { u, v } of edges) {
-    const bu = adjBits[u]!;
-    const bv = adjBits[v]!;
-    const startWord = (v + 1) >>> 5;
-    const startBit = (v + 1) & 31;
-
-    for (let wd = startWord; wd < words; wd++) {
-      let bits = bu[wd]! & bv[wd]!;
-      if (wd === startWord && startBit > 0) {
-        bits &= ~((1 << startBit) - 1);
-      }
-      while (bits) {
-        const lsb = bits & -bits;
-        const bit = Math.clz32(lsb) ^ 31;
-        const k = (wd << 5) + bit;
-        bits ^= lsb;
-
-        const val = triVal(complex, u, v, k);
-        if (val <= maxDist) {
-          fn(u, v, k, val);
-        }
-      }
-    }
-  }
-}
