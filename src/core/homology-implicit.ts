@@ -31,6 +31,20 @@
  * caught both in sequence: removing the filter surfaced a 30% failure rate,
  * and the remaining 60 failures all traced to unsorted `rank4` arguments
  * when `x` fell below `u`, between `u` and `v`, or between `v` and `w`.
+ *
+ * ---------------------------------------------------------------------------
+ * Apparent pairs fused into enumeration (H₁ + H₂):
+ *
+ * While enumerating each column's cofacets, the loop also tracks the minimum
+ * cofacet value and whether it is unique. When the minimum is unique and its
+ * pivot slot is still free, the HeapColumn working column is skipped
+ * entirely: a unique minimum-value entry is the pivot under the (val, rank)
+ * order regardless of the rank tie-break, and a fresh claim stores the raw
+ * coboundary with zero XORs — so claiming plus storing the full boundary
+ * directly reproduces the reduction path bit-for-bit (values are Math.max of
+ * the same edge values the rank-based valuation would unrank). Columns whose
+ * minimum is tied or already owned fall back to the full HeapColumn path
+ * unchanged, so tie-heavy inputs (grids/lattices) behave exactly as before.
  */
 
 import {
@@ -96,7 +110,7 @@ function computeH1ImplicitAndPivots(
   edges: { u: number; v: number; val: number }[],
   cycleEdges: Uint8Array
 ): { h1Pairs: PersistencePair[]; triPivotOwner: Map<number, number> } {
-  const { adjBits, n } = complex;
+  const { adjBits, n, _edgeVals: edgeVals, _getEdgeIndex: getEdgeIndex } = complex;
   const h1Pairs: PersistencePair[] = [];
   const words = Math.ceil(n / 32);
 
@@ -112,8 +126,16 @@ function computeH1ImplicitAndPivots(
       continue;
     }
     const { u, v } = edges[ei]!;
+    const ev = edges[ei]!.val;
 
     const coboundary: number[] = [];
+    // Apparent-pair tracking: the minimum cofacet value, how many cofacets
+    // attain it, and the rank of the (unique, if count === 1) minimiser.
+    // Values come straight from the two lookup edges (u,k),(v,k) — no unrank
+    // needed, unlike triValByRank.
+    let minTriVal = Infinity;
+    let minTriCount = 0;
+    let minTriRank = -1;
     const bu = adjBits[u]!;
     const bv = adjBits[v]!;
 
@@ -145,11 +167,45 @@ function computeH1ImplicitAndPivots(
 
         const rank = complex._combinatorialIndex.rank(a, b, c);
         coboundary.push(rank);
+        const euk =
+          edgeVals[getEdgeIndex(u < k ? u : k, u < k ? k : u)]!;
+        const evk =
+          edgeVals[getEdgeIndex(v < k ? v : k, v < k ? k : v)]!;
+        const tv = Math.max(ev, euk, evk);
+        if (tv < minTriVal) {
+          minTriVal = tv;
+          minTriCount = 1;
+          minTriRank = rank;
+        } else if (tv === minTriVal) {
+          minTriCount++;
+        }
       }
     }
 
     if (coboundary.length === 0) {
       h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
+      continue;
+    }
+
+    if (minTriCount === 1 && !triPivotOwner.has(minTriRank)) {
+      // Apparent pair fused into enumeration: the minimum-value cofacet is
+      // unique, so the HeapColumn below would return minTriRank as its pivot
+      // on the very first check regardless of the (val, rank) tie-break, and
+      // a fresh claim stores the raw coboundary with zero XORs. Claim the
+      // pivot and store the full boundary directly, skipping the working
+      // column entirely. minTriVal is bit-identical to triValByRank
+      // (Math.max of the same three edge values), so the emission guard
+      // matches the full path exactly.
+      triPivotOwner.set(minTriRank, ei);
+      // Stored unsorted: all consumers (HeapColumn/DenseWorkingCol xorSparse)
+      // toggle by presence, so order is irrelevant — and a comparator sort
+      // here would cost O(C log C), dwarfing the HeapColumn saving on wide
+      // dense columns. (HeapColumn.toSparse still emits ascending when IT
+      // stores, so mixed provenance is invisible downstream.)
+      edgeReducedCol.set(ei, Int32Array.from(coboundary));
+      if (minTriVal > ev) {
+        h1Pairs.push({ birth: ev, death: minTriVal, dim: 1 });
+      }
       continue;
     }
 
@@ -195,6 +251,7 @@ function computeH2Implicit(
     n,
     edges,
     _edgeVals: edgeVals,
+    _getEdgeIndex: getEdgeIndex,
     _combinatorialIndex: ci,
   } = complex;
   const words = Math.ceil(n / 32);
@@ -262,6 +319,14 @@ function computeH2Implicit(
 
         const bk = adjBits[k]!;
         const coboundary: number[] = [];
+        // Apparent-pair tracking, dual to the H1 loop above: unique
+        // minimum-value tetrahedron cofacet. tetVal needs no unrank — it is
+        // max(triVal, the three x-edge values), and triVal is already known
+        // from dab/dac/dbc.
+        const triVal = Math.max(dab, dac, dbc);
+        let minTetVal = Infinity;
+        let minTetCount = 0;
+        let minTetRank = -1;
 
         for (let xd = 0; xd < words; xd++) {
           let xbits = bu[xd]! & bv[xd]! & bk[xd]!;
@@ -293,12 +358,42 @@ function computeH2Implicit(
               r = c;
               s = x;
             }
-            coboundary.push(ci.rank4(p, q, r, s));
+            const tetRank = ci.rank4(p, q, r, s);
+            coboundary.push(tetRank);
+            const exa =
+              edgeVals[getEdgeIndex(x < a ? x : a, x < a ? a : x)]!;
+            const exb =
+              edgeVals[getEdgeIndex(x < b ? x : b, x < b ? b : x)]!;
+            const exc =
+              edgeVals[getEdgeIndex(x < c ? x : c, x < c ? c : x)]!;
+            const xv = Math.max(triVal, exa, exb, exc);
+            if (xv < minTetVal) {
+              minTetVal = xv;
+              minTetCount = 1;
+              minTetRank = tetRank;
+            } else if (xv === minTetVal) {
+              minTetCount++;
+            }
           }
         }
 
         if (coboundary.length === 0) {
           h2Pairs.push({ birth: edgeVal, death: -1, dim: 2 });
+          continue;
+        }
+
+        if (minTetCount === 1 && !tetPivotOwner.has(minTetRank)) {
+          // Apparent pair: unique minimum-value tetra cofacet, so the
+          // HeapColumn would return minTetRank first and a fresh claim
+          // stores the raw coboundary with zero XORs — identical outcome,
+          // no working column. Emission guard mirrors the full path
+          // (birth is the producing edge's value here, not the triangle's).
+          tetPivotOwner.set(minTetRank, triRank);
+          // Unsorted store, same rationale as the H1 shortcut above.
+          triReducedCol.set(triRank, Int32Array.from(coboundary));
+          if (minTetVal > edgeVal) {
+            h2Pairs.push({ birth: edgeVal, death: minTetVal, dim: 2 });
+          }
           continue;
         }
 
