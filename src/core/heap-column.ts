@@ -81,13 +81,6 @@ export class HeapColumn {
     this.hLen = 0;
   }
 
-  loadFromArray(arr: Int32Array): void {
-    this.clear();
-    for (const rank of arr) {
-      this.add(rank, this.getVal(rank));
-    }
-  }
-
   loadFromNumbers(arr: number[]): void {
     this.clear();
     for (const rank of arr) {

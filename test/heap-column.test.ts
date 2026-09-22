@@ -23,7 +23,7 @@ describe("HeapColumn vs DenseWorkingCol on 500 random inputs", () => {
       dwc.loadFromArray(initialCol);
 
       const hc = new HeapColumn((idx: number) => idx);
-      hc.loadFromArray(initialCol);
+      hc.loadFromNumbers([...initialCol]);
 
       const dwcPivots: number[] = [];
       const hcPivots: number[] = [];
@@ -71,15 +71,6 @@ describe("HeapColumn standalone correctness", () => {
     hc.loadFromNumbers([2, 5, 7]);
     expect(hc.pivot()).toBe(7);
     expect([...hc.toSparse()]).toStrictEqual([2, 5, 7]);
-  });
-
-  it("loadFromArray behaves identically to loadFromNumbers", () => {
-    const a = new HeapColumn((idx: number) => idx);
-    const b = new HeapColumn((idx: number) => idx);
-    a.loadFromNumbers([1, 4, 9]);
-    b.loadFromArray(new Int32Array([1, 4, 9]));
-    expect([...a.toSparse()]).toStrictEqual([...b.toSparse()]);
-    expect(a.pivot()).toBe(b.pivot());
   });
 
   it("loadFromNumbers clears prior state (not additive)", () => {
