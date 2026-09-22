@@ -1,6 +1,5 @@
 export class CombinatorialIndex {
   readonly n: number;
-  readonly maxRank: number;
   private readonly binom: Float64Array;
 
   constructor(n: number) {
@@ -20,7 +19,6 @@ export class CombinatorialIndex {
       this.binom[base + 4] =
         i <= 3 ? 0 : (i * (i - 1) * (i - 2) * (i - 3)) / 24;
     }
-    this.maxRank = n < 3 ? 0 : (n * (n - 1) * (n - 2)) / 6;
   }
 
   rank(u: number, v: number, w: number): number {

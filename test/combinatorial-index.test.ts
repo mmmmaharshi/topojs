@@ -55,7 +55,7 @@ describe(CombinatorialIndex, () => {
           const r = idx.rank(u, v, w);
           expect(idx.unrank(r)).toStrictEqual([u, v, w]);
         }
-        for (let r = 0; r < idx.maxRank; r++) {
+        for (let r = 0; r < C(n, 3); r++) {
           const [u, v, w] = idx.unrank(r);
           expect(idx.rank(u, v, w)).toBe(r);
         }
@@ -82,14 +82,13 @@ describe(CombinatorialIndex, () => {
       (n) => {
         expect(() => new CombinatorialIndex(n)).not.toThrow();
         const idx = new CombinatorialIndex(n);
-        expect(idx.maxRank).toBe(0);
+        expect([...enumerateTriangles(n)]).toStrictEqual([]);
         expect(idx.n).toBe(n);
       }
     );
 
     it("n=3 produces exactly one triangle, rank 0", () => {
       const idx = new CombinatorialIndex(3);
-      expect(idx.maxRank).toBe(1);
       expect(idx.rank(0, 1, 2)).toBe(0);
       expect(idx.unrank(0)).toStrictEqual([0, 1, 2]);
     });
@@ -101,7 +100,7 @@ describe(CombinatorialIndex, () => {
       (n) => {
         const idx = new CombinatorialIndex(n);
         expect(idx.unrank(0)).toStrictEqual([0, 1, 2]);
-        expect(idx.unrank(idx.maxRank - 1)).toStrictEqual([
+        expect(idx.unrank(C(n, 3) - 1)).toStrictEqual([
           n - 3,
           n - 2,
           n - 1,
