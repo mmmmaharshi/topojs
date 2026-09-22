@@ -86,8 +86,6 @@ describe("unionfind", () => {
     expect(uf.find(0)).not.toBe(uf.find(2));
     uf.union(1, 2);
     expect(uf.find(0)).toBe(uf.find(3));
-    uf.reset();
-    expect(uf.find(0)).not.toBe(uf.find(1));
   });
   /* eslint-enable vitest/max-expects */
 });

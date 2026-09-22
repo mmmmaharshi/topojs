@@ -140,19 +140,19 @@ export class ColumnStore {
  * (via Math.clz32 on the highest non-zero word) and fast XOR of sparse
  * pivot columns (32 indices per word XOR).
  *
- * Key operations and their complexity (W = ceil(numRows / 32),
- * D = number of touched ("dirty") words since the last load/clear):
- *   pivot()      — O(D) worst-case, O(1) average (early exit at high word)
- *   xorSparse()  — O(|col|) — one word XOR per sparse entry
- *   toSparse()   — O(D log D + popcount) sparse / O(maxDirty) dense
- *   load/clear   — O(D) instead of O(W) fill(0)
- *
- * Dirty-word tracking: every word index written since the last load/clear
- * is recorded once in `dirty` (deduplicated via the `stamp` epoch array),
- * so pivot()/extractBits()/clear() only visit touched words instead of all
- * W. Class invariant: any nonzero word is dirty (zeroing on load/clear
- * walks exactly the dirty list). Callers only use the public methods and
- * never touch `bits` directly, so the invariant is maintained internally.
+  * Key operations and their complexity (W = ceil(numRows / 32),
+  * D = number of touched ("dirty") words since the last load):
+  *   pivot()      — O(D) worst-case, O(1) average (early exit at high word)
+  *   xorSparse()  — O(|col|) — one word XOR per sparse entry
+  *   toSparse()   — O(D log D + popcount) sparse / O(maxDirty) dense
+  *   load         — O(D) instead of O(W) fill(0)
+  *
+  * Dirty-word tracking: every word index written since the last load
+  * is recorded once in `dirty` (deduplicated via the `stamp` epoch array),
+  * so pivot()/extractBits() only visit touched words instead of all
+  * W. Class invariant: any nonzero word is dirty (zeroing on load
+  * walks exactly the dirty list). Callers only use the public methods and
+  * never touch `bits` directly, so the invariant is maintained internally.
  *
  * Compared to a pure-sparse representation (Int32Array per column):
  *   - Pivot is O(1) vs. O(log |col|) for sparse
@@ -219,12 +219,8 @@ export class DenseWorkingCol {
     }
   }
 
-  clear(): void {
-    this.reset();
-  }
-
   /**
-   * Grow (never shrink) this instance's backing storage to accommodate at
+  * Grow (never shrink) this instance's backing storage to accommodate at
    * least `numEdges` rows, reallocating `bits`/`scratch` only if the current
    * capacity is insufficient. A no-op otherwise. Lets one DenseWorkingCol be
    * reused across many calls with slightly varying `numEdges` (e.g. a

@@ -43,14 +43,6 @@ describe(DenseWorkingCol, () => {
     expect([...col.toSparse()]).toStrictEqual([8]);
   });
 
-  it("clear() zeroes all bits", () => {
-    const col = new DenseWorkingCol(10);
-    col.loadFromNumbers([1, 2, 3]);
-    col.clear();
-    expect(col.pivot()).toBe(-1);
-    expect([...col.toSparse()]).toStrictEqual([]);
-  });
-
   it("xorSparse toggles bits: symmetric difference semantics", () => {
     const col = new DenseWorkingCol(10);
     col.loadFromNumbers([1, 2, 3]);
@@ -121,14 +113,14 @@ describe(DenseWorkingCol, () => {
     expect([...col.toSparse()]).toStrictEqual([32]);
   });
 
-  it("a fresh instance and one just clear()ed behave identically (no residual scratch state)", () => {
+  it("a reload replaces scratch state (no residual entries from a larger load)", () => {
     // DenseWorkingCol reuses a preallocated scratch buffer across toSparse()
     // calls (see class docstring) -- confirm that reuse never leaks stale
     // entries from a previous, larger load.
     const col = new DenseWorkingCol(20);
     col.loadFromNumbers([1, 2, 3, 4, 5, 6, 7, 8]); // populate scratch with 8 entries
-    col.clear();
-    col.loadFromNumbers([9]); // now only 1 entry -- scratch must not still report 8
+    expect([...col.toSparse()]).toStrictEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    col.loadFromNumbers([9]); // reload resets: only 1 entry -- scratch must not still report 8
     expect([...col.toSparse()]).toStrictEqual([9]);
   });
 
@@ -177,13 +169,12 @@ describe(DenseWorkingCol, () => {
       expect(grown.pivot()).toBe(direct.pivot());
     });
 
-    it("xorSparse and repeated reuse (clear + load + xor) behave correctly after growth", () => {
+    it("xorSparse and repeated reuse (load + xor + reload) behave correctly after growth", () => {
       const col = new DenseWorkingCol(5);
       col.ensureCapacity(64);
       col.loadFromNumbers([10, 40]);
       col.xorSparse(new Int32Array([40, 63]));
       expect([...col.toSparse()]).toStrictEqual([10, 63]);
-      col.clear();
       col.loadFromNumbers([1]);
       expect([...col.toSparse()]).toStrictEqual([1]);
     });

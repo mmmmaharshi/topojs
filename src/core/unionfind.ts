@@ -45,10 +45,4 @@ export class UnionFind {
     this.parent[ra] = -(sa + sb);
     return true;
   }
-
-  reset(): void {
-    for (let i = 0; i < this.parent.length; i++) {
-      this.parent[i] = EMPTY;
-    }
-  }
 }
