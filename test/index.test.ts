@@ -43,8 +43,6 @@ describe("public API barrel (src/index.ts)", () => {
   });
 
   it("exports every documented distance/comparison function", () => {
-    expect(topojs.computePairwiseDistances).toBeTypeOf("function");
-    expect(topojs.lookupDist).toBeTypeOf("function");
     expect(topojs.bottleneckDistance).toBeTypeOf("function");
   });
 

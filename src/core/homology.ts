@@ -176,6 +176,3 @@ export function computePersistentHomology(
     pairs: [...h0Pairs, ...h1Pairs, ...h2Pairs],
   };
 }
-
-export { bottleneckDistance } from "./bottleneck.ts";
-export { computePairwiseDistances } from "./distance.ts";

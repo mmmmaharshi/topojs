@@ -39,8 +39,8 @@ export { computeCubicalHomology } from "./core/cubical.ts";
 export type { CubicalResult } from "./core/cubical.ts";
 
 // ── Distances ──
-export { computePairwiseDistances, lookupDist, enclosingRadius } from "./core/distance.ts";
-export type { Points, DistanceMatrix } from "./core/distance.ts";
+export { enclosingRadius } from "./core/distance.ts";
+export type { Points } from "./core/distance.ts";
 
 // ── Bottleneck distance ──
 export { bottleneckDistance } from "./core/bottleneck.ts";
