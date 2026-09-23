@@ -129,7 +129,7 @@ console.log("Summary:", summarize(result.pairs));
 | --- | --- |
 | `SlidingWindow` | Fixed-capacity ring buffer feeding both engines. |
 | `StreamingHomology` | Full recompute on every `push()`. Baseline for differential testing. |
-| `IncrementalH1` | Prefix-stable incremental engine — H₀+H₁+H₂ without full recompute. `maxDim` controls dimension (0/1/2). Theorem 2: diagram-identical to full recompute, `O(k+deg²+|suffix|)` per push (see `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`). |
+| `IncrementalH1` | Prefix-stable incremental engine — H₀+H₁+H₂ without full recompute. `maxDim` controls dimension (0/1/2). Theorem 2: diagram-identical to full recompute, `O(k+deg²+ | suffix | )`per push (see`paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`). |
 | `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result. |
 
 ### Example datasets
@@ -140,8 +140,8 @@ console.log("Summary:", summarize(result.pairs));
 
 ## Theorems (new)
 
-* **Theorem 1 — Truncated Stability** (`src/core/sparse-rips.ts`, `bench/theorem1-check.ts`): With `T=maxDist, λ=coveringRadius, T*=T−2λ`, `d_B(Dgm_T^∘)≤2λ` always and full `d_B≤2λ` iff `isExactBound` (no finite bar in `[T*,T)`), otherwise `≤2λ+truncatedGap` (`<2λ`). Closes the prior truncated caveat; `0/1164` empirical sweep now proved. Per-call certifier: `result.isExactBound`.
-* **Theorem 2 — Prefix-Stable Incremental Exactness** (`src/streaming/incremental-h1.ts`): `IncrementalH1.push()` is diagram-identical to `StreamingHomology.push()`; per-push extra work `O(k+deg²+|suffix|)`. See `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`.
+- **Theorem 1 — Truncated Stability** (`src/core/sparse-rips.ts`, `bench/theorem1-check.ts`): With `T=maxDist, λ=coveringRadius, T*=T−2λ`, `d_B(Dgm_T^∘)≤2λ` always and full `d_B≤2λ` iff `isExactBound` (no finite bar in `[T*,T)`), otherwise `≤2λ+truncatedGap` (`<2λ`). Closes the prior truncated caveat; `0/1164` empirical sweep now proved. Per-call certifier: `result.isExactBound`.
+- **Theorem 2 — Prefix-Stable Incremental Exactness** (`src/streaming/incremental-h1.ts`): `IncrementalH1.push()` is diagram-identical to `StreamingHomology.push()`; per-push extra work `O(k+deg²+|suffix|)`. See `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`.
 
 ## Benchmarks
 
