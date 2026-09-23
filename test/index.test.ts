@@ -26,8 +26,8 @@ import * as topojs from "../src/index.ts";
 describe("public API barrel (src/index.ts)", () => {
   it("exports every documented batch-homology function", () => {
     expect(topojs.computePersistentHomology).toBeTypeOf("function");
-    expect(topojs.computePersistentHomologyCohomologyFromComplex).toBeTypeOf(
-      "function"
+    expect(topojs).not.toHaveProperty(
+      "computePersistentHomologyCohomologyFromComplex"
     );
     expect(topojs.computeCubicalHomology).toBeTypeOf("function");
   });
@@ -91,6 +91,146 @@ describe("public API barrel (src/index.ts)", () => {
     });
     expect(reduced.complex.numVertices).toBe(standard.complex.numVertices);
     expect(reduced.pairs).toHaveLength(standard.pairs.length);
+  });
+
+  it("uses homology-dimension maxDim semantics across the published engines", () => {
+    const loop = new Float64Array([0, 0, 1, 0, 1, 1, 0, 1]);
+    const octahedron = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
+    const engines = [
+      "auto",
+      "standard",
+      "cohomology",
+      "implicit",
+      "implicit-full",
+      "fast",
+    ] as const;
+
+    for (const engine of engines) {
+      const h0 = topojs.computePersistentHomology(loop, 2, {
+        engine,
+        maxDim: 0,
+        maxDist: 1.1,
+      });
+      expect(h0.pairs.every((pair) => pair.dim === 0)).toBeTruthy();
+
+      const h1 = topojs.computePersistentHomology(loop, 2, {
+        engine,
+        maxDim: 1,
+        maxDist: 1.1,
+      });
+      expect(h1.pairs.some((pair) => pair.dim === 1)).toBeTruthy();
+      expect(h1.pairs.every((pair) => pair.dim <= 1)).toBeTruthy();
+
+      const h2 = topojs.computePersistentHomology(octahedron, 3, {
+        engine,
+        maxDim: 2,
+        maxDist: Math.SQRT2 + 0.01,
+      });
+      expect(h2.pairs.some((pair) => pair.dim === 2)).toBeTruthy();
+    }
+  });
+
+  it("defaults the published interface to H0+H1+H2", () => {
+    const octahedron = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
+    const result = topojs.computePersistentHomology(
+      octahedron,
+      3,
+      Math.SQRT2 + 0.01
+    );
+    expect(result.pairs.some((pair) => pair.dim === 2)).toBeTruthy();
+  });
+
+  it("uses public maxDim semantics in the direct implicit entry point", () => {
+    const loop = new Float64Array([0, 0, 1, 0, 1, 1, 0, 1]);
+    const h0 = topojs.computePersistentHomologyImplicit(loop, 2, 1.1, 0);
+    expect(h0.pairs.every((pair) => pair.dim === 0)).toBeTruthy();
+
+    const octahedron = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
+    const h2 = topojs.computePersistentHomologyImplicit(
+      octahedron,
+      3,
+      Math.SQRT2 + 0.01,
+      2
+    );
+    expect(h2.pairs.some((pair) => pair.dim === 2)).toBeTruthy();
+  });
+
+  it("uses public maxDim semantics in the sparse entry point", () => {
+    const octahedron = new Float64Array([
+      1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1,
+    ]);
+    const result = topojs.computeSparseRipsHomology(
+      octahedron,
+      3,
+      6,
+      6,
+      Math.SQRT2 + 0.01,
+      2
+    );
+    expect(result.pairs.some((pair) => pair.dim === 2)).toBeTruthy();
+  });
+
+  it("uses public maxDim semantics in the streaming entry point", () => {
+    const octahedron = [
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+      [0, 0, 1],
+      [0, 0, -1],
+    ];
+    const h0Stream = new topojs.StreamingHomology({
+      dims: 3,
+      maxDim: 0,
+      maxDist: Math.SQRT2 + 0.01,
+      windowSize: 6,
+    });
+    const h2Stream = new topojs.StreamingHomology({
+      dims: 3,
+      maxDim: 2,
+      maxDist: Math.SQRT2 + 0.01,
+      windowSize: 6,
+    });
+    let h0;
+    let h2;
+    for (const point of octahedron) {
+      h0 = h0Stream.push(point);
+      h2 = h2Stream.push(point);
+    }
+    expect(h0?.result.pairs.every((pair) => pair.dim === 0)).toBeTruthy();
+    expect(h2?.result.pairs.some((pair) => pair.dim === 2)).toBeTruthy();
+  });
+
+  it("computePersistentHomology's engine:'reduced' option supports scope 0 and 1, and rejects scope 2", () => {
+    const loop = new Float64Array([0, 0, 1, 0, 1, 1, 0, 1]);
+    const h0 = topojs.computePersistentHomology(loop, 2, {
+      engine: "reduced",
+      maxDim: 0,
+      maxDist: 1.1,
+    });
+    expect(h0.pairs.every((pair) => pair.dim === 0)).toBeTruthy();
+
+    const h1 = topojs.computePersistentHomology(loop, 2, {
+      engine: "reduced",
+      maxDim: 1,
+      maxDist: 1.1,
+    });
+    expect(h1.pairs.some((pair) => pair.dim === 1)).toBeTruthy();
+    expect(h1.pairs.every((pair) => pair.dim <= 1)).toBeTruthy();
+
+    expect(() =>
+      topojs.computePersistentHomology(loop, 2, {
+        engine: "reduced",
+        maxDim: 2,
+        maxDist: 1.1,
+      })
+    ).toThrow(/only computes H0\+H1/u);
   });
 
   it("computePersistentHomology's engine:'reduced' option throws a clear error if maxDim>1 is requested (it has no H2 algorithm)", () => {

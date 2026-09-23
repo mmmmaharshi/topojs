@@ -17,12 +17,20 @@ import { computePersistentHomologyCohomology } from "./homology-cohom.ts";
 import { computePersistentHomologyFast } from "./homology-fast.ts";
 import { computePersistentHomologyImplicitFromComplex } from "./homology-implicit.ts";
 import { computePersistentHomologyReduced } from "./homology-reduced.ts";
+import { toEngineMaxDim, validateMaxDim } from "./homology-scope.ts";
 import type { HomologyResult } from "./homology.ts";
 import { computePersistentHomology as computeStandard } from "./homology.ts";
 
 export { computePersistentHomologyCohomologyFromComplex } from "./homology-cohom-implicit.ts";
 
 export type { HomologyResult } from "./homology.ts";
+
+function limitToScope(result: HomologyResult, maxDim: number): HomologyResult {
+  return {
+    ...result,
+    pairs: result.pairs.filter((pair) => pair.dim <= maxDim),
+  };
+}
 
 /** Engine selection for `computePersistentHomology`. */
 export type HomologyEngine =
@@ -59,10 +67,10 @@ export interface HomologyOptions {
    * `"reduced"` uses the reduced Vietoris-Rips complex (Koyama, Memoli,
    * Robins, Turner, arXiv:2307.16333) -- builds a much smaller 2-simplex
    * set via per-edge lune connected-components, often a large speedup on
-   * dense complexes (see bench/data/reduced_vr_results.txt). It only
-   * computes H0+H1, so it throws if `maxDim` is 2 (the default) or higher;
-   * pass `maxDim: 1` explicitly to use it. Never auto-selected, since
-   * `computePersistentHomology`'s default scope is H0+H1+H2.
+   * dense complexes (see bench/data/reduced_vr_results.txt). It supports
+   * public scopes 0 and 1 and throws for scope 2 or higher. Never
+   * auto-selected, since `computePersistentHomology`'s default scope is
+   * H0+H1+H2.
    */
   engine?: HomologyEngine;
   /** Sheehy sparse Rips parameter (only supported by `"implicit"`). */
@@ -73,8 +81,8 @@ export interface HomologyOptions {
  * Vietoris–Rips persistent homology (H₀+H₁+H₂) with automatic engine selection.
  *
  * Signature overloads:
- * - `computePersistentHomology(points, dims, maxDist?, maxDim?)` — positional,
- *   backward-compatible with the standard engine's signature.
+ * - `computePersistentHomology(points, dims, maxDist?, maxDim?)` — positional
+ *   form with the public homology-dimension `maxDim` scope.
  * - `computePersistentHomology(points, dims, options?)` — options object for
  *   engine selection, maxDist/maxDim, and Sheehy-sparse epsilon.
  */
@@ -103,29 +111,36 @@ export function computePersistentHomology(
 
   const { maxDist = Infinity, maxDim = 2, engine = "auto", epsilon } = opts;
 
-  // Auto-select engine
+  if (engine !== "reduced") {
+    validateMaxDim(maxDim);
+  }
+
+  const materializationDim = toEngineMaxDim(maxDim);
+
   let resolved: HomologyEngine = engine;
   if (resolved === "auto") {
     if (epsilon === undefined) {
-      // Build the implicit complex once and count triangles to decide.
-      // On fallback the cohomology engine rebuilds edges from scratch
-      // (double O(n²) edge enumeration), accepted for now because the
-      // decision only probes on the first call to this function.
       const complex = buildImplicitRipsComplex(points, dims, maxDist);
       const triCount = countImplicitTriangles(complex);
 
-      if (maxDim >= 3) {
-        // H₂: avoid materialising all triangles above ~8K
-        // (measured on 3D random and 60D Sonar with maxDist=0.5–2.0
-        // giving 10–200K triangles; crossover is sub-10K in all cases).
+      if (maxDim === 2) {
         if (triCount >= 8000) {
-          return computePersistentHomologyImplicitFromComplex(complex, maxDim);
+          return limitToScope(
+            computePersistentHomologyImplicitFromComplex(
+              complex,
+              materializationDim
+            ),
+            maxDim
+          );
         }
       } else if (triCount >= 60_000) {
-        // H₁ only: the implicit engine wins by avoiding triangle
-        // materialisation, but its bitset scanning overhead dominates
-        // below ~60K triangles (measured on the same sweeps).
-        return computePersistentHomologyImplicitFromComplex(complex, maxDim);
+        return limitToScope(
+          computePersistentHomologyImplicitFromComplex(
+            complex,
+            materializationDim
+          ),
+          maxDim
+        );
       }
       resolved = "cohomology";
     } else {
@@ -135,28 +150,53 @@ export function computePersistentHomology(
 
   switch (resolved) {
     case "cohomology": {
-      return computePersistentHomologyCohomology(points, dims, maxDist, maxDim);
+      return limitToScope(
+        computePersistentHomologyCohomology(
+          points,
+          dims,
+          maxDist,
+          materializationDim
+        ),
+        maxDim
+      );
     }
     case "implicit": {
-      return computePersistentHomologyCohomologyImplicit(
-        points,
-        dims,
-        maxDist,
-        maxDim,
-        epsilon
+      return limitToScope(
+        computePersistentHomologyCohomologyImplicit(
+          points,
+          dims,
+          maxDist,
+          materializationDim,
+          epsilon
+        ),
+        maxDim
       );
     }
     case "implicit-full": {
-      return computePersistentHomologyImplicitFromComplex(
-        buildImplicitRipsComplex(points, dims, maxDist),
+      return limitToScope(
+        computePersistentHomologyImplicitFromComplex(
+          buildImplicitRipsComplex(points, dims, maxDist),
+          materializationDim
+        ),
         maxDim
       );
     }
     case "standard": {
-      return computeStandard(points, dims, maxDist, maxDim);
+      return limitToScope(
+        computeStandard(points, dims, maxDist, materializationDim),
+        maxDim
+      );
     }
     case "fast": {
-      return computePersistentHomologyFast(points, dims, maxDist, maxDim);
+      return limitToScope(
+        computePersistentHomologyFast(
+          points,
+          dims,
+          maxDist,
+          materializationDim
+        ),
+        maxDim
+      );
     }
     case "reduced": {
       if (maxDim > 1) {
@@ -164,7 +204,11 @@ export function computePersistentHomology(
           `engine: "reduced" only computes H0+H1 (Koyama/Memoli/Robins/Turner's reduced Vietoris-Rips complex has no H2 algorithm) -- requested maxDim=${maxDim}. Pass maxDim: 1, or use a different engine ("cohomology", "implicit", "implicit-full", "fast") for H2.`
         );
       }
-      return computePersistentHomologyReduced(points, dims, maxDist);
+      validateMaxDim(maxDim);
+      return limitToScope(
+        computePersistentHomologyReduced(points, dims, maxDist),
+        maxDim
+      );
     }
     default: {
       const _exhaustive: never = resolved;

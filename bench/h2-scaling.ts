@@ -96,7 +96,7 @@ for (const n of sweepNs) {
   try {
     const result = computePersistentHomology(pts, 2, {
       engine: "standard",
-      maxDim: 3, // 3 = tetrahedra construction = H2 (see repo's maxDim convention note)
+      maxDim: 2,
       maxDist: MAX_DIST,
     });
     ({ numTetrahedra, numTriangles, numEdges } = result.complex);

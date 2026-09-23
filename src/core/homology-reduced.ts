@@ -8,6 +8,11 @@ import type { EdgeEntry, PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
 import { stableSortByVal } from "./radix-sort.ts";
+import {
+  collectEssentialClasses,
+  columnStoreColumnAdapter,
+  reducePhase,
+} from "./reducer.ts";
 import { ColumnStore, DenseWorkingCol } from "./reduction.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
 import { UnionFind } from "./unionfind.ts";
@@ -110,9 +115,10 @@ const GRID_MIN_N = 700;
  * maxDist up to ~43x on the densest real case tested -- see
  * bench/data/reduced_vr_results.txt and `npm run bench:reduced-vr`. Exposed
  * publicly via `computePersistentHomology(points, dims, { engine: "reduced",
- * maxDim: 1 })` (see homology-unified.ts) rather than as its own top-level
- * export, matching how the other alternate engines (cohomology/fast/
- * implicit/standard) are only reachable through that same `engine` option.
+ * maxDim: 0 })` or `maxDim: 1` (see homology-unified.ts) rather than as its
+ * own top-level export, matching how the other alternate engines
+ * (cohomology/fast/implicit/standard) are only reachable through that same
+ * `engine` option.
  */
 export function computePersistentHomologyReduced(
   points: Points,
@@ -311,42 +317,36 @@ export function computePersistentHomologyReduced(
   const h1reduced = new ColumnStore(triangles.length);
   const h1Pairs: PersistencePair[] = [];
   const w1 = new DenseWorkingCol(edges.length);
+  const boundaryScratch = new Int32Array(3);
 
-  for (let ti = 0; ti < triangles.length; ti++) {
-    const tri = triangles[ti]!;
-    const e0 = edgeOrder(tri.y, tri.z);
-    const e1 = edgeOrder(tri.y, tri.x);
-    const e2 = edgeOrder(tri.z, tri.x);
-    w1.loadFromNumbers([e0, e1, e2]);
-    while (true) {
-      const pivot = w1.pivot();
-      if (pivot < 0) {
-        break; // boundary already a cycle -- no H1 pairing from this triangle
-      }
-      const prev = h1Pivots[pivot]!;
-      if (prev < 0) {
-        h1Pivots[pivot] = ti;
-        w1.storeInto(h1reduced, ti);
-        if (tri.val > edges[pivot]!.val) {
-          h1Pairs.push({ birth: edges[pivot]!.val, death: tri.val, dim: 1 });
-        }
-        break;
-      }
-      const prevCol = h1reduced.get(prev);
-      if (prevCol === null) {
-        break;
-      }
-      w1.xorSparse(prevCol);
-    }
-  }
+  reducePhase({
+    adapter: columnStoreColumnAdapter(w1, h1Pivots, h1reduced),
+    columnValue: (ti) => triangles[ti]!.val,
+    dimension: 1,
+    emitPair: (pair) => h1Pairs.push(pair),
+    end: triangles.length,
+    filtrationOrder: "boundary",
+    loadColumn: (ti) => {
+      const tri = triangles[ti]!;
+      boundaryScratch[0] = edgeOrder(tri.y, tri.z);
+      boundaryScratch[1] = edgeOrder(tri.y, tri.x);
+      boundaryScratch[2] = edgeOrder(tri.z, tri.x);
+      w1.loadFromArray(boundaryScratch);
+    },
+    pivotValue: (ei) => edges[ei]!.val,
+    start: 0,
+    step: 1,
+  });
 
   // Essential (infinite) H1 classes: cycle edges never claimed as a pivot
   // by any triangle -- same convention as computePersistentHomology.
-  for (let ei = 0; ei < edges.length; ei++) {
-    if (cycleEdges[ei] && h1Pivots[ei]! < 0) {
-      h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
-    }
-  }
+  collectEssentialClasses(
+    h1Pivots,
+    cycleEdges,
+    (ei) => edges[ei]!.val,
+    1,
+    (pair) => h1Pairs.push(pair)
+  );
 
   return {
     complex: {

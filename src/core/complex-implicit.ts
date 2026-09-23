@@ -1,38 +1,18 @@
 import { CombinatorialIndex } from "./combinatorial-index.ts";
-import { enclosingRadius } from "./distance.ts";
 import type { Points } from "./distance.ts";
-import { collapseDominatedEdges } from "./edge-collapse.ts";
 import type { EdgeEntry } from "./h0.ts";
-import { selectLandmarks } from "./landmarks.ts";
-import { SpatialGrid } from "./spatial-grid.ts";
-
-const GRID_MIN_N = 700;
-const EDGE_INDEX_DENSE_MAX_N = 1000;
+import { buildRipsSkeleton } from "./rips-skeleton.ts";
 
 export interface ImplicitRipsComplex {
   n: number;
   maxDist: number;
   edges: EdgeEntry[];
   adjBits: Uint32Array[];
-  _edgeVals: Float64Array;
-  _getEdgeIndex: (u: number, v: number) => number;
-  _combinatorialIndex: CombinatorialIndex;
-}
-
-function squaredEuclidean(
-  points: Points,
-  dims: number,
-  i: number,
-  j: number
-): number {
-  const bi = i * dims;
-  const bj = j * dims;
-  let sq = 0;
-  for (let d = 0; d < dims; d++) {
-    const diff = points[bi + d]! - points[bj + d]!;
-    sq += diff * diff;
-  }
-  return sq;
+  edgeValue: (u: number, v: number) => number;
+  triangleRank: (u: number, v: number, w: number) => number;
+  tetrahedronRank: (a: number, b: number, c: number, d: number) => number;
+  triangleValueByRank: (rank: number) => number;
+  tetrahedronValueByRank: (rank: number) => number;
 }
 
 export function buildImplicitRipsComplex(
@@ -41,163 +21,46 @@ export function buildImplicitRipsComplex(
   maxDist: number,
   epsilon?: number
 ): ImplicitRipsComplex {
-  const n = points.length / dims;
-
-  // ── Enclosing-radius cutoff (Ripser default threshold): when maxDist is
-  // unbounded, cap it at min_i max_j d(i,j) — beyond that scale the Rips
-  // complex is a cone, so the barcode is identical and triangle/tetrahedron
-  // enumeration (O(n³)/O(n⁴)) shrinks. Finite thresholds are respected
-  // exactly as requested (callers asserting complex sizes at finite maxDist
-  // must see the full thresholded complex).
-  let effectiveMaxDist = maxDist;
-  if (epsilon === undefined && maxDist > 0 && !Number.isFinite(maxDist)) {
-    const r = enclosingRadius(points, dims);
-    if (r < effectiveMaxDist) {
-      effectiveMaxDist = r;
-    }
-  }
-
-  let perm: Int32Array | null = null;
-  let radii: Float64Array | null = null;
-  let activeCount = n;
-  if (epsilon !== undefined && epsilon > 0 && Number.isFinite(epsilon)) {
-    const lm = selectLandmarks(points, dims, n, n, 0);
-    perm = lm.landmarkIndices;
-    radii = lm.insertionRadii;
-    radii[0] = 0;
-    const threshold = epsilon * maxDist;
-    let inactivePrefix = 0;
-    for (let i = 1; i < n && radii[i]! > threshold; i++) {
-      inactivePrefix++;
-    }
-    activeCount = n - inactivePrefix;
-  }
-
-  const tempEdges: { u: number; v: number; val: number }[] = [];
-  const adj: number[][] = Array.from({ length: n }, () => []);
-
-  const permRank: Int32Array | null = perm ? new Int32Array(n) : null;
-  if (permRank && perm) {
-    permRank.fill(-1);
-    for (let pi = 0; pi < perm.length; pi++) {
-      permRank[perm[pi]!] = pi;
-    }
-  }
-  const isActive = (idx: number): boolean =>
-    permRank === null ? true : permRank[idx]! < activeCount;
-
-  const useGrid =
-    !epsilon &&
-    effectiveMaxDist > 0 &&
-    Number.isFinite(effectiveMaxDist) &&
-    n >= GRID_MIN_N;
-  const grid = useGrid
-    ? new SpatialGrid(points, dims, n, effectiveMaxDist)
-    : null;
-
-  // Squared-distance filter: compare sq <= maxDist² and take ONE sqrt per
-  // KEPT edge. Rejected candidates (the majority in sparse regimes) never
-  // pay for sqrt; sort order on kept vals is unchanged (sqrt is monotone).
-  const maxDistSq = effectiveMaxDist * effectiveMaxDist;
-  for (let i = 0; i < n; i++) {
-    if (!isActive(i)) {
-      continue;
-    }
-    const candidates = grid ? grid.candidatesAfter(points, i) : null;
-    const checkPair = (j: number): void => {
-      if (!isActive(j)) {
-        return;
-      }
-      const sq = squaredEuclidean(points, dims, i, j);
-      if (sq <= maxDistSq) {
-        const d = Math.sqrt(sq);
-        tempEdges.push({ u: i, v: j, val: d });
-        adj[i]!.push(j);
-        adj[j]!.push(i);
-      }
-    };
-    if (candidates) {
-      for (const j of candidates) {
-        checkPair(j);
-      }
-    } else {
-      for (let j = i + 1; j < n; j++) {
-        checkPair(j);
-      }
-    }
-  }
-
-  // Sort by (val, u, v): total order derived from the edge set alone, so
-  // grid and brute-force collection paths feed edge-collapse identical
-  // input.
-  tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
-
-  // Edge-collapse preprocessing (src/core/edge-collapse.ts): shrink the
-  // 1-skeleton to a diagram-equivalent subset. `adj` (built incrementally
-  // above) is rebuilt from the survivors so edgeIndex/adjBits below stay
-  // consistent; coface values derived via triVal/tetVal (max of edge vals)
-  // are unaffected structurally.
-  const edges: EdgeEntry[] = collapseDominatedEdges(
-    n,
-    tempEdges.map((e) => ({ u: e.u, v: e.v, val: e.val }))
-  );
-  for (let i = 0; i < n; i++) {
-    adj[i]!.length = 0;
-  }
-  for (const e of edges) {
-    adj[e.u]!.push(e.v);
-    adj[e.v]!.push(e.u);
-  }
-
-  const edgeIndexDense: Int32Array | null =
-    n < EDGE_INDEX_DENSE_MAX_N ? new Int32Array(n * n).fill(-1) : null;
-  const edgeIndexSparse: Map<number, number> | null = edgeIndexDense
-    ? null
-    : new Map();
-  const setEdgeIndex = (u: number, v: number, idx: number): void => {
-    if (edgeIndexDense) {
-      edgeIndexDense[u * n + v] = idx;
-    } else {
-      edgeIndexSparse!.set(u * n + v, idx);
-    }
-  };
-  const getEdgeIndex = (u: number, v: number): number => {
-    if (edgeIndexDense) {
-      return edgeIndexDense[u * n + v]!;
-    }
-    return edgeIndexSparse!.get(u * n + v)!;
-  };
-
-  const edgeVals = new Float64Array(edges.length);
-  for (let i = 0; i < edges.length; i++) {
-    const e = edges[i]!;
-    setEdgeIndex(e.u, e.v, i);
-    edgeVals[i] = e.val;
-  }
-
-  for (let v = 0; v < n; v++) {
-    adj[v]!.sort((a, b) => a - b);
-  }
-
-  const words = Math.ceil(n / 32);
-  const adjBits: Uint32Array[] = Array.from({ length: n });
-  for (let v = 0; v < n; v++) {
-    const bits = new Uint32Array(words);
-    const nbors = adj[v]!;
-    for (const nb of nbors) {
-      bits[nb >>> 5]! |= 1 << (nb & 31);
-    }
-    adjBits[v] = bits;
-  }
+  const skeleton = buildRipsSkeleton(points, dims, maxDist, {
+    collapseMaxDim: 2,
+    epsilon,
+  });
+  const combinatorialIndex = new CombinatorialIndex(skeleton.n);
+  const triangleValue = (u: number, v: number, w: number): number =>
+    Math.max(
+      skeleton.edgeValue(u, v),
+      skeleton.edgeValue(u, w),
+      skeleton.edgeValue(v, w)
+    );
+  const tetrahedronValue = (
+    a: number,
+    b: number,
+    c: number,
+    d: number
+  ): number =>
+    Math.max(
+      triangleValue(a, b, c),
+      triangleValue(a, b, d),
+      triangleValue(a, c, d),
+      triangleValue(b, c, d)
+    );
 
   return {
-    _combinatorialIndex: new CombinatorialIndex(n),
-    _edgeVals: edgeVals,
-    _getEdgeIndex: getEdgeIndex,
-    adjBits,
-    edges,
-    maxDist: effectiveMaxDist,
-    n,
+    adjBits: skeleton.adjBits,
+    edgeValue: skeleton.edgeValue,
+    edges: skeleton.edges,
+    maxDist: skeleton.maxDist,
+    n: skeleton.n,
+    tetrahedronRank: (a, b, c, d) => combinatorialIndex.rank4(a, b, c, d),
+    tetrahedronValueByRank: (rank) => {
+      const [a, b, c, d] = combinatorialIndex.unrank4(rank);
+      return tetrahedronValue(a, b, c, d);
+    },
+    triangleRank: (u, v, w) => combinatorialIndex.rank(u, v, w),
+    triangleValueByRank: (rank) => {
+      const [u, v, w] = combinatorialIndex.unrank(rank);
+      return triangleValue(u, v, w);
+    },
   };
 }
 
@@ -207,21 +70,18 @@ export function triVal(
   v: number,
   w: number
 ): number {
-  const edgeUV = complex._getEdgeIndex(u, v);
-  const edgeUW = complex._getEdgeIndex(u, w);
-  const edgeVW = complex._getEdgeIndex(v, w);
-  const duv = complex._edgeVals[edgeUV]!;
-  const duw = complex._edgeVals[edgeUW]!;
-  const dvw = complex._edgeVals[edgeVW]!;
-  return Math.max(duv, duw, dvw);
+  return Math.max(
+    complex.edgeValue(u, v),
+    complex.edgeValue(u, w),
+    complex.edgeValue(v, w)
+  );
 }
 
 export function triValByRank(
   complex: ImplicitRipsComplex,
   rank: number
 ): number {
-  const [u, v, w] = complex._combinatorialIndex.unrank(rank);
-  return triVal(complex, u, v, w);
+  return complex.triangleValueByRank(rank);
 }
 
 export function tetVal(
@@ -231,12 +91,12 @@ export function tetVal(
   c: number,
   d: number
 ): number {
-  const dab = complex._edgeVals[complex._getEdgeIndex(a, b)]!;
-  const dac = complex._edgeVals[complex._getEdgeIndex(a, c)]!;
-  const dad = complex._edgeVals[complex._getEdgeIndex(a, d)]!;
-  const dbc = complex._edgeVals[complex._getEdgeIndex(b, c)]!;
-  const dbd = complex._edgeVals[complex._getEdgeIndex(b, d)]!;
-  const dcd = complex._edgeVals[complex._getEdgeIndex(c, d)]!;
+  const dab = complex.edgeValue(a, b);
+  const dac = complex.edgeValue(a, c);
+  const dad = complex.edgeValue(a, d);
+  const dbc = complex.edgeValue(b, c);
+  const dbd = complex.edgeValue(b, d);
+  const dcd = complex.edgeValue(c, d);
   const m1 = dab >= dac ? dab : dac;
   const m2 = dad >= dbc ? dad : dbc;
   const m3 = dbd >= dcd ? dbd : dcd;
@@ -248,8 +108,7 @@ export function tetValByRank(
   complex: ImplicitRipsComplex,
   rank: number
 ): number {
-  const [a, b, c, d] = complex._combinatorialIndex.unrank4(rank);
-  return tetVal(complex, a, b, c, d);
+  return complex.tetrahedronValueByRank(rank);
 }
 
 export function countImplicitTriangles(

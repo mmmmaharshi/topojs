@@ -6,8 +6,10 @@ coverage/
 Thumbs.db
 __pycache__/
 bench/_tmp_*
-docs/
+docs/*
+!docs/agents/
 .agents/
+.claude/
 github-research-output/
 .opencode/
 package-lock.json

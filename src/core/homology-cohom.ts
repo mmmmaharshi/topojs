@@ -3,6 +3,7 @@ import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
+import { columnStoreColumnAdapter, reducePhase } from "./reducer.ts";
 import { DenseWorkingCol, ColumnStore } from "./reduction.ts";
 
 /**
@@ -213,41 +214,24 @@ export function computePersistentHomologyCohomology(
 
   const w = new DenseWorkingCol(triangles.length);
 
-  for (let ei = edges.length - 1; ei >= 0; ei--) {
-    if (!cycleEdges[ei]) {
-      continue;
-    }
-    const start = edgeTriStart[ei]!;
-    const end = edgeTriStart[ei + 1]!;
-    w.loadFromArray(edgeTriListFlipped.subarray(start, end));
-
-    while (true) {
-      const flippedPivot = w.pivot();
-      if (flippedPivot < 0) {
-        h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
-        break;
-      }
-      const pivot = flip(flippedPivot);
-      const owner = triPivotOwner[pivot]!;
-      if (owner < 0) {
-        triPivotOwner[pivot] = ei;
-        w.storeInto(edgeReducedCol, ei);
-        if (triangles[pivot]!.val > edges[ei]!.val) {
-          h1Pairs.push({
-            birth: edges[ei]!.val,
-            death: triangles[pivot]!.val,
-            dim: 1,
-          });
-        }
-        break;
-      }
-      const prevCol = edgeReducedCol.get(owner);
-      if (prevCol === null) {
-        break;
-      }
-      w.xorSparse(prevCol);
-    }
-  }
+  reducePhase({
+    adapter: columnStoreColumnAdapter(w, triPivotOwner, edgeReducedCol),
+    columnValue: (ei) => edges[ei]!.val,
+    dimension: 1,
+    emitPair: (pair) => h1Pairs.push(pair),
+    end: 0,
+    filtrationOrder: "coboundary",
+    loadColumn: (ei) => {
+      const start = edgeTriStart[ei]!;
+      const end = edgeTriStart[ei + 1]!;
+      w.loadFromArray(edgeTriListFlipped.subarray(start, end));
+    },
+    pivotIndex: flip,
+    pivotValue: (pivot) => triangles[pivot]!.val,
+    skipColumn: (ei) => !cycleEdges[ei],
+    start: edges.length - 1,
+    step: -1,
+  });
 
   // ── Phase 3: H2 via cohomology (coboundary) reduction, one dimension up
   // from H1, with cross-dimension CLEARING (triangles already claimed as an
@@ -259,7 +243,7 @@ export function computePersistentHomologyCohomology(
   // every 4-point subset always includes an antipodal pair too far apart to
   // form a tetrahedron), every unclaimed cycle triangle is immediately
   // essential (its coboundary is empty by construction, caught by the
-  // start===end branch below). Gating on tetrahedra.length>0 was tried first
+  // zero-column path below). Gating on tetrahedra.length>0 was tried first
   // and silently dropped exactly this essential-H2 case -- caught via a
   // hand-picked octahedron-vertices differential test, not the random
   // stress sweeps (small random clouds essentially never produce a genuine
@@ -309,46 +293,24 @@ export function computePersistentHomologyCohomology(
 
     const w2 = new DenseWorkingCol(tetrahedra.length);
 
-    for (let ci = triangles.length - 1; ci >= 0; ci--) {
-      if (triPivotOwner[ci]! >= 0) {
-        continue;
-      } // cleared: already an H1 pivot
-      const start = triTetStart[ci]!;
-      const end = triTetStart[ci + 1]!;
-      if (start === end) {
-        // No tetrahedron cofacets at all: essential (infinite) H2 class.
-        h2Pairs.push({ birth: triangles[ci]!.val, death: -1, dim: 2 });
-        continue;
-      }
-      w2.loadFromArray(triTetListFlipped.subarray(start, end));
-
-      while (true) {
-        const flippedPivot = w2.pivot();
-        if (flippedPivot < 0) {
-          h2Pairs.push({ birth: triangles[ci]!.val, death: -1, dim: 2 });
-          break;
-        }
-        const pivot = flip2(flippedPivot);
-        const owner = tetPivotOwner[pivot]!;
-        if (owner < 0) {
-          tetPivotOwner[pivot] = ci;
-          w2.storeInto(triReducedCol, ci);
-          if (tetrahedra[pivot]!.val > triangles[ci]!.val) {
-            h2Pairs.push({
-              birth: triangles[ci]!.val,
-              death: tetrahedra[pivot]!.val,
-              dim: 2,
-            });
-          }
-          break;
-        }
-        const prevCol = triReducedCol.get(owner);
-        if (prevCol === null) {
-          break;
-        }
-        w2.xorSparse(prevCol);
-      }
-    }
+    reducePhase({
+      adapter: columnStoreColumnAdapter(w2, tetPivotOwner, triReducedCol),
+      columnValue: (ci) => triangles[ci]!.val,
+      dimension: 2,
+      emitPair: (pair) => h2Pairs.push(pair),
+      end: 0,
+      filtrationOrder: "coboundary",
+      loadColumn: (ci) => {
+        const start = triTetStart[ci]!;
+        const end = triTetStart[ci + 1]!;
+        w2.loadFromArray(triTetListFlipped.subarray(start, end));
+      },
+      pivotIndex: flip2,
+      pivotValue: (pivot) => tetrahedra[pivot]!.val,
+      skipColumn: (ci) => triPivotOwner[ci]! >= 0,
+      start: triangles.length - 1,
+      step: -1,
+    });
   }
 
   return {

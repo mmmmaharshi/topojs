@@ -3,25 +3,13 @@ import { describe, it, expect } from "vitest";
 
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
-
-/**
- * Canonicalize pairs before comparing: computePersistentHomologyCohomology
- * is an independent code path (reduces edges-as-columns against a triangle
- * coboundary instead of triangles-as-columns against an edge boundary), so
- * pair emission order can legitimately differ even when the resulting
- * barcode (multiset of {dim,birth,death}) is identical. Only the multiset
- * is a meaningful correctness claim.
- */
-function canon(pairs: { dim: number; birth: number; death: number }[]): string {
-  return JSON.stringify(
-    pairs
-      .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted(
-        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
-      )
-  );
-}
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import {
+  mulberry32,
+  circlePoints,
+  generatePoints,
+  samePersistencePairs,
+} from "./helpers.ts";
 
 function checkMatches(
   points: Float64Array,
@@ -36,11 +24,15 @@ function checkMatches(
     maxDist,
     maxDim
   );
+  const expectedPairs =
+    points.length / dims <= 12
+      ? referenceRipsBarcode(points, dims, maxDist, maxDim === 3 ? 2 : 1)
+      : expected.pairs;
   expect(actual.complex).toStrictEqual(expected.complex);
-  expect(canon(actual.pairs)).toBe(canon(expected.pairs));
+  expect(samePersistencePairs(actual.pairs, expectedPairs)).toBeTruthy();
 }
 
-describe("computePersistentHomologyCohomology (cohomology direction) vs. computePersistentHomology (ground truth)", () => {
+describe("computePersistentHomologyCohomology (cohomology direction) vs. independent reference and production fallback", () => {
   it("matches on random point clouds across many seeds and densities", () => {
     // Bumped from 10 to 40 seeds -- see the identical note in
     // test/homology-fast.test.ts. src/index.ts's docstring for THIS engine
@@ -178,7 +170,7 @@ describe("computePersistentHomologyCohomology (cohomology direction) vs. compute
       const expected = computePersistentHomology(pts, 3, maxDist, 3);
       const actual = computePersistentHomologyCohomology(pts, 3, maxDist, 3);
       expect(expected.complex.numTetrahedra).toBe(0); // sanity: this IS the zero-tetrahedra case
-      expect(canon(actual.pairs)).toBe(canon(expected.pairs));
+      expect(samePersistencePairs(actual.pairs, expected.pairs)).toBeTruthy();
       const b2 = actual.pairs.filter(
         (p) => p.dim === 2 && p.death === -1
       ).length;

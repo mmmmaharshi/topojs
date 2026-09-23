@@ -49,8 +49,6 @@
 
 import {
   buildImplicitRipsComplex,
-  triValByRank,
-  tetValByRank,
   countImplicitTriangles,
 } from "./complex-implicit.ts";
 import type { ImplicitRipsComplex } from "./complex-implicit.ts";
@@ -58,6 +56,7 @@ import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import { HeapColumn } from "./heap-column.ts";
+import { toEngineMaxDim, validateMaxDim } from "./homology-scope.ts";
 import type { HomologyResult } from "./homology.ts";
 import { ColumnStore } from "./reduction.ts";
 
@@ -67,9 +66,10 @@ export function computePersistentHomologyImplicit(
   maxDist = Infinity,
   maxDim = 2
 ): HomologyResult {
+  validateMaxDim(maxDim, "computePersistentHomologyImplicit");
   return computePersistentHomologyImplicitFromComplex(
     buildImplicitRipsComplex(points, dims, maxDist),
-    maxDim
+    toEngineMaxDim(maxDim)
   );
 }
 
@@ -81,11 +81,10 @@ export function computePersistentHomologyImplicitFromComplex(
 
   const { h0Pairs, cycleEdges } = computeH0Phase(n, edges);
 
-  const { h1Pairs, triPivotOwner } = computeH1ImplicitAndPivots(
-    complex,
-    edges,
-    cycleEdges
-  );
+  const { h1Pairs, triPivotOwner } =
+    maxDim >= 2
+      ? computeH1ImplicitAndPivots(complex, edges, cycleEdges)
+      : { h1Pairs: [], triPivotOwner: new Map<number, number>() };
 
   let h2Pairs: PersistencePair[] = [];
   if (maxDim >= 3) {
@@ -110,21 +109,13 @@ function computeH1ImplicitAndPivots(
   edges: { u: number; v: number; val: number }[],
   cycleEdges: Uint8Array
 ): { h1Pairs: PersistencePair[]; triPivotOwner: Map<number, number> } {
-  const {
-    adjBits,
-    n,
-    _edgeVals: edgeVals,
-    _getEdgeIndex: getEdgeIndex,
-  } = complex;
+  const { adjBits, edgeValue, n, triangleRank, triangleValueByRank } = complex;
   const h1Pairs: PersistencePair[] = [];
   const words = Math.ceil(n / 32);
 
   const triPivotOwner = new Map<number, number>();
   const edgeReducedCol = new ColumnStore(edges.length);
-  const w = new HeapColumn(
-    (rank: number) => triValByRank(complex, rank),
-    "min"
-  );
+  const w = new HeapColumn((rank: number) => triangleValueByRank(rank), "min");
 
   for (let ei = edges.length - 1; ei >= 0; ei--) {
     if (!cycleEdges[ei]) {
@@ -170,10 +161,10 @@ function computeH1ImplicitAndPivots(
           c = k;
         }
 
-        const rank = complex._combinatorialIndex.rank(a, b, c);
+        const rank = triangleRank(a, b, c);
         coboundary.push(rank);
-        const euk = edgeVals[getEdgeIndex(u < k ? u : k, u < k ? k : u)]!;
-        const evk = edgeVals[getEdgeIndex(v < k ? v : k, v < k ? k : v)]!;
+        const euk = edgeValue(u, k);
+        const evk = edgeValue(v, k);
         const tv = Math.max(ev, euk, evk);
         if (tv < minTriVal) {
           minTriVal = tv;
@@ -224,7 +215,7 @@ function computeH1ImplicitAndPivots(
       if (owner === undefined) {
         triPivotOwner.set(pivotRank, ei);
         w.storeInto(edgeReducedCol, ei);
-        const pv = triValByRank(complex, pivotRank);
+        const pv = triangleValueByRank(pivotRank);
         if (pv > edges[ei]!.val) {
           h1Pairs.push({
             birth: edges[ei]!.val,
@@ -251,11 +242,12 @@ function computeH2Implicit(
 ): PersistencePair[] {
   const {
     adjBits,
-    n,
+    edgeValue,
     edges,
-    _edgeVals: edgeVals,
-    _getEdgeIndex: getEdgeIndex,
-    _combinatorialIndex: ci,
+    n,
+    tetrahedronRank,
+    triangleRank,
+    tetrahedronValueByRank,
   } = complex;
   const words = Math.ceil(n / 32);
   const h2Pairs: PersistencePair[] = [];
@@ -263,7 +255,7 @@ function computeH2Implicit(
   const tetPivotOwner = new Map<number, number>();
   const triReducedCol = new Map<number, Int32Array>();
   const w2 = new HeapColumn(
-    (rank: number) => tetValByRank(complex, rank),
+    (rank: number) => tetrahedronValueByRank(rank),
     "min"
   );
 
@@ -299,9 +291,9 @@ function computeH2Implicit(
           pos = 0;
         }
 
-        const dab = edgeVals[complex._getEdgeIndex(a, b)]!;
-        const dac = edgeVals[complex._getEdgeIndex(a, c)]!;
-        const dbc = edgeVals[complex._getEdgeIndex(b, c)]!;
+        const dab = edgeValue(a, b);
+        const dac = edgeValue(a, c);
+        const dbc = edgeValue(b, c);
 
         let isCanonical: boolean;
         if (pos === 0) {
@@ -315,7 +307,7 @@ function computeH2Implicit(
           continue;
         }
 
-        const triRank = ci.rank(a, b, c);
+        const triRank = triangleRank(a, b, c);
         if (triPivotOwner.has(triRank)) {
           continue;
         }
@@ -361,11 +353,11 @@ function computeH2Implicit(
               r = c;
               s = x;
             }
-            const tetRank = ci.rank4(p, q, r, s);
+            const tetRank = tetrahedronRank(p, q, r, s);
             coboundary.push(tetRank);
-            const exa = edgeVals[getEdgeIndex(x < a ? x : a, x < a ? a : x)]!;
-            const exb = edgeVals[getEdgeIndex(x < b ? x : b, x < b ? b : x)]!;
-            const exc = edgeVals[getEdgeIndex(x < c ? x : c, x < c ? c : x)]!;
+            const exa = edgeValue(x, a);
+            const exb = edgeValue(x, b);
+            const exc = edgeValue(x, c);
             const xv = Math.max(triVal, exa, exb, exc);
             if (xv < minTetVal) {
               minTetVal = xv;
@@ -408,7 +400,7 @@ function computeH2Implicit(
           const ownerTriRank = tetPivotOwner.get(pivotRank);
           if (ownerTriRank === undefined) {
             tetPivotOwner.set(pivotRank, triRank);
-            const tetVal = tetValByRank(complex, pivotRank);
+            const tetVal = tetrahedronValueByRank(pivotRank);
             const sparse = w2.toSparse();
             triReducedCol.set(triRank, sparse);
             if (tetVal > edgeVal) {

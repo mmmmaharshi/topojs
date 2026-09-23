@@ -8,17 +8,13 @@ import {
 } from "../src/core/homology-cohom-implicit.ts";
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
-
-function canon(pairs: { dim: number; birth: number; death: number }[]): string {
-  return JSON.stringify(
-    pairs
-      .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted(
-        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
-      )
-  );
-}
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import {
+  mulberry32,
+  circlePoints,
+  generatePoints,
+  samePersistencePairs,
+} from "./helpers.ts";
 
 function checkMatchesExact(
   points: Float64Array,
@@ -33,7 +29,11 @@ function checkMatchesExact(
     maxDist,
     maxDim
   );
-  expect(canon(actual.pairs)).toBe(canon(expected.pairs));
+  const expectedPairs =
+    points.length / dims <= 12
+      ? referenceRipsBarcode(points, dims, maxDist, maxDim === 3 ? 2 : 1)
+      : expected.pairs;
+  expect(samePersistencePairs(actual.pairs, expectedPairs)).toBeTruthy();
 }
 
 // The cohomology engine with implicit matrix should produce the same barcode
@@ -58,10 +58,10 @@ function checkMatchesImplicitVsExplicit(
     maxDim
   );
   expect(implicit.complex).toStrictEqual(explicit.complex);
-  expect(canon(implicit.pairs)).toBe(canon(explicit.pairs));
+  expect(samePersistencePairs(implicit.pairs, explicit.pairs)).toBeTruthy();
 }
 
-describe("computePersistentHomologyCohomologyImplicit (implicit matrix) vs. computePersistentHomology (ground truth)", () => {
+describe("computePersistentHomologyCohomologyImplicit (implicit matrix) vs. independent reference and production fallback", () => {
   it("matches on random point clouds across many seeds and densities", () => {
     for (let seed = 1; seed <= 40; seed++) {
       const rng = mulberry32(seed);
@@ -256,7 +256,9 @@ describe("computePersistentHomologyCohomologyFromComplex (with pre-built complex
       0.5,
       3
     );
-    expect(canon(fromComplex.pairs)).toBe(canon(implicit.pairs));
+    expect(
+      samePersistencePairs(fromComplex.pairs, implicit.pairs)
+    ).toBeTruthy();
   });
 });
 
@@ -332,6 +334,6 @@ describe("Sheehy sparse Rips (epsilon parameter on buildRipsComplex)", () => {
       sparseComplex,
       2
     );
-    expect(canon(sparse.pairs)).toBe(canon(exact.pairs));
+    expect(samePersistencePairs(sparse.pairs, exact.pairs)).toBeTruthy();
   });
 });

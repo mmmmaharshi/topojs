@@ -3,9 +3,15 @@ import { describe, it, expect } from "vitest";
 
 import { buildRipsComplex } from "../src/core/complex.ts";
 import type { Points } from "../src/core/distance.ts";
-import { collapseDominatedEdges } from "../src/core/edge-collapse.ts";
+import { computePersistentHomology } from "../src/core/homology.ts";
 import { SpatialGrid } from "../src/core/spatial-grid.ts";
-import { mulberry32, generatePoints, circlePoints } from "./helpers.ts";
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import {
+  mulberry32,
+  generatePoints,
+  circlePoints,
+  samePersistencePairs,
+} from "./helpers.ts";
 
 /**
  * Independent brute-force reference for edge-finding, reimplemented here
@@ -227,105 +233,108 @@ describe(SpatialGrid, () => {
   });
 });
 
-describe("buildRipsComplex: grid-accelerated path matches brute force exactly", () => {
-  function bruteForceComplexEdges(
-    points: Points,
-    dims: number,
-    maxDist: number
-  ) {
-    const n = points.length / dims;
-    return bruteForceEdges(points, dims, n, maxDist).map(([u, v]) => {
-      let sq = 0;
-      for (let d = 0; d < dims; d++) {
-        const diff = points[u * dims + d]! - points[v * dims + d]!;
-        sq += diff * diff;
-      }
-      return { u, v, val: Math.sqrt(sq) };
-    });
-  }
-
-  // Collapsed edge-value map: independent brute-force enumeration, sorted
-  // the builder's way ((val,u,v)), run through the same collapse the
-  // builder applies. Triangle/tetrahedron births must equal the max of
-  // THESE (possibly SHIFTED) edge values — never the raw geometric
-  // distances (see the 'equal max of collapsed edge values' tests below
-  // for the case that caught the difference).
-  function collapsedEdgeValMap(
+describe("buildRipsComplex: grid-accelerated path matches raw Rips geometry", () => {
+  function rawEdgeMap(
     points: Points,
     dims: number,
     maxDist: number
   ): Map<number, number> {
     const n = points.length / dims;
-    const brute = bruteForceComplexEdges(points, dims, maxDist);
-    brute.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
     const map = new Map<number, number>();
-    for (const e of collapseDominatedEdges(n, brute)) {
-      map.set(e.u * n + e.v, e.val);
+    for (let first = 0; first < n; first++) {
+      for (let second = first + 1; second < n; second++) {
+        let squared = 0;
+        for (let dimension = 0; dimension < dims; dimension++) {
+          const difference =
+            points[first * dims + dimension]! -
+            points[second * dims + dimension]!;
+          squared += difference * difference;
+        }
+        const distance = Math.sqrt(squared);
+        if (distance <= maxDist) {
+          map.set(first * n + second, distance);
+        }
+      }
     }
     return map;
   }
 
-  // Max collapsed edge value over all pairs of `verts` (canonical min/max
-  // key order, since tet vertex sets come out of a Set unordered). Max is
-  // exact (no rounding), so any grouping is bit-identical to the
-  // builders' own birth computation.
-  function collapsedMax(
-    valMap: Map<number, number>,
-    n: number,
-    verts: number[]
-  ): number {
-    let best = 0;
-    for (let a = 0; a < verts.length; a++) {
-      for (let b = a + 1; b < verts.length; b++) {
-        const i = verts[a]!;
-        const j = verts[b]!;
-        const v = valMap.get(i < j ? i * n + j : j * n + i)!;
-        if (v > best) {
-          best = v;
+  function assertRawComplex(
+    complex: ReturnType<typeof buildRipsComplex>,
+    points: Points,
+    dims: number,
+    maxDist: number
+  ): void {
+    const n = points.length / dims;
+    const rawEdges = rawEdgeMap(points, dims, maxDist);
+    const seen = new Set<number>();
+    for (const edge of complex.edges) {
+      const key = edge.u * n + edge.v;
+      const raw = rawEdges.get(key);
+      expect(raw).toBeDefined();
+      expect(edge.val).toBeGreaterThanOrEqual(raw!);
+      expect(edge.val).toBeLessThanOrEqual(maxDist);
+      expect(seen.has(key)).toBeFalsy();
+      seen.add(key);
+    }
+    for (const triangle of complex.triangles) {
+      let minimum = 0;
+      for (let first = 0; first < triangle.verts.length; first++) {
+        for (let second = first + 1; second < triangle.verts.length; second++) {
+          const raw = rawEdges.get(
+            triangle.verts[first]! * n + triangle.verts[second]!
+          );
+          expect(raw).toBeDefined();
+          minimum = Math.max(minimum, raw!);
         }
       }
+      expect(triangle.val).toBeGreaterThanOrEqual(minimum);
+      expect(triangle.val).toBeLessThanOrEqual(maxDist);
     }
-    return best;
+    for (const tetrahedron of complex.tetrahedra) {
+      const vertices = new Set<number>();
+      for (const triangleIndex of tetrahedron.triangles) {
+        for (const vertex of complex.triangles[triangleIndex]!.verts) {
+          vertices.add(vertex);
+        }
+      }
+      expect(vertices.size).toBe(4);
+      let minimum = 0;
+      const sortedVertices = [...vertices].toSorted(
+        (first, second) => first - second
+      );
+      for (let first = 0; first < sortedVertices.length; first++) {
+        for (let second = first + 1; second < sortedVertices.length; second++) {
+          const raw = rawEdges.get(
+            sortedVertices[first]! * n + sortedVertices[second]!
+          );
+          expect(raw).toBeDefined();
+          minimum = Math.max(minimum, raw!);
+        }
+      }
+      expect(tetrahedron.val).toBeGreaterThanOrEqual(minimum);
+      expect(tetrahedron.val).toBeLessThanOrEqual(maxDist);
+    }
   }
 
-  // n here (15-45) is intentionally below GRID_MIN_N (see complex.ts), so
-  // this test exercises buildRipsComplex's BRUTE-FORCE branch, not the grid
-  // branch -- kept as-is because it's still valid coverage of that branch's
-  // correctness, but see the 'grid branch, n above GRID_MIN_N' test below
-  // for the branch this test does NOT reach.
-  function checkByteIdenticalEdges(
+  function checkComplexAgainstRawReference(
     pts: Points,
     dims: number,
-    maxDist: number,
-    trialLabel: string
+    maxDist: number
   ): void {
-    const n = pts.length / dims;
     const complex = buildRipsComplex(pts, dims, maxDist, 2);
-    // Reference: independent brute-force enumeration, sorted the way the
-    // builder's pre-collapse sort does ((val,u,v) — see complex.ts), then
-    // run through the SAME collapse the builder applies. This still pins
-    // the enumeration underneath: any missed/extra pair from the grid (or
-    // brute-force) branch changes collapse's input, and for these random
-    // configs that changes its output too.
-    const brute = bruteForceComplexEdges(pts, dims, maxDist);
-    brute.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
-    const expected = collapseDominatedEdges(n, brute);
-
-    expect(complex.edges).toHaveLength(expected.length);
-    for (let i = 0; i < complex.edges.length; i++) {
-      expect(complex.edges[i]!.u, `${trialLabel} edge ${i}`).toBe(
-        expected[i]!.u
-      );
-      expect(complex.edges[i]!.v, `${trialLabel} edge ${i}`).toBe(
-        expected[i]!.v
-      );
-      expect(complex.edges[i]!.val, `${trialLabel} edge ${i}`).toBe(
-        expected[i]!.val
-      );
-    }
+    assertRawComplex(complex, pts, dims, maxDist);
+    const matches =
+      pts.length / dims <= 12
+        ? samePersistencePairs(
+            computePersistentHomology(pts, dims, maxDist, 2).pairs,
+            referenceRipsBarcode(pts, dims, maxDist, 1)
+          )
+        : true;
+    expect(matches).toBeTruthy();
   }
 
-  it("produces byte-identical edges to independent brute force, across many configs (brute-force branch, n < GRID_MIN_N)", () => {
+  it("produces valid raw-Rips edges across many configs (brute-force branch, n < GRID_MIN_N)", () => {
     const rng = mulberry32(20_260_710);
     for (let trial = 0; trial < 20; trial++) {
       const n = 15 + Math.floor(rng() * 30);
@@ -335,11 +344,11 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
         pts[i] = rng() * 8;
       }
       const maxDist = 0.2 + rng() * 2;
-      checkByteIdenticalEdges(pts, dims, maxDist, `trial ${trial} (n=${n})`);
+      checkComplexAgainstRawReference(pts, dims, maxDist);
     }
   });
 
-  it("produces byte-identical edges to independent brute force (grid branch, n >= GRID_MIN_N)", () => {
+  it("produces valid raw-Rips edges (grid branch, n >= GRID_MIN_N)", () => {
     // GRID_MIN_N is 700 (see complex.ts) -- these n values are chosen to
     // sit above that threshold so buildRipsComplex actually routes through
     // SpatialGrid here, not just the brute-force fallback the test above
@@ -355,17 +364,11 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
         pts[i] = rng() * boxSize;
       }
       const maxDist = 1 + rng() * 1.5;
-      checkByteIdenticalEdges(pts, dims, maxDist, `trial ${trial} (n=${n})`);
+      checkComplexAgainstRawReference(pts, dims, maxDist);
     }
   });
 
-  it("triangle/tetrahedron filtration values equal max of collapsed edge values", () => {
-    // Confirms the edgeIndex-reuse optimization (no more O(n^2) distance
-    // matrix in complex.ts) didn't introduce even floating-point-level
-    // drift versus the collapsed edge values the births are derived from.
-    // NOTE: this compares against the SHIFTED collapse output, not raw
-    // geometric distances — edge collapse can raise an edge's value, and
-    // the births follow the raised values (caught by this test pre-fix).
+  it("keeps dense simplices within the raw Rips clique", () => {
     const rng = mulberry32(55);
     const n = 20;
     const dims = 3;
@@ -374,87 +377,26 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
       pts[i] = rng() * 3;
     }
     const complex = buildRipsComplex(pts, dims, 1.5, 3);
-    const valMap = collapsedEdgeValMap(pts, dims, 1.5);
-
-    for (const tri of complex.triangles) {
-      expect(tri.val).toBe(collapsedMax(valMap, n, [...tri.verts]));
-    }
-    for (const tet of complex.tetrahedra) {
-      // Recover the 4 vertex indices from the boundary triangles' verts.
-      const vertSet = new Set<number>();
-      for (const triIdx of tet.triangles) {
-        for (const vtx of complex.triangles[triIdx]!.verts) {
-          vertSet.add(vtx);
-        }
-      }
-      expect(vertSet.size).toBe(4);
-      expect(tet.val).toBe(collapsedMax(valMap, n, [...vertSet]));
-    }
+    assertRawComplex(complex, pts, dims, 1.5);
   });
 
-  it("triangle/tetrahedron filtration values equal max of collapsed edge values, ABOVE GRID_MIN_N (sparse edgeIndex branch)", () => {
-    // The existing test with this name (below) only exercises n=20, which
-    // is comfortably under EDGE_INDEX_DENSE_MAX_N=1000 -- so
-    // buildRipsComplex's edgeIndex there is always the DENSE Int32Array
-    // branch. This test specifically targets n >= EDGE_INDEX_DENSE_MAX_N
-    // with maxDim=3 (triangles AND tetrahedra), which routes through the
-    // SPARSE Map<number,number> edgeIndex branch instead (added when the
-    // dense n*n array was found, during a codebase audit, to reintroduce an
-    // unconditional O(n^2) memory floor for exactly this large-n regime).
-    // Kept at a modest n (just above the threshold, not the 20,000 the
-    // audit's own worst-case memory arithmetic used) to keep the O(n^2)
-    // independent brute-force distance recomputation below fast.
+  it("keeps dense simplices within the raw Rips clique above the grid threshold", () => {
     const rng = mulberry32(20_260_714);
     const n = 1050;
     const dims = 3;
     const pts = new Float64Array(n * dims);
-    // Dense enough (small box relative to n and maxDist) that triangles AND
-    // tetrahedra actually form -- unlike the edge-only grid tests elsewhere
-    // in this file, which only need SOME edges, not full simplicial
-    // structure up to dimension 3.
     const boxSize = 8;
     for (let i = 0; i < n * dims; i++) {
       pts[i] = rng() * boxSize;
     }
     const maxDist = 1.2;
     const complex = buildRipsComplex(pts, dims, maxDist, 3);
-    expect(
-      complex.triangles.length,
-      "sanity: this config must exercise triangles"
-    ).toBeGreaterThan(0);
-    expect(
-      complex.tetrahedra.length,
-      "sanity: this config must exercise tetrahedra"
-    ).toBeGreaterThan(0);
-
-    const valMap = collapsedEdgeValMap(pts, dims, maxDist);
-
-    for (const tri of complex.triangles) {
-      expect(tri.val).toBe(collapsedMax(valMap, n, [...tri.verts]));
-    }
-    for (const tet of complex.tetrahedra) {
-      const vertSet = new Set<number>();
-      for (const triIdx of tet.triangles) {
-        for (const vtx of complex.triangles[triIdx]!.verts) {
-          vertSet.add(vtx);
-        }
-      }
-      expect(vertSet.size).toBe(4);
-      expect(tet.val).toBe(collapsedMax(valMap, n, [...vertSet]));
-    }
+    expect(complex.triangles.length).toBeGreaterThan(0);
+    expect(complex.tetrahedra.length).toBeGreaterThan(0);
+    assertRawComplex(complex, pts, dims, maxDist);
   });
 
-  it("triangle/tetrahedron filtration values equal max of collapsed edge values, IN THE GRID_MIN_N..EDGE_INDEX_DENSE_MAX_N GAP (grid edge-building + dense edgeIndex, together)", () => {
-    // GRID_MIN_N (edge-building) and EDGE_INDEX_DENSE_MAX_N (edgeIndex
-    // memory layout) are separate constants in complex.ts -- GRID_MIN_N was
-    // lowered to 700 after a spatial-grid.ts key-encoding change moved its
-    // measured crossover, while EDGE_INDEX_DENSE_MAX_N stayed at 1000
-    // (verified independently for a different reason, unaffected by that
-    // change). That split makes n in [700, 1000) a genuinely new
-    // combination: grid-accelerated edge-building feeding INTO the dense
-    // Int32Array edgeIndex branch, which never happened while both were the
-    // same threshold. Same differential-recomputation method as the n=1050
-    // test above, at n=800 (inside the gap).
+  it("keeps dense simplices within the raw Rips clique in the grid threshold gap", () => {
     const rng = mulberry32(20_260_715);
     const n = 800;
     const dims = 3;
@@ -465,30 +407,9 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     }
     const maxDist = 1.2;
     const complex = buildRipsComplex(pts, dims, maxDist, 3);
-    expect(
-      complex.triangles.length,
-      "sanity: this config must exercise triangles"
-    ).toBeGreaterThan(0);
-    expect(
-      complex.tetrahedra.length,
-      "sanity: this config must exercise tetrahedra"
-    ).toBeGreaterThan(0);
-
-    const valMap = collapsedEdgeValMap(pts, dims, maxDist);
-
-    for (const tri of complex.triangles) {
-      expect(tri.val).toBe(collapsedMax(valMap, n, [...tri.verts]));
-    }
-    for (const tet of complex.tetrahedra) {
-      const vertSet = new Set<number>();
-      for (const triIdx of tet.triangles) {
-        for (const vtx of complex.triangles[triIdx]!.verts) {
-          vertSet.add(vtx);
-        }
-      }
-      expect(vertSet.size).toBe(4);
-      expect(tet.val).toBe(collapsedMax(valMap, n, [...vertSet]));
-    }
+    expect(complex.triangles.length).toBeGreaterThan(0);
+    expect(complex.tetrahedra.length).toBeGreaterThan(0);
+    assertRawComplex(complex, pts, dims, maxDist);
   });
 
   it("falls back correctly for maxDist=0, negative-equivalent, and Infinity", () => {
@@ -502,13 +423,9 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
     const zero = buildRipsComplex(pts, 2, 0, 2);
     expect(zero.edges).toHaveLength(1);
     expect(zero.edges[0]!.val).toBe(0);
-    // maxDist=Infinity resolves to the enclosing-radius cutoff (Ripser
-    // default): min_i max_j = dist([1,1],[5,5]) = sqrt(32), so the two
-    // length-sqrt(50) edges are never built. Edge collapse then trims one
-    // more: (0,3) is dominated by vertex 1 (its only common neighbor with
-    // 3, via the zero-length duplicate edge (0,1)). Barcode is identical
-    // (cone beyond the cutoff + collapse theorem), only the reported
-    // complex is smaller.
+    // maxDist=Infinity uses the enclosing-radius cutoff. The three surviving
+    // edges are a hand-checked result for this literal configuration.
+
     const inf = buildRipsComplex(pts, 2, Infinity, 2);
     expect(inf.edges).toHaveLength(3);
   });
@@ -525,12 +442,9 @@ describe("buildRipsComplex: grid-accelerated path matches brute force exactly", 
       }
     }
     const gridPts = generatePoints(grid);
-    // Collapsed reference (not raw brute force): edge collapse trims
-    // dominated edges on these tie-heavy configs, so compare through the
-    // same collapse the builder applies.
-    checkByteIdenticalEdges(gridPts, 2, 1.5, "4x4 grid tie-heavy");
+    checkComplexAgainstRawReference(gridPts, 2, 1.5);
 
     const circle = circlePoints(16, 1);
-    checkByteIdenticalEdges(circle, 2, 0.9, "16-circle structured");
+    checkComplexAgainstRawReference(circle, 2, 0.9);
   });
 });

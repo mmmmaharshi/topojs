@@ -15,8 +15,6 @@
 // of leaving that as an unmeasured docstring claim).
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
-import { computePersistentHomologyImplicit } from "../src/core/homology-implicit.ts";
 import { computePersistentHomology } from "../src/index.ts";
 
 const csvPath = process.argv[2]!;
@@ -38,18 +36,33 @@ lines.forEach((line, i) => {
   }
 });
 
-let compute: typeof computePersistentHomology;
 let engine: string;
 if (engineArg === "cohom") {
-  compute = computePersistentHomologyCohomology;
   engine = "cohom";
 } else if (engineArg === "impl") {
-  compute = computePersistentHomologyImplicit;
   engine = "impl";
 } else {
-  compute = computePersistentHomology;
   engine = "plain";
 }
+let selectedEngine: "cohomology" | "implicit-full" | "standard";
+if (engine === "cohom") {
+  selectedEngine = "cohomology";
+} else if (engine === "impl") {
+  selectedEngine = "implicit-full";
+} else {
+  selectedEngine = "standard";
+}
+const compute = (
+  points: Float64Array,
+  pointDims: number,
+  pointMaxDist: number,
+  pointMaxDim: number
+) =>
+  computePersistentHomology(points, pointDims, {
+    engine: selectedEngine,
+    maxDim: pointMaxDim,
+    maxDist: pointMaxDist,
+  });
 const t0 = performance.now();
 const result = compute(flat, dims, maxDist, maxDim);
 const ms = performance.now() - t0;

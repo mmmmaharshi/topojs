@@ -155,12 +155,11 @@ def time_only_rerun(name: str, engine: str, points: np.ndarray, max_dist: float,
     csv_path = TMPDIR / f"{name}_{engine}_rerun.csv"
     out_path = TMPDIR / f"{name}_{engine}_rerun_result.json"
     np.savetxt(csv_path, points, fmt="%.10f")
-    topojs_max_dim = max_dim + 1 if max_dim >= 2 else max_dim
     subprocess.run(
         [
             "node", "--experimental-strip-types",
             str(HERE / "export_topojs_diagram.ts"),
-            str(csv_path), "2", str(max_dist), str(topojs_max_dim), str(out_path), engine,
+            str(csv_path), "2", str(max_dist), str(max_dim), str(out_path), engine,
         ],
         check=True, capture_output=True, text=True,
     )
@@ -190,20 +189,11 @@ def run_topojs_engine(name: str, engine: str, points: np.ndarray, max_dist: floa
     csv_path = TMPDIR / f"{name}_{engine}.csv"
     out_path = TMPDIR / f"{name}_{engine}_result.json"
     np.savetxt(csv_path, points, fmt="%.10f")
-    # NOTE on convention mismatch: ripser's `maxdim` is the highest HOMOLOGY
-    # dimension to compute (2 = H0+H1+H2). topojs's engines' `maxDim` is the
-    # highest SIMPLEX dimension to construct -- per their docstrings, maxDim=1
-    # and maxDim=2 both mean "H0+H1 only"; you must pass maxDim=3 (tetrahedra)
-    # to get H2 at all. This tripped up the first run of this script (saw a
-    # real-looking "topojs missed an H2 class" mismatch that was actually
-    # just this off-by-one in API convention, not an algorithm bug) --
-    # documented here so it isn't silently "fixed" by coincidence again.
-    topojs_max_dim = max_dim + 1 if max_dim >= 2 else max_dim
     subprocess.run(
         [
             "node", "--experimental-strip-types",
             str(HERE / "export_topojs_diagram.ts"),
-            str(csv_path), "2", str(max_dist), str(topojs_max_dim), str(out_path), engine,
+            str(csv_path), "2", str(max_dist), str(max_dim), str(out_path), engine,
         ],
         check=True, capture_output=True, text=True,
     )
@@ -361,9 +351,7 @@ def main():
         return run_case(name, points, max_dist, max_dim, trials=trials)
 
     # Small case, H0+H1+H2: same order of magnitude as the streaming
-    # benchmarks' window sizes. topojs's plain computePersistentHomology
-    # needs maxDim=3 (tetrahedra construction) to compute H2 at all -- see
-    # the conversion note in run_topojs_engine().
+    # benchmarks' window sizes.
     all_results += maybe_run("sunspots_n60", sunspots[:60], 0.15, 2)
     all_results += maybe_run("melbourne_n60", melbourne[:60], 0.15, 2)
 

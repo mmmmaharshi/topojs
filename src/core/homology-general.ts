@@ -3,6 +3,11 @@ import type { GeneralSimplexEntry } from "./complex-general.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
+import {
+  collectEssentialClasses,
+  denseColumnAdapter,
+  reducePhase,
+} from "./reducer.ts";
 import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of {@link computePersistentHomologyGeneral}. */
@@ -122,39 +127,26 @@ export function computePersistentHomologyGeneral(
     const nextNullspace = new Uint8Array(columns.length);
     const w = new DenseWorkingCol(pivotLen);
 
-    for (let ci = 0; ci < columns.length; ci++) {
-      const col = columns[ci]!;
-      w.loadFromArray(col.faces);
-      while (true) {
-        const pivot = w.pivot();
-        if (pivot < 0) {
-          reduced[ci] = new Int32Array(0);
-          nextNullspace[ci] = 1;
-          break;
-        }
-        const prev = pivots[pivot]!;
-        if (prev < 0) {
-          pivots[pivot] = ci;
-          reduced[ci] = w.toSparse();
-          const pivotVal = levelVal(j, pivot);
-          if (col.val > pivotVal) {
-            allPairs.push({ birth: pivotVal, death: col.val, dim: j });
-          }
-          break;
-        }
-        const prevCol = reduced[prev];
-        if (prevCol === null || prevCol === undefined) {
-          break;
-        }
-        w.xorSparse(prevCol);
-      }
-    }
-
-    for (let p = 0; p < pivotLen; p++) {
-      if (nullspace[p] && pivots[p]! < 0) {
-        allPairs.push({ birth: levelVal(j, p), death: -1, dim: j });
-      }
-    }
+    reducePhase({
+      adapter: denseColumnAdapter(w, pivots, reduced),
+      columnValue: (ci) => columns[ci]!.val,
+      dimension: j,
+      emitPair: (pair) => allPairs.push(pair),
+      end: columns.length,
+      filtrationOrder: "boundary",
+      loadColumn: (ci) => w.loadFromArray(columns[ci]!.faces),
+      nullspace: nextNullspace,
+      pivotValue: (pivot) => levelVal(j, pivot),
+      start: 0,
+      step: 1,
+    });
+    collectEssentialClasses(
+      pivots,
+      nullspace,
+      (pivot) => levelVal(j, pivot),
+      j,
+      (pair) => allPairs.push(pair)
+    );
 
     nullspace = nextNullspace;
   }

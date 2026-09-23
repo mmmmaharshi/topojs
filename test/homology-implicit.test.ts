@@ -2,33 +2,8 @@ import { describe, it, expect } from "vitest";
 
 import { computePersistentHomologyCohomology } from "../src/core/homology-cohom.ts";
 import { computePersistentHomologyImplicit } from "../src/core/homology-implicit.ts";
-import { mulberry32 } from "./helpers.ts";
-
-function randomPoints(
-  rng: () => number,
-  n: number,
-  dims: number
-): Float64Array {
-  const pts = new Float64Array(n * dims);
-  for (let i = 0; i < n * dims; i++) {
-    pts[i] = rng() * 10;
-  }
-  return pts;
-}
-
-function sortPairs(
-  pairs: { birth: number; death: number; dim: number }[]
-): { birth: number; death: number; dim: number }[] {
-  return [...pairs].toSorted((a, b) => {
-    if (a.dim !== b.dim) {
-      return a.dim - b.dim;
-    }
-    if (a.birth !== b.birth) {
-      return a.birth - b.birth;
-    }
-    return a.death - b.death;
-  });
-}
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import { mulberry32, randomPoints, samePersistencePairs } from "./helpers.ts";
 
 describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomology", () => {
   const seeds = Array.from({ length: 500 }, (_, i) => i * 13 + 7);
@@ -39,7 +14,7 @@ describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomolo
       const rng = mulberry32(seed);
       const n = 5 + Math.floor(rng() * 26);
       const dims = 2 + Math.floor(rng() * 4);
-      const pts = randomPoints(rng, n, dims);
+      const pts = randomPoints(rng, n, dims, 10);
 
       const maxDistCandidates = [0.5, 1, 2, 3, 5, 8, Infinity];
       const maxDist =
@@ -55,17 +30,16 @@ describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomolo
         pts,
         dims,
         maxDist,
-        2
+        1
       );
 
-      const cohomPairs = sortPairs(
-        cohomResult.pairs.filter((p) => p.dim !== 2)
-      );
-      const implicitPairs = sortPairs(
-        implicitResult.pairs.filter((p) => p.dim !== 2)
-      );
+      const cohomPairs = cohomResult.pairs.filter((p) => p.dim !== 2);
+      const implicitPairs = implicitResult.pairs.filter((p) => p.dim !== 2);
+      const expected =
+        n <= 8 ? referenceRipsBarcode(pts, dims, maxDist, 1) : cohomPairs;
 
-      expect(implicitPairs).toStrictEqual(cohomPairs);
+      expect(samePersistencePairs(cohomPairs, expected)).toBeTruthy();
+      expect(samePersistencePairs(implicitPairs, expected)).toBeTruthy();
     }
   );
 
@@ -75,7 +49,7 @@ describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomolo
       const rng = mulberry32(seed);
       const n = 5 + Math.floor(rng() * 26);
       const dims = 2 + Math.floor(rng() * 4);
-      const pts = randomPoints(rng, n, dims);
+      const pts = randomPoints(rng, n, dims, 10);
 
       const maxDistCandidates = [0.5, 1, 2, 3, 5, 8, Infinity];
       const maxDist =
@@ -91,17 +65,20 @@ describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomolo
         pts,
         dims,
         maxDist,
-        3
+        2
       );
 
-      const cohomPairs = sortPairs(
-        cohomResult.pairs.filter((p) => p.dim === 2)
-      );
-      const implicitPairs = sortPairs(
-        implicitResult.pairs.filter((p) => p.dim === 2)
-      );
+      const cohomPairs = cohomResult.pairs.filter((p) => p.dim === 2);
+      const implicitPairs = implicitResult.pairs.filter((p) => p.dim === 2);
+      const expected =
+        n <= 8
+          ? referenceRipsBarcode(pts, dims, maxDist, 2).filter(
+              (pair) => pair.dim === 2
+            )
+          : cohomPairs;
 
-      expect(implicitPairs).toStrictEqual(cohomPairs);
+      expect(samePersistencePairs(cohomPairs, expected)).toBeTruthy();
+      expect(samePersistencePairs(implicitPairs, expected)).toBeTruthy();
     }
   );
 });

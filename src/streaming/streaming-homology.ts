@@ -1,5 +1,5 @@
-import { computePersistentHomology } from "../core/homology.ts";
-import type { HomologyResult } from "../core/homology.ts";
+import { computePersistentHomology } from "../core/homology-unified.ts";
+import type { HomologyResult } from "../core/homology-unified.ts";
 import { SlidingWindow } from "./sliding-window.ts";
 
 /** Configuration for {@link StreamingHomology}. */
@@ -81,12 +81,11 @@ export class StreamingHomology {
       return null;
     }
     const flat = this.window.toFlatArray();
-    const result = computePersistentHomology(
-      flat,
-      this.dims,
-      this.maxDist,
-      this.maxDim
-    );
+    const result = computePersistentHomology(flat, this.dims, {
+      engine: "standard",
+      maxDim: this.maxDim,
+      maxDist: this.maxDist,
+    });
     return { isFull: this.window.isFull, result, windowSize: this.window.size };
   }
 

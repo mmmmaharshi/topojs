@@ -1,6 +1,6 @@
 import type { Points } from "./distance.ts";
-import type { HomologyResult } from "./homology.ts";
-import { computePersistentHomology } from "./homology.ts";
+import { computePersistentHomology } from "./homology-unified.ts";
+import type { HomologyResult } from "./homology-unified.ts";
 import { selectLandmarks } from "./landmarks.ts";
 
 /**
@@ -118,12 +118,11 @@ export function computeSparseRipsHomology(
     }
   }
 
-  const result = computePersistentHomology(
-    landmarkPoints,
-    dims,
+  const result = computePersistentHomology(landmarkPoints, dims, {
+    engine: "standard",
+    maxDim,
     maxDist,
-    maxDim
-  );
+  });
 
   const tStar = maxDist === Infinity ? Infinity : maxDist - 2 * coveringRadius;
   let maxFiniteDeath = -Infinity;

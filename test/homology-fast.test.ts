@@ -3,24 +3,14 @@ import { describe, it, expect } from "vitest";
 
 import { computePersistentHomologyFast } from "../src/core/homology-fast.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { mulberry32, circlePoints, generatePoints } from "./helpers.ts";
-
-/**
- * Canonicalize pairs before comparing: computePersistentHomologyFast is an
- * independent code path (apparent-pairs pre-pass changes WHICH triangles
- * take the reduction loop), so pair emission order can legitimately differ
- * even when the resulting barcode (multiset of {dim,birth,death}) is
- * identical. Only the multiset is a meaningful correctness claim.
- */
-function canon(pairs: { dim: number; birth: number; death: number }[]): string {
-  return JSON.stringify(
-    pairs
-      .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted(
-        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
-      )
-  );
-}
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import {
+  mulberry32,
+  circlePoints,
+  generatePoints,
+  samePersistencePairs,
+  runSmallDifferentialTrial,
+} from "./helpers.ts";
 
 function checkMatches(
   points: Float64Array,
@@ -30,8 +20,12 @@ function checkMatches(
 ): void {
   const expected = computePersistentHomology(points, dims, maxDist, maxDim);
   const actual = computePersistentHomologyFast(points, dims, maxDist, maxDim);
+  const expectedPairs =
+    points.length / dims <= 12
+      ? referenceRipsBarcode(points, dims, maxDist, maxDim === 3 ? 2 : 1)
+      : expected.pairs;
   expect(actual.complex).toStrictEqual(expected.complex);
-  expect(canon(actual.pairs)).toBe(canon(expected.pairs));
+  expect(samePersistencePairs(actual.pairs, expectedPairs)).toBeTruthy();
   // sanity: diagnostics must be internally consistent
   expect(actual.diagnostics.reReducedTriangles).toBeGreaterThanOrEqual(0);
   expect(actual.diagnostics.reReducedTriangles).toBeLessThanOrEqual(
@@ -40,7 +34,7 @@ function checkMatches(
   expect(actual.diagnostics.totalTriangles).toBe(actual.complex.numTriangles);
 }
 
-describe("computePersistentHomologyFast (apparent pairs) vs. computePersistentHomology (ground truth)", () => {
+describe("computePersistentHomologyFast (apparent pairs) vs. independent reference and production fallback", () => {
   it("matches on random point clouds across many seeds and densities", () => {
     // Bumped from 10 to 40 seeds (4x). src/index.ts's docstring for this
     // engine claims "ad-hoc stress sweeps of 11,100 random configs... 0
@@ -61,6 +55,21 @@ describe("computePersistentHomologyFast (apparent pairs) vs. computePersistentHo
       for (const maxDist of [0.2, 0.35, 0.5, 1.5]) {
         checkMatches(flat, 2, maxDist, 2);
       }
+    }
+  });
+
+  it("matches the independent reference on small seeded trials", () => {
+    for (const seed of [101, 102, 103, 104, 105, 106, 107, 108]) {
+      const trial = runSmallDifferentialTrial(
+        seed,
+        6,
+        2,
+        0.6,
+        (points, dims, maxDist) =>
+          computePersistentHomologyFast(points, dims, maxDist, 2).pairs,
+        1
+      );
+      expect(trial.matches).toBeTruthy();
     }
   });
 

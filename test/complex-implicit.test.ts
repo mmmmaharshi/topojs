@@ -7,19 +7,7 @@ import {
   countImplicitTriangles,
 } from "../src/core/complex-implicit.ts";
 import { buildRipsComplex } from "../src/core/complex.ts";
-import { mulberry32 } from "./helpers.ts";
-
-function randomPoints(
-  rng: () => number,
-  n: number,
-  dims: number
-): Float64Array {
-  const pts = new Float64Array(n * dims);
-  for (let i = 0; i < n * dims; i++) {
-    pts[i] = rng() * 10;
-  }
-  return pts;
-}
+import { mulberry32, randomPoints } from "./helpers.ts";
 
 describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
   const seeds = Array.from({ length: 200 }, (_, i) => i * 7 + 13);
@@ -30,7 +18,7 @@ describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
       const rng = mulberry32(seed);
       const n = 5 + Math.floor(rng() * 26); // 5..30
       const dims = 2 + Math.floor(rng() * 4); // 2..5
-      const pts = randomPoints(rng, n, dims);
+      const pts = randomPoints(rng, n, dims, 10);
 
       const maxDistCandidates = [0.5, 1, 2, 3, 5, 8, Infinity];
       const maxDist =
@@ -59,7 +47,7 @@ describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
 
   it("edge bits match between implicit and materialized", () => {
     const rng = mulberry32(42);
-    const pts = randomPoints(rng, 15, 3);
+    const pts = randomPoints(rng, 15, 3, 10);
     const maxDist = 3;
 
     const materialized = buildRipsComplex(pts, 3, maxDist, 2);

@@ -3,6 +3,11 @@ import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
+import {
+  collectEssentialClasses,
+  denseColumnAdapter,
+  reducePhase,
+} from "./reducer.ts";
 import { DenseWorkingCol } from "./reduction.ts";
 
 /**
@@ -163,6 +168,7 @@ export function computePersistentHomologyFast(
   // (cofacetCountAtValue[e] === 1). The reduced column stored is the
   // triangle's FULL raw boundary (see IMPLEMENTATION NOTE above).
   const isApparentTri = new Uint8Array(triangles.length);
+  let apparentCount = 0;
   for (let ei = 0; ei < edges.length; ei++) {
     if (cofacetCountAtValue[ei] === 1) {
       const ci = cofacetTriAtValue[ei]!;
@@ -173,6 +179,7 @@ export function computePersistentHomologyFast(
         full.sort();
         h1reduced[ci] = full;
         isApparentTri[ci] = 1;
+        apparentCount++;
         // Zero-persistence (birth === death): not pushed, matching the
         // existing `if (tri.val > edges[pivot].val)` convention below.
       }
@@ -184,42 +191,30 @@ export function computePersistentHomologyFast(
   // fully resolved and order-independent, so skipping them mid-loop is
   // safe).
   const w1 = new DenseWorkingCol(edges.length);
-  let reReducedCount = 0;
-  for (let ci = 0; ci < triangles.length; ci++) {
-    if (isApparentTri[ci]) {
-      continue;
-    }
-    reReducedCount++;
-    const tri = triangles[ci]!;
-    w1.loadFromNumbers(tri.edges);
-    while (true) {
-      const pivot = w1.pivot();
-      if (pivot < 0) {
-        h1reduced[ci] = new Int32Array(0);
-        break;
-      }
-      const prev = h1Pivots[pivot]!;
-      if (prev < 0) {
-        h1Pivots[pivot] = ci;
-        h1reduced[ci] = w1.toSparse();
-        if (tri.val > edges[pivot]!.val) {
-          h1Pairs.push({ birth: edges[pivot]!.val, death: tri.val, dim: 1 });
-        }
-        break;
-      }
-      const prevCol = h1reduced[prev];
-      if (prevCol === null || prevCol === undefined) {
-        break;
-      }
-      w1.xorSparse(prevCol);
-    }
-  }
-
-  for (let ei = 0; ei < edges.length; ei++) {
-    if (cycleEdges[ei] && h1Pivots[ei]! < 0) {
-      h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
-    }
-  }
+  const h1Nullspace =
+    maxDim >= 3 ? new Uint8Array(triangles.length) : undefined;
+  reducePhase({
+    adapter: denseColumnAdapter(w1, h1Pivots, h1reduced),
+    columnValue: (ci) => triangles[ci]!.val,
+    dimension: 1,
+    emitPair: (pair) => h1Pairs.push(pair),
+    end: triangles.length,
+    filtrationOrder: "boundary",
+    loadColumn: (ci) => w1.loadFromNumbers(triangles[ci]!.edges),
+    nullspace: h1Nullspace,
+    pivotValue: (ei) => edges[ei]!.val,
+    skipColumn: (ci) => isApparentTri[ci] === 1,
+    start: 0,
+    step: 1,
+  });
+  collectEssentialClasses(
+    h1Pivots,
+    cycleEdges,
+    (ei) => edges[ei]!.val,
+    1,
+    (pair) => h1Pairs.push(pair)
+  );
+  const reReducedCount = triangles.length - apparentCount;
 
   // ── Phase 3: H2 (identical to computePersistentHomology; not accelerated --
   // see this file's top docstring for the proof that H1-style apparent
@@ -227,59 +222,32 @@ export function computePersistentHomologyFast(
   const h2Pairs: PersistencePair[] = [];
 
   if (maxDim >= 3) {
-    const nullspaceTrigs = new Uint8Array(triangles.length);
-    for (let ci = 0; ci < triangles.length; ci++) {
-      if (h1reduced[ci] !== null && h1reduced[ci]!.length === 0) {
-        nullspaceTrigs[ci] = 1;
-      }
-    }
-
     const h2Pivots = new Int32Array(triangles.length).fill(-1);
     const h2reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
       length: tetrahedra.length,
     }).fill(null);
     const w2 = new DenseWorkingCol(triangles.length);
+    const h2Adapter = denseColumnAdapter(w2, h2Pivots, h2reduced);
 
-    for (let ci = 0; ci < tetrahedra.length; ci++) {
-      const tet = tetrahedra[ci]!;
-      w2.loadFromNumbers(tet.triangles);
-      while (true) {
-        const pivot = w2.pivot();
-        if (pivot < 0) {
-          break;
-        }
-        const prev = h2Pivots[pivot]!;
-        if (prev < 0) {
-          h2Pivots[pivot] = ci;
-          h2reduced[ci] = w2.toSparse();
-          if (tet.val > triangles[pivot]!.val) {
-            h2Pairs.push({
-              birth: triangles[pivot]!.val,
-              death: tet.val,
-              dim: 2,
-            });
-          }
-          break;
-        }
-        const prevCol = h2reduced[prev];
-        if (prevCol === null || prevCol === undefined) {
-          break;
-        }
-        w2.xorSparse(prevCol);
-      }
-    }
-
-    const usedAsPivot = new Uint8Array(triangles.length);
-    for (let ti = 0; ti < triangles.length; ti++) {
-      if (h2Pivots[ti]! >= 0) {
-        usedAsPivot[ti] = 1;
-      }
-    }
-    for (let ci = 0; ci < triangles.length; ci++) {
-      if (nullspaceTrigs[ci] && !usedAsPivot[ci]) {
-        h2Pairs.push({ birth: triangles[ci]!.val, death: -1, dim: 2 });
-      }
-    }
+    reducePhase({
+      adapter: h2Adapter,
+      columnValue: (ci) => tetrahedra[ci]!.val,
+      dimension: 2,
+      emitPair: (pair) => h2Pairs.push(pair),
+      end: tetrahedra.length,
+      filtrationOrder: "boundary",
+      loadColumn: (ci) => w2.loadFromNumbers(tetrahedra[ci]!.triangles),
+      pivotValue: (ti) => triangles[ti]!.val,
+      start: 0,
+      step: 1,
+    });
+    collectEssentialClasses(
+      h2Pivots,
+      h1Nullspace!,
+      (ti) => triangles[ti]!.val,
+      2,
+      (pair) => h2Pairs.push(pair)
+    );
   }
   return {
     complex: {

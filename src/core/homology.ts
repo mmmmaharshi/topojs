@@ -2,6 +2,11 @@ import { buildRipsComplex } from "./complex.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
+import {
+  collectEssentialClasses,
+  denseColumnAdapter,
+  reducePhase,
+} from "./reducer.ts";
 import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of persistent homology computation. */
@@ -63,39 +68,30 @@ export function computePersistentHomology(
     length: triangles.length,
   }).fill(null);
   const h1Pairs: PersistencePair[] = [];
+  const h1Nullspace =
+    maxDim >= 3 ? new Uint8Array(triangles.length) : undefined;
   const w1 = new DenseWorkingCol(edges.length);
 
-  for (let ci = 0; ci < triangles.length; ci++) {
-    const tri = triangles[ci]!;
-    w1.loadFromNumbers(tri.edges);
-    while (true) {
-      const pivot = w1.pivot();
-      if (pivot < 0) {
-        h1reduced[ci] = new Int32Array(0);
-        break;
-      }
-      const prev = h1Pivots[pivot]!;
-      if (prev < 0) {
-        h1Pivots[pivot] = ci;
-        h1reduced[ci] = w1.toSparse();
-        if (tri.val > edges[pivot]!.val) {
-          h1Pairs.push({ birth: edges[pivot]!.val, death: tri.val, dim: 1 });
-        }
-        break;
-      }
-      const prevCol = h1reduced[prev]!;
-      if (prevCol === null) {
-        break;
-      }
-      w1.xorSparse(prevCol);
-    }
-  }
-
-  for (let ei = 0; ei < edges.length; ei++) {
-    if (cycleEdges[ei] && h1Pivots[ei]! < 0) {
-      h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
-    }
-  }
+  reducePhase({
+    adapter: denseColumnAdapter(w1, h1Pivots, h1reduced),
+    columnValue: (ci) => triangles[ci]!.val,
+    dimension: 1,
+    emitPair: (pair) => h1Pairs.push(pair),
+    end: triangles.length,
+    filtrationOrder: "boundary",
+    loadColumn: (ci) => w1.loadFromNumbers(triangles[ci]!.edges),
+    nullspace: h1Nullspace,
+    pivotValue: (ei) => edges[ei]!.val,
+    start: 0,
+    step: 1,
+  });
+  collectEssentialClasses(
+    h1Pivots,
+    cycleEdges,
+    (ei) => edges[ei]!.val,
+    1,
+    (pair) => h1Pairs.push(pair)
+  );
 
   // ── Phase 3: H2 (2-dimensional persistence) ──
   const h2Pairs: PersistencePair[] = [];
@@ -107,63 +103,34 @@ export function computePersistentHomology(
   // Essential H2 pairs (ker(∂₂) \ im(∂₃)) naturally turn up as nullspace
   // triangles that survive the pivot table with no claimant.
   if (maxDim >= 3) {
-    // Which triangles generate 2-cycles (their H1 column reduced to zero)
-    const nullspaceTrigs = new Uint8Array(triangles.length);
-    for (let ci = 0; ci < triangles.length; ci++) {
-      if (h1reduced[ci] !== null && h1reduced[ci]!.length === 0) {
-        nullspaceTrigs[ci] = 1;
-      }
-    }
-
     // H2 pivot table: which triangle pivot is paired with which tetrahedron
     const h2Pivots = new Int32Array(triangles.length).fill(-1);
     const h2reduced: (Int32Array | null)[] = Array.from<Int32Array | null>({
       length: tetrahedra.length,
     }).fill(null);
     const w2 = new DenseWorkingCol(triangles.length);
+    const h2Adapter = denseColumnAdapter(w2, h2Pivots, h2reduced);
 
     // Reduce tetrahedron columns (∂₃: C₃ → C₂)
-    for (let ci = 0; ci < tetrahedra.length; ci++) {
-      const tet = tetrahedra[ci]!;
-      w2.loadFromNumbers(tet.triangles);
-      while (true) {
-        const pivot = w2.pivot();
-        if (pivot < 0) {
-          break;
-        }
-        const prev = h2Pivots[pivot]!;
-        if (prev < 0) {
-          h2Pivots[pivot] = ci;
-          h2reduced[ci] = w2.toSparse();
-          if (tet.val > triangles[pivot]!.val) {
-            h2Pairs.push({
-              birth: triangles[pivot]!.val,
-              death: tet.val,
-              dim: 2,
-            });
-          }
-          break;
-        }
-        const prevCol = h2reduced[prev]!;
-        if (prevCol === null) {
-          break;
-        }
-        w2.xorSparse(prevCol);
-      }
-    }
-
-    // Essential H2: nullspace triangles NOT killed by any tetrahedron
-    const usedAsPivot = new Uint8Array(triangles.length);
-    for (let ti = 0; ti < triangles.length; ti++) {
-      if (h2Pivots[ti]! >= 0) {
-        usedAsPivot[ti] = 1;
-      }
-    }
-    for (let ci = 0; ci < triangles.length; ci++) {
-      if (nullspaceTrigs[ci] && !usedAsPivot[ci]) {
-        h2Pairs.push({ birth: triangles[ci]!.val, death: -1, dim: 2 });
-      }
-    }
+    reducePhase({
+      adapter: h2Adapter,
+      columnValue: (ci) => tetrahedra[ci]!.val,
+      dimension: 2,
+      emitPair: (pair) => h2Pairs.push(pair),
+      end: tetrahedra.length,
+      filtrationOrder: "boundary",
+      loadColumn: (ci) => w2.loadFromNumbers(tetrahedra[ci]!.triangles),
+      pivotValue: (ti) => triangles[ti]!.val,
+      start: 0,
+      step: 1,
+    });
+    collectEssentialClasses(
+      h2Pivots,
+      h1Nullspace!,
+      (ti) => triangles[ti]!.val,
+      2,
+      (pair) => h2Pairs.push(pair)
+    );
   }
 
   return {

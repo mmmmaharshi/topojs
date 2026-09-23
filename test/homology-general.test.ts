@@ -1,28 +1,12 @@
 import { describe, it, expect } from "vitest";
 
 import type { Points } from "../src/core/distance.ts";
-import type { PersistencePair } from "../src/core/h0.ts";
 import { computePersistentHomologyGeneral } from "../src/core/homology-general.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
-import { mulberry32 } from "./helpers.ts";
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import { mulberry32, randomPoints, samePersistencePairs } from "./helpers.ts";
 
-function randomPoints(rng: () => number, n: number, dims: number): Points {
-  const pts = new Float64Array(n * dims);
-  for (let i = 0; i < pts.length; i++) {
-    pts[i] = rng();
-  }
-  return pts;
-}
-
-function sortedKey(p: PersistencePair): string {
-  return `${p.dim}|${p.birth.toFixed(9)}|${p.death < 0 ? "inf" : p.death.toFixed(9)}`;
-}
-
-function sortedKeys(pairs: PersistencePair[]): string[] {
-  return pairs.map(sortedKey).toSorted();
-}
-
-describe("computePersistentHomologyGeneral: differential test against computePersistentHomology (maxHomologyDim<=2)", () => {
+describe("computePersistentHomologyGeneral: differential test against independent reference and production fallback", () => {
   it("matches exactly across many random 2D/3D configs at maxHomologyDim=1", () => {
     const rng = mulberry32(1);
     for (let trial = 0; trial < 200; trial++) {
@@ -38,9 +22,9 @@ describe("computePersistentHomologyGeneral: differential test against computePer
       // homology.ts: maxDim 1 and 2 are equivalent, both H0+H1 only) --
       // restrict exact's output to dim<=1 to match general's maxHomologyDim=1 scope.
       const exactRestricted = exact.pairs.filter((p) => p.dim <= 1);
-      expect(sortedKeys(general.pairs)).toStrictEqual(
-        sortedKeys(exactRestricted)
-      );
+      const expected =
+        n <= 8 ? referenceRipsBarcode(pts, dims, maxDist, 1) : exactRestricted;
+      expect(samePersistencePairs(general.pairs, expected)).toBeTruthy();
     }
   });
 
@@ -55,7 +39,9 @@ describe("computePersistentHomologyGeneral: differential test against computePer
       const exact = computePersistentHomology(pts, dims, maxDist, 3);
       const general = computePersistentHomologyGeneral(pts, dims, maxDist, 2);
 
-      expect(sortedKeys(general.pairs)).toStrictEqual(sortedKeys(exact.pairs));
+      const expected =
+        n <= 8 ? referenceRipsBarcode(pts, dims, maxDist, 2) : exact.pairs;
+      expect(samePersistencePairs(general.pairs, expected)).toBeTruthy();
     }
   });
 
@@ -152,9 +138,12 @@ describe("computePersistentHomologyGeneral: edge cases", () => {
     const maxDist = 0.4;
     const general = computePersistentHomologyGeneral(pts, 2, maxDist, 0);
     const exact = computePersistentHomology(pts, 2, maxDist, 0);
-    expect(sortedKeys(general.pairs)).toStrictEqual(
-      sortedKeys(exact.pairs.filter((p) => p.dim === 0))
-    );
+    expect(
+      samePersistencePairs(
+        general.pairs,
+        exact.pairs.filter((p) => p.dim === 0)
+      )
+    ).toBeTruthy();
   });
 
   it("throws on negative maxHomologyDim", () => {

@@ -1,5 +1,10 @@
 import type { PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
+import {
+  collectEssentialClasses,
+  denseColumnAdapter,
+  reducePhase,
+} from "./reducer.ts";
 import { DenseWorkingCol } from "./reduction.ts";
 
 /** Result of cubical persistence homology on a 2D grayscale image. */
@@ -159,45 +164,35 @@ export function computeCubicalHomology(
       length: numSquares,
     }).fill(null);
     const w = new DenseWorkingCol(numEdges);
+    const adapter = denseColumnAdapter(w, h1Pivots, h1reduced);
 
-    for (let ci = 0; ci < numSquares; ci++) {
-      const sq = squares[ci]!;
-      w.loadFromNumbers(sq.edges);
-      while (true) {
-        const pivot = w.pivot();
-        if (pivot < 0) {
-          break;
-        }
-        const prev = h1Pivots[pivot]!;
-        if (prev < 0) {
-          h1Pivots[pivot] = ci;
-          h1reduced[ci] = w.toSparse();
-          // Zero-persistence guard: without this, ties (birth === death,
-          // e.g. any flat/constant region of the image) emit a spurious
-          // finite H1 pair -- a phantom "loop" that appears and dies at the
-          // same filtration value. The Rips engines (homology.ts,
-          // homology-fast.ts, homology-cohom.ts) all guard the equivalent
-          // push the same way; this file used to be the one place that
-          // didn't, found via a direct code-shape comparison against
-          // homology.ts's H1 phase.
-          if (sq.val > edges[pivot]!.val) {
-            h1Pairs.push({ birth: edges[pivot]!.val, death: sq.val, dim: 1 });
-          }
-          break;
-        }
-        const prevCol = h1reduced[prev]!;
-        if (prevCol === null) {
-          break;
-        }
-        w.xorSparse(prevCol);
-      }
-    }
-
-    for (let ei = 0; ei < numEdges; ei++) {
-      if (cycleEdges[ei] && h1Pivots[ei]! < 0) {
-        h1Pairs.push({ birth: edges[ei]!.val, death: -1, dim: 1 });
-      }
-    }
+    // Zero-persistence guard: without this, ties (birth === death,
+    // e.g. any flat/constant region of the image) emit a spurious
+    // finite H1 pair -- a phantom "loop" that appears and dies at the
+    // same filtration value. The Rips engines (homology.ts,
+    // homology-fast.ts, homology-cohom.ts) all guard the equivalent
+    // push the same way; this file used to be the one place that
+    // didn't, found via a direct code-shape comparison against
+    // homology.ts's H1 phase.
+    reducePhase({
+      adapter,
+      columnValue: (ci) => squares[ci]!.val,
+      dimension: 1,
+      emitPair: (pair) => h1Pairs.push(pair),
+      end: numSquares,
+      filtrationOrder: "boundary",
+      loadColumn: (ci) => w.loadFromNumbers(squares[ci]!.edges),
+      pivotValue: (ei) => edges[ei]!.val,
+      start: 0,
+      step: 1,
+    });
+    collectEssentialClasses(
+      h1Pivots,
+      cycleEdges,
+      (ei) => edges[ei]!.val,
+      1,
+      (pair) => h1Pairs.push(pair)
+    );
   }
 
   return {

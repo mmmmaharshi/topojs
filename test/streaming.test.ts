@@ -1,11 +1,12 @@
 /* eslint-disable unicorn/prefer-single-call */
 import { describe, it, expect } from "vitest";
 
-import { computePersistentHomology } from "../src/core/homology.ts";
+import { computePersistentHomology } from "../src/core/homology-unified.ts";
 import { SlidingWindow } from "../src/streaming/sliding-window.ts";
 import { StreamingHomology } from "../src/streaming/streaming-homology.ts";
 import { summarizeForStreaming } from "../src/streaming/topological-summary.ts";
-import { mulberry32, circlePoints } from "./helpers.ts";
+import { referenceRipsBarcode } from "./barcode-reference.ts";
+import { mulberry32, circlePoints, samePersistencePairs } from "./helpers.ts";
 
 describe(SlidingWindow, () => {
   it("rejects invalid construction parameters", () => {
@@ -82,9 +83,10 @@ describe("StreamingHomology (Phase A / naive)", () => {
 
   it("matches a fresh full recompute on the same window contents (differential test)", () => {
     // The core correctness property of the naive baseline: since it just
-    // wraps computePersistentHomology on the current window, its output
-    // must be byte-identical to calling computePersistentHomology directly
-    // on the same point set, for every window state along a stream.
+    // wraps computePersistentHomology on the current window, its barcode
+    // must match the independent reference for every window state along a
+    // stream, and its complex metadata must match production.
+
     const rng = mulberry32(2026);
     const windowSize = 8;
     const dims = 2;
@@ -109,11 +111,13 @@ describe("StreamingHomology (Phase A / naive)", () => {
         flat[idx * dims + 1] = p[1]!;
       });
       const expected = computePersistentHomology(flat, dims, maxDist, 2);
+      const expectedPairs = referenceRipsBarcode(flat, dims, maxDist, 2);
 
       expect(update.windowSize).toBe(expectedWindow.length);
-      expect(JSON.stringify(update.result.pairs)).toBe(
-        JSON.stringify(expected.pairs)
-      );
+      expect(
+        samePersistencePairs(update.result.pairs, expectedPairs)
+      ).toBeTruthy();
+
       expect(update.result.complex).toStrictEqual(expected.complex);
     }
   });

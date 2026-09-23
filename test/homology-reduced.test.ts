@@ -3,31 +3,15 @@ import { describe, expect, it } from "vitest";
 
 import { computePersistentHomologyReduced } from "../src/core/homology-reduced.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
+import { referenceRipsBarcode } from "./barcode-reference.ts";
 import {
   bruteForceEdgeCount,
   bruteForceTriangleCount,
   circlePoints,
   generatePoints,
   mulberry32,
+  samePersistencePairs,
 } from "./helpers.ts";
-
-/**
- * Canonicalize pairs before comparing: computePersistentHomologyReduced
- * builds a different (smaller) triangle set than computePersistentHomology,
- * so pair emission order can legitimately differ even when the resulting
- * barcode (multiset of {dim,birth,death}) is identical. Only the multiset is
- * a meaningful correctness claim -- same convention as the other
- * differential-testing suites in this repo (homology-cohom.test.ts et al.).
- */
-function canon(pairs: { dim: number; birth: number; death: number }[]): string {
-  return JSON.stringify(
-    pairs
-      .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted(
-        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
-      )
-  );
-}
 
 /**
  * computePersistentHomologyReduced only computes H0+H1 (see its docstring
@@ -43,16 +27,18 @@ function checkMatches(points: Float64Array, maxDist: number, dims = 2): void {
   // is a flag-filtration optimization and does not transfer to its
   // metric-dependent lune construction), while the standard path collapses
   // -- so numEdges is checked against an independent brute-force count,
-  // and only the barcode (canon) is compared across engines.
+  // and only the barcode is compared across engines.
   expect(actual.complex.numEdges).toBe(
     bruteForceEdgeCount(points, dims, maxDist)
   );
-  expect(canon(actual.pairs)).toBe(
-    canon(expectedFull.pairs.filter((p) => p.dim <= 1))
-  );
+  const expectedPairs =
+    points.length / dims <= 8
+      ? referenceRipsBarcode(points, dims, maxDist, 1)
+      : expectedFull.pairs.filter((p) => p.dim <= 1);
+  expect(samePersistencePairs(actual.pairs, expectedPairs)).toBeTruthy();
 }
 
-describe("computePersistentHomologyReduced (reduced VR complex) vs. computePersistentHomology (ground truth, H0+H1 only)", () => {
+describe("computePersistentHomologyReduced (reduced VR complex) vs. independent reference and production fallback (H0+H1 only)", () => {
   it("matches on random point clouds across many seeds, densities, and maxDist values", () => {
     for (let seed = 1; seed <= 60; seed++) {
       const rng = mulberry32(seed);

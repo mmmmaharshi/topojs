@@ -9,20 +9,7 @@ import type { Points } from "../src/core/distance.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
 import { selectLandmarks } from "../src/core/landmarks.ts";
 import { computeSparseRipsHomology } from "../src/core/sparse-rips.ts";
-import { mulberry32 } from "./helpers.ts";
-
-function randomPoints(
-  rng: () => number,
-  n: number,
-  dims: number,
-  scale = 1
-): Points {
-  const pts = new Float64Array(n * dims);
-  for (let i = 0; i < pts.length; i++) {
-    pts[i] = rng() * scale;
-  }
-  return pts;
-}
+import { mulberry32, randomPoints } from "./helpers.ts";
 
 // Independent, deliberately-not-shared-code brute-force reference for the
 // covering radius, so a bug in selectLandmarks' incremental bookkeeping
@@ -175,7 +162,7 @@ describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
     expect(checked).toBeGreaterThan(200); // sanity: the loop actually exercised real (non-Infinity) comparisons
   });
 
-  it("holds across a smaller sweep including H2 (maxDim=3)", () => {
+  it("holds across a smaller sweep including H2", () => {
     const rng = mulberry32(200);
     let checked = 0;
     for (let trial = 0; trial < 30; trial++) {
@@ -192,7 +179,7 @@ describe("computeSparseRipsHomology: proven bound holds (d_B <= 2 * coveringRadi
         n,
         numLandmarks,
         maxDist,
-        3
+        2
       );
 
       for (const dim of [0, 1, 2]) {

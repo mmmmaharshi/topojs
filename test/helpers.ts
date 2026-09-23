@@ -1,5 +1,6 @@
 import type { Points } from "../src/core/distance.ts";
 import { enclosingRadius } from "../src/core/distance.ts";
+import { referenceRipsBarcode } from "./barcode-reference.ts";
 
 /** Build a flattened Points array from an array of [x, y] tuples. */
 export function generatePoints(pts: [number, number][]): Points {
@@ -36,6 +37,87 @@ export function mulberry32(seed: number): () => number {
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
     return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+export interface TestPersistencePair {
+  birth: number;
+  death: number;
+  dim: number;
+}
+
+export function canonicalizePairs(
+  pairs: readonly TestPersistencePair[]
+): string {
+  return JSON.stringify(
+    pairs
+      .map((pair) => ({ birth: pair.birth, death: pair.death, dim: pair.dim }))
+      .toSorted(
+        (first, second) =>
+          first.dim - second.dim ||
+          first.birth - second.birth ||
+          first.death - second.death
+      )
+  );
+}
+
+export function samePersistencePairs(
+  first: readonly TestPersistencePair[],
+  second: readonly TestPersistencePair[]
+): boolean {
+  return canonicalizePairs(first) === canonicalizePairs(second);
+}
+
+export function randomPoints(
+  rng: () => number,
+  n: number,
+  dims: number,
+  scale = 1
+): Points {
+  const points = new Float64Array(n * dims);
+  for (let index = 0; index < points.length; index++) {
+    points[index] = rng() * scale;
+  }
+  return points;
+}
+
+export function seededPoints(
+  seed: number,
+  n: number,
+  dims: number,
+  scale = 1
+): Points {
+  return randomPoints(mulberry32(seed), n, dims, scale);
+}
+
+export interface SmallDifferentialTrial {
+  actual: readonly TestPersistencePair[];
+  expected: ReturnType<typeof referenceRipsBarcode>;
+  matches: boolean;
+  points: Points;
+}
+
+export function runSmallDifferentialTrial(
+  seed: number,
+  n: number,
+  dims: number,
+  maxDist: number,
+  run: (
+    points: Points,
+    dims: number,
+    maxDist: number
+  ) => readonly TestPersistencePair[],
+  maxHomologyDim = 2,
+  scale = 1
+): SmallDifferentialTrial {
+  const points = randomPoints(mulberry32(seed), n, dims, scale);
+  const actual = run(points, dims, maxDist);
+  const expected = referenceRipsBarcode(points, dims, maxDist, maxHomologyDim);
+  return {
+    actual,
+    expected,
+    matches: samePersistencePairs(actual, expected),
+    points,
   };
 }
 

@@ -3,36 +3,21 @@ import { describe, it, expect } from "vitest";
 
 import { computePersistentHomology } from "../src/core/homology.ts";
 import { IncrementalH1 } from "../src/streaming/incremental-h1.ts";
+import { referenceRipsBarcode } from "./barcode-reference.ts";
 import {
   bruteForceEdgeCount,
   bruteForceTetraCount,
   bruteForceTriangleCount,
   circlePoints,
   mulberry32,
+  samePersistencePairs,
 } from "./helpers.ts";
 
 /**
- * Sort pairs into a canonical order before comparing. The incremental
- * engine is an independent reimplementation of the reduction algorithm (its
- * own tie-break rule for equal-value simplices), so pair emission ORDER can
- * legitimately differ from computePersistentHomology's even when the
- * resulting barcode (the multiset of {dim,birth,death}) is identical. Only
- * the multiset is a meaningful correctness claim.
- */
-function canon(pairs: { dim: number; birth: number; death: number }[]): string {
-  return JSON.stringify(
-    pairs
-      .map((p) => ({ birth: p.birth, death: p.death, dim: p.dim }))
-      .toSorted(
-        (a, b) => a.dim - b.dim || a.birth - b.birth || a.death - b.death
-      )
-  );
-}
-
-/**
  * Run a random point stream through IncrementalH1, and after every push,
- * independently recompute ground truth via computePersistentHomology on the
- * exact same window contents (reconstructed from the raw stream). This is
+ * independently recompute the barcode from the exact same window contents
+ * (reconstructed from the raw stream), using the boundary reference for small
+ * windows and the production engine for larger windows. This is
  * the same differential-testing pattern used for the Phase A naive
  * baseline (test/streaming.test.ts) — here it's the load-bearing
  * correctness check for a genuinely new reduction algorithm (prefix-stable
@@ -86,7 +71,10 @@ function runDifferentialTrial(
     // engine keeps its own complete 1-skeleton (edge collapse is a batch
     // flag-filtration optimization and does not transfer to its prefix-
     // stable reduction), while the batch reference builders collapse.
-    const expectedH01 = computePersistentHomology(flat, dims, maxDist, 2);
+    const expectedH01 =
+      windowPts.length <= 12
+        ? referenceRipsBarcode(flat, dims, maxDist, 1)
+        : computePersistentHomology(flat, dims, maxDist, 2).pairs;
     expect(update.windowSize).toBe(windowPts.length);
     expect(update.complex.numEdges).toBe(
       bruteForceEdgeCount(flat, dims, maxDist)
@@ -95,22 +83,27 @@ function runDifferentialTrial(
       bruteForceTriangleCount(flat, dims, maxDist)
     );
     const incH01 = update.pairs.filter((p) => p.dim < 2);
-    expect(canon(incH01)).toBe(canon(expectedH01.pairs));
+    expect(samePersistencePairs(incH01, expectedH01)).toBeTruthy();
 
     sawTetrahedra ||= update.complex.numTetrahedra > 0;
 
-    // H2: compare ALL pairs against a maxDim=3 reference
     const incH2 = update.pairs.filter((p) => p.dim === 2);
-    const expectedAll = computePersistentHomology(flat, dims, maxDist, 3);
-    const refH2 = expectedAll.pairs.filter((p) => p.dim === 2);
-    expect(canon(incH2)).toBe(canon(refH2));
+    const refH2 =
+      windowPts.length <= 12
+        ? referenceRipsBarcode(flat, dims, maxDist, 2).filter(
+            (pair) => pair.dim === 2
+          )
+        : computePersistentHomology(flat, dims, maxDist, 3).pairs.filter(
+            (pair) => pair.dim === 2
+          );
+    expect(samePersistencePairs(incH2, refH2)).toBeTruthy();
   }
 
   // When assertDense is set, the geometry must actually produce tetrahedra
   // (otherwise the H2 reduction path is never exercised). H2 pairs may be
   // empty even when tetrahedra exist — in a complete graph every tetrahedron's
   // pivot triangle has the same filtration value (birth = death), so no finite
-  // H2 pairs are emitted. The canon comparison against maxDim=3 already
+  // H2 pairs are emitted. The barcode comparison against maxDim=3 already
   // validates H2 correctness for any pairs that ARE produced.
   expect(!assertDense || sawTetrahedra).toBeTruthy();
 }
@@ -238,9 +231,9 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
         flat[idx * 2] = p[0]!;
         flat[idx * 2 + 1] = p[1]!;
       });
-      const expected = computePersistentHomology(flat, 2, maxDist, 2);
+      const expected = referenceRipsBarcode(flat, 2, maxDist, 1);
       const incH01 = update.pairs.filter((p) => p.dim < 2);
-      expect(canon(incH01)).toBe(canon(expected.pairs));
+      expect(samePersistencePairs(incH01, expected)).toBeTruthy();
     };
 
     for (let i = 0; i < windowSize; i++) {
@@ -542,10 +535,10 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     expect(lu.complex.numTetrahedra).toBe(bruteForceTetraCount(flat, 3, 0.8));
     const incH01 = lu.pairs.filter((p) => p.dim < 2);
     const refH01 = expected.pairs.filter((p) => p.dim < 2);
-    expect(canon(incH01)).toBe(canon(refH01));
+    expect(samePersistencePairs(incH01, refH01)).toBeTruthy();
     const incH2 = lu.pairs.filter((p) => p.dim === 2);
     const refH2 = expected.pairs.filter((p) => p.dim === 2);
-    expect(canon(incH2)).toBe(canon(refH2));
+    expect(samePersistencePairs(incH2, refH2)).toBeTruthy();
   });
   /* eslint-enable vitest/max-expects */
 

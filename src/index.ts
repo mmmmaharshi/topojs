@@ -8,10 +8,7 @@
  */
 
 // ── Unified Rips persistence (auto-selects best engine) ──
-export {
-  computePersistentHomology,
-  computePersistentHomologyCohomologyFromComplex,
-} from "./core/homology-unified.ts";
+export { computePersistentHomology } from "./core/homology-unified.ts";
 export { computePersistentHomologyImplicit } from "./core/homology-implicit.ts";
 export type {
   HomologyResult,
@@ -51,7 +48,7 @@ export type { CollapseOptions } from "./core/edge-collapse.ts";
 
 // ── Core types ──
 export type { PersistencePair, EdgeEntry } from "./core/h0.ts";
-export type { TriangleEntry, TetraEntry, RipsComplex } from "./core/complex.ts";
+export type { TriangleEntry, TetraEntry } from "./core/complex.ts";
 
 // ── Export / serialization ──
 export {
