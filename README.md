@@ -74,8 +74,10 @@ console.log("Summary:", summarize(result.pairs));
 | Function | Description |
 | --- | --- |
 | `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with auto engine selection. `maxDim` is the highest homology dimension: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂ (default). Options object for `engine` (`"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`), or `epsilon` (Sheehy sparsification). Auto mode picks `"implicit-full"` above 8K triangles (H₂) or 60K triangles (H₁ only); falls back to `"cohomology"`; `"implicit"` selected for Sheehy complexes. |
-| `computePersistentHomologyImplicit(points, dims, maxDist, maxDim?)` | Fully implicit reduction (`"implicit-full"` engine); avoids all simplex materialisation. H₂ crossover ~8K triangles, H₁ crossover ~60K triangles. |
+| `computePersistentHomologyImplicit(points, dims, maxDist, maxDim?)` | Fully implicit reduction (`"implicit-full"` engine); avoids all simplex materialisation. `maxDim` follows the public scope: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂. H₂ crossover ~8K triangles, H₁ crossover ~60K triangles. |
 | `computeCubicalHomology(image, height, width, maxDim)` | H₀+H₁ on 2D grayscale images. |
+
+Complex construction and prebuilt cohomology reduction are internal implementation details. Use the point-cloud functions above for the published persistence API.
 
 ### Arbitrary-dimension homology
 
@@ -88,7 +90,7 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `computeSparseRipsHomology(points, dims, n, numLandmarks, maxDist, maxDim, startIndex?)` | Homology on a farthest-point landmark subset. `result.bottleneckBound` = 2× covering radius (proven bound). Actual error ~0.19× the guarantee at the median. `result.tStar = maxDist−2λ`, `result.isExactBound` (Theorem 1a: `true` iff no finite bar dies in `[tStar, maxDist)`), `result.truncatedGap <2λ` for boundary strip. See `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`. |
+| `computeSparseRipsHomology(points, dims, n, numLandmarks, maxDist, maxDim, startIndex?)` | Homology on a farthest-point landmark subset. `maxDim` follows the public scope: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂. `result.bottleneckBound` = 2× covering radius (proven bound). Actual error ~0.19× the guarantee at the median. `result.tStar = maxDist−2λ`, `result.isExactBound` (Theorem 1a: `true` iff no finite bar dies in `[tStar, maxDist)`), `result.truncatedGap <2λ` for boundary strip. See `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`. |
 | `selectLandmarks(points, dims, n, numLandmarks, startIndex?)` | Farthest-point landmark sampling, O(numLandmarks·n) time. |
 
 ### Distances & comparison
@@ -127,8 +129,8 @@ console.log("Summary:", summarize(result.pairs));
 | Function / Class | Description |
 | --- | --- |
 | `SlidingWindow` | Fixed-capacity ring buffer feeding both engines. |
-| `StreamingHomology` | Full recompute on every `push()`. Baseline for differential testing. |
-| `IncrementalH1` | Prefix-stable incremental engine — H₀+H₁+H₂ without full recompute. `maxDim` controls dimension (0/1/2). Theorem 2: diagram-identical to full recompute, `O(k+deg²+ | suffix | )`per push (see`paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`). |
+| `StreamingHomology` | Full recompute on every `push()`. Baseline for differential testing. `maxDim` follows the public scope: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂. |
+| `IncrementalH1` | Prefix-stable incremental engine — H₀+H₁+H₂ without full recompute. `maxDim` follows the public scope: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂. Theorem 2: diagram-identical to full recompute, `O(k+deg²+ | suffix | )`per push (see`paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`). |
 | `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result. |
 
 ### Example datasets
@@ -148,7 +150,7 @@ Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --expose-gc
 
 ### Batch engines
 
-Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open-addressing `Set`, dirty-word tracking in `DenseWorkingCol`, zero-alloc `SpatialGrid` (MurmurHash3), stable LSD radix sort for filtration order, bitset lune + grid edges for the reduced engine, squared-distance filtering and enclosing-radius cutoff. Verified by `bun test` (1999 tests, barcodes identical to baseline).
+Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open-addressing `Set`, dirty-word tracking in `DenseWorkingCol`, zero-alloc `SpatialGrid` (MurmurHash3), stable LSD radix sort for filtration order, bitset lune + grid edges for the reduced engine, squared-distance filtering and enclosing-radius cutoff. Verified by `bun test` (2015 tests, barcodes identical to baseline).
 
 **Standard vs reduced (H₀+H₁, `--expose-gc`, median of 12 trials, 2026-09-23):**
 
