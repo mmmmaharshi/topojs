@@ -15,6 +15,7 @@ const disabled = [
   "unicorn/consistent-function-scoping",
   "unicorn/prefer-spread",
   "unicorn/prefer-math-trunc",
+  "unicorn/numeric-separators-style",
 ];
 
 export default defineConfig({

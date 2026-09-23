@@ -125,29 +125,36 @@ export function computeSparseRipsHomology(
     maxDim
   );
 
-  const tStar =
-    maxDist === Infinity ? Infinity : maxDist - 2 * coveringRadius;
+  const tStar = maxDist === Infinity ? Infinity : maxDist - 2 * coveringRadius;
   let maxFiniteDeath = -Infinity;
   let truncatedGap = 0;
   let isExactBound = true;
   for (const p of result.pairs) {
-    if (p.death === -1) continue;
-    if (p.death > maxFiniteDeath) maxFiniteDeath = p.death;
+    if (p.death === -1) {
+      continue;
+    }
+    if (p.death > maxFiniteDeath) {
+      maxFiniteDeath = p.death;
+    }
     if (Number.isFinite(tStar) && p.death >= tStar && p.death < maxDist) {
       isExactBound = false;
       const g = maxDist - p.death;
-      if (g > truncatedGap) truncatedGap = g;
+      if (g > truncatedGap) {
+        truncatedGap = g;
+      }
     }
   }
-  if (!Number.isFinite(tStar)) isExactBound = true;
+  if (!Number.isFinite(tStar)) {
+    isExactBound = true;
+  }
 
   return {
     ...result,
     bottleneckBound: 2 * coveringRadius,
     coveringRadius,
+    isExactBound,
     landmarkIndices,
     tStar,
-    isExactBound,
     truncatedGap,
   };
 }

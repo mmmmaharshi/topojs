@@ -33,7 +33,7 @@ This performance comes at a cost: Ripser and GUDHI are C++ libraries requiring n
 ## 2. Related Work
 
 | Tool | Language | Filtration | Key technique | Limitation for browser |
-|------|----------|------------|---------------|------------------------|
+| --- | --- | --- | --- | --- |
 | **Ripser** (Bauer 2021) | C++ | VR H₀–H₂ | Implicit coboundary, apparent pairs, cohomology | Native compilation only |
 | **GUDHI** | C++ | VR, Alpha, Cubical | Simplex tree, DTM | No manylinux aarch64 wheel; server-side |
 | **Dionysus/PHAT** | C++ | VR | Matrix reduction variants | Same |
@@ -87,7 +87,7 @@ This yields ≤c triangles per edge vs up to n, hence O(n²) worst-case in ℝ�
 ### 4.2 Engine Portfolio and Auto-Dispatch
 
 | Engine | Builds | Use when | `computePersistentHomology({engine})` |
-|--------|--------|----------|---------------------------------------|
+| --- | --- | --- | --- |
 | `standard` | Full simplices | Baseline / correctness oracle | Always correct |
 | `cohomology` | Full, cohomology | General H₀–H₂ | Faster on dense |
 | `implicit` / `implicit-full` | None (on-the-fly coboundary) | n≳8K tris (H₂) / 60K (H₁) | Avoids O(n³) materialisation |
@@ -127,7 +127,7 @@ Auto mode selects `implicit-full` above crossover thresholds, otherwise `cohomol
 Fresh run 2026-09-23 (this manuscript) vs. archived `bench/data/reduced_vr_results.txt`:
 
 | Dataset | maxDist | Tris baseline → reduced (% baseline) | Time baseline → reduced | Speedup | Heap |
-|---------|---------|--------------------------------------|--------------------------|---------|------|
+| --- | --- | --- | --- | --- | --- |
 | Wine 178×13D | 0.25 | 0 → 0 (—) | 0.80 → 0.50 ms | **1.60×** | — |
 | Wine 178×13D | 0.45 | 687 → 347 (50.5%) | 1.61 → 0.94 ms | **1.72×** | 52.6% |
 | Seeds 210×7D | 0.15 | 99 → 83 (83.8%) | 1.18 → 1.24 ms | **0.95×** (loss) | 0.5% |
@@ -150,7 +150,7 @@ Fresh run 2026-09-23 (this manuscript) vs. archived `bench/data/reduced_vr_resul
 `bench/compare_ripser.py --trials 6`, 4 cases, 95% CIs:
 
 | Case | n | maxDist | TopoJS plain vs Ripser | TopoJS cohom vs Ripser | Betti match |
-|------|---|---------|------------------------|------------------------|-------------|
+| --- | --- | --- | --- | --- | --- |
 | sunspots_n60 | 60 | 0.15 | 17.5× (16.6–18.5) | 17.8× (16.9–18.7) | YES |
 | melbourne_n60 | 60 | 0.15 | 14.9× (14.3–15.5) | 14.6× (13.9–15.3) | YES |
 | sunspots_n400 | 400 | 0.10 | 30.5× (28.6–32.5) | 30.5× (28.6–32.6) | YES |
@@ -163,10 +163,10 @@ Geometric mean slowdown vs Ripser: **19.1×** (both engines). This is expected a
 Re-run 2026-09-23 (`bench/benchmark.ts`, paired t on log-speedup):
 
 | Dataset | Window | Geo. mean speedup (95% CI) | Survives Bonferroni (m=7) | Order-sensitivity (12 shuffles) |
-|---------|--------|----------------------------|---------------------------|----------------------------------|
+| --- | --- | --- | --- | --- |
 | Melbourne-temp 2D (3650d) | 45 | 1.20× (1.08–1.32) | **YES** | N/A (time series) |
 | Sonar 60D (208) | 15 | 3.94× (3.17–4.89) | **YES** | 0.83× n.s. |
-| Wine 13D (178) | 20 | 1.90× (1.50–2.41) | **YES** | **0.85× significant (p<0.05)** — *slower under shuffle* |
+| Wine 13D (178) | 20 | 1.90× (1.50–2.41) | **YES** | **0.85× significant (p<0.05)** — _slower under shuffle_ |
 | Seeds 7D (210) | 25 | 1.38× (1.02–1.87) | NO | 1.2× n.s. |
 | Iris 4D (150) | 20 | 1.22× (1.02–1.45) | NO | 0.99× n.s. |
 | Sunspots 2D (2820m) | 40 | 1.20× (1.05–1.37) | NO | N/A |
@@ -209,20 +209,20 @@ TopoJS demonstrates that exact persistent homology — including a provably loss
 
 ## References
 
-- Bauer, U. Ripser: efficient computation of Vietoris–Rips persistence barcodes. *J. Appl. Comput. Topol.* 5, 391–423 (2021). arXiv:1908.02518.
+- Bauer, U. Ripser: efficient computation of Vietoris–Rips persistence barcodes. _J. Appl. Comput. Topol._ 5, 391–423 (2021). arXiv:1908.02518.
 - Koyama, M., Memoli, F., Robins, V., Turner, K. Faster computation of degree-1 persistent homology using the reduced Vietoris–Rips filtration. arXiv:2307.16333 (2023/2024).
 - Koyama, M., Robins, V., Turner, K. The distilled Vietoris–Rips filtration. arXiv:2412.07805 (2024).
 - Bauer, U. et al. Keeping it sparse: Computing persistent homology revisited. arXiv:2211.09075 (2024) — swap reduction (evaluated and rejected for this codebase, `bench/data/swap_reduction_results.txt`).
-- Bubenik, P. Statistical topological data analysis using persistence landscapes. *JMLR* 16 (2015).
-- Adams, H. et al. Persistence images. *JMLR* 18 (2017).
-- Otter, N. et al. A roadmap for the computation of persistent homology. *EPJ Data Sci.* 6, 17 (2017).
+- Bubenik, P. Statistical topological data analysis using persistence landscapes. _JMLR_ 16 (2015).
+- Adams, H. et al. Persistence images. _JMLR_ 18 (2017).
+- Otter, N. et al. A roadmap for the computation of persistent homology. _EPJ Data Sci._ 6, 17 (2017).
 
 ---
 
 ## Appendix A. Ablation Summary (for reviewers)
 
 | Component | File | Effect | Cost | Keep? |
-|-----------|------|--------|------|-------|
+| --- | --- | --- | --- | --- |
 | Adjacency bitsets (lune) | `homology-reduced.ts:204` | O(n/32) vs O(n) lune scan | n²/8 bytes | **YES** — core to scaling |
 | SpatialGrid (MurmurHash3) | `spatial-grid.ts` | 1.64–4.25× edge-build win at n≥1000 | Hash overhead below n=700 | YES (gated at n=700) |
 | LSD radix sort | `radix-sort.ts` | Stable filtration order, O(n) vs O(n log n) | — | YES |
@@ -241,4 +241,3 @@ Geometric mean = exp(mean(log(speedup))); 95% CI = exp(mean ± t_{n-1,0.975}·SE
 - [x] `bench/data/*.txt` committed with generation commands in headers
 - [x] `bun run lint` (ultracite) + `bun run build` + `bun test` green on Node 22/24 (CI already does this)
 - [ ] Zenodo DOI + SoftwareX cover letter (state: browser-native TDA, 0 deps, reduced VR novelty is engineering not theorem)
-
