@@ -7,8 +7,8 @@ import type { Points } from "./distance.ts";
 import type { EdgeEntry, PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
-import { ColumnStore, DenseWorkingCol } from "./reduction.ts";
 import { stableSortByVal } from "./radix-sort.ts";
+import { ColumnStore, DenseWorkingCol } from "./reduction.ts";
 import { SpatialGrid } from "./spatial-grid.ts";
 import { UnionFind } from "./unionfind.ts";
 
@@ -147,8 +147,7 @@ export function computePersistentHomologyReduced(
     v: number;
     val: number;
   }
-  const useGrid =
-    Number.isFinite(maxDist) && maxDist > 0 && n >= GRID_MIN_N;
+  const useGrid = Number.isFinite(maxDist) && maxDist > 0 && n >= GRID_MIN_N;
   const grid = useGrid ? new SpatialGrid(points, dims, n, maxDist) : null;
   const tempEdges: TempEdge[] = [];
   for (let i = 0; i < n; i++) {

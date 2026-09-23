@@ -204,10 +204,7 @@ export function collapseDominatedEdges(
       } else {
         for (let i = 0; i < presentCount; i++) {
           const w = present[i]!;
-          if (
-            w !== prevDominator &&
-            dominatesAt(w, u, v, t, presentCount)
-          ) {
+          if (w !== prevDominator && dominatesAt(w, u, v, t, presentCount)) {
             dominator = w;
             break;
           }

@@ -100,11 +100,7 @@ describe(CombinatorialIndex, () => {
       (n) => {
         const idx = new CombinatorialIndex(n);
         expect(idx.unrank(0)).toStrictEqual([0, 1, 2]);
-        expect(idx.unrank(C(n, 3) - 1)).toStrictEqual([
-          n - 3,
-          n - 2,
-          n - 1,
-        ]);
+        expect(idx.unrank(C(n, 3) - 1)).toStrictEqual([n - 3, n - 2, n - 1]);
       }
     );
   });

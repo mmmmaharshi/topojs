@@ -51,11 +51,7 @@ export type { CollapseOptions } from "./core/edge-collapse.ts";
 
 // ── Core types ──
 export type { PersistencePair, EdgeEntry } from "./core/h0.ts";
-export type {
-  TriangleEntry,
-  TetraEntry,
-  RipsComplex,
-} from "./core/complex.ts";
+export type { TriangleEntry, TetraEntry, RipsComplex } from "./core/complex.ts";
 
 // ── Export / serialization ──
 export {

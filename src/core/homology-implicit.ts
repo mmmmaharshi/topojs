@@ -110,7 +110,12 @@ function computeH1ImplicitAndPivots(
   edges: { u: number; v: number; val: number }[],
   cycleEdges: Uint8Array
 ): { h1Pairs: PersistencePair[]; triPivotOwner: Map<number, number> } {
-  const { adjBits, n, _edgeVals: edgeVals, _getEdgeIndex: getEdgeIndex } = complex;
+  const {
+    adjBits,
+    n,
+    _edgeVals: edgeVals,
+    _getEdgeIndex: getEdgeIndex,
+  } = complex;
   const h1Pairs: PersistencePair[] = [];
   const words = Math.ceil(n / 32);
 
@@ -167,10 +172,8 @@ function computeH1ImplicitAndPivots(
 
         const rank = complex._combinatorialIndex.rank(a, b, c);
         coboundary.push(rank);
-        const euk =
-          edgeVals[getEdgeIndex(u < k ? u : k, u < k ? k : u)]!;
-        const evk =
-          edgeVals[getEdgeIndex(v < k ? v : k, v < k ? k : v)]!;
+        const euk = edgeVals[getEdgeIndex(u < k ? u : k, u < k ? k : u)]!;
+        const evk = edgeVals[getEdgeIndex(v < k ? v : k, v < k ? k : v)]!;
         const tv = Math.max(ev, euk, evk);
         if (tv < minTriVal) {
           minTriVal = tv;
@@ -360,12 +363,9 @@ function computeH2Implicit(
             }
             const tetRank = ci.rank4(p, q, r, s);
             coboundary.push(tetRank);
-            const exa =
-              edgeVals[getEdgeIndex(x < a ? x : a, x < a ? a : x)]!;
-            const exb =
-              edgeVals[getEdgeIndex(x < b ? x : b, x < b ? b : x)]!;
-            const exc =
-              edgeVals[getEdgeIndex(x < c ? x : c, x < c ? c : x)]!;
+            const exa = edgeVals[getEdgeIndex(x < a ? x : a, x < a ? a : x)]!;
+            const exb = edgeVals[getEdgeIndex(x < b ? x : b, x < b ? b : x)]!;
+            const exc = edgeVals[getEdgeIndex(x < c ? x : c, x < c ? c : x)]!;
             const xv = Math.max(triVal, exa, exb, exc);
             if (xv < minTetVal) {
               minTetVal = xv;

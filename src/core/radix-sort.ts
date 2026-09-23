@@ -39,8 +39,7 @@ const DIGIT_MASK = 65_535;
 // Little-endian check, evaluated once: the key-word addressing below reads
 // the high 32 bits of each float64 at u32 offset 2*i+1, which is only the
 // sign/exponent word on little-endian platforms.
-const LITTLE_ENDIAN =
-  new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 // Scratch buffers reused across calls (single-threaded, synchronous use
 // only -- never live across a call boundary): the 64K counting table

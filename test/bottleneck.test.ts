@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-import type { PersistencePair } from "../src/core/h0.ts";
 import { bottleneckDistance } from "../src/core/bottleneck.ts";
+import type { PersistencePair } from "../src/core/h0.ts";
 import { mulberry32 } from "./helpers.ts";
 
 describe("bottleneck distance", () => {

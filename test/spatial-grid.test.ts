@@ -35,7 +35,7 @@ function bruteForceEdges(
   return out;
 }
 
-  function gridCandidatePairs(
+function gridCandidatePairs(
   points: Points,
   dims: number,
   n: number,

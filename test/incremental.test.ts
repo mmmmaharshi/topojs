@@ -538,9 +538,7 @@ describe("IncrementalH1 (Phase B / prefix-stable incremental reduction)", () => 
     // Full-complex counts (see runDifferentialTrial note: the incremental
     // engine does not collapse its 1-skeleton).
     expect(lu.complex.numEdges).toBe(bruteForceEdgeCount(flat, 3, 0.8));
-    expect(lu.complex.numTriangles).toBe(
-      bruteForceTriangleCount(flat, 3, 0.8)
-    );
+    expect(lu.complex.numTriangles).toBe(bruteForceTriangleCount(flat, 3, 0.8));
     expect(lu.complex.numTetrahedra).toBe(bruteForceTetraCount(flat, 3, 0.8));
     const incH01 = lu.pairs.filter((p) => p.dim < 2);
     const refH01 = expected.pairs.filter((p) => p.dim < 2);

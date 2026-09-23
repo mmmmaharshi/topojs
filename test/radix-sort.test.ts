@@ -86,9 +86,7 @@ describe("stableSortByVal matches native stable sort exactly", () => {
 
   it("negative values fall back to native behavior (identical output)", () => {
     const rng = mulberry32(99);
-    const arr = boxes(
-      Array.from({ length: 9000 }, () => rng() * 20 - 10)
-    );
+    const arr = boxes(Array.from({ length: 9000 }, () => rng() * 20 - 10));
     const expected = nativeSorted(arr);
     stableSortByVal(arr);
     expectIdentical(arr, expected);

@@ -192,9 +192,7 @@ export class HeapColumn {
       // the hole is cyclically inside [home..j]. Non-movable entries are
       // simply skipped (the scan continues past them).
       const movable =
-        home <= j
-          ? hole >= home && hole <= j
-          : hole >= home || hole <= j;
+        home <= j ? hole >= home && hole <= j : hole >= home || hole <= j;
       if (movable) {
         keys[hole] = rk;
         vals[hole] = vals[j]!;
@@ -258,9 +256,7 @@ export class HeapColumn {
     this.hLen++;
     while (i > 0) {
       const parent = (i - 1) >> 1;
-      if (
-        this.better(hVal[parent]!, hRank[parent]!, hVal[i]!, hRank[i]!)
-      ) {
+      if (this.better(hVal[parent]!, hRank[parent]!, hVal[i]!, hRank[i]!)) {
         break;
       }
       const tr = hRank[parent]!;

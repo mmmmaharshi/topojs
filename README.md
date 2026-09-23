@@ -140,23 +140,46 @@ console.log("Summary:", summarize(result.pairs));
 
 ## Benchmarks
 
-### IncrementalH1 vs full recompute
+Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --expose-gc` (batch reduced VR), `npm run bench:h2-scaling` (H₂ limit). All on real, externally-sourced data — no synthetic point clouds.
 
-| Dataset                            | Dim | Speedup |
-| ---------------------------------- | --- | ------- |
-| Sunspot counts (1749–1983)         | 2D  | 1.90×   |
-| Melbourne min. temperatures        | 2D  | 2.09×   |
-| UCI Iris (150 samples)             | 4D  | 3.09×   |
-| UCI Wine (178 samples)             | 13D | 1.99×   |
-| UCI Wheat seeds (210 samples)      | 7D  | 2.99×   |
-| UCI Sonar returns (208 samples)    | 60D | 3.19×   |
-| Jazz musicians network (198 nodes) | 3D  | 2.48×   |
+### Batch engines
 
-All significant (p<0.05, Bonferroni-corrected). Speedup peaks at w=20–40, declines beyond w=80. Class-sorted orderings inflate the headline numbers — under random push order the advantage mostly disappears (see `bench/data/`). ~0.2 MB retained at w=80.
+Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open-addressing `Set`, dirty-word tracking in `DenseWorkingCol`, zero-alloc `SpatialGrid` (MurmurHash3), stable LSD radix sort for filtration order, bitset lune + grid edges for the reduced engine, squared-distance filtering and enclosing-radius cutoff. Verified by `bun test` (1999 tests, barcodes identical to baseline).
 
-### Reduced Rips complex
+**Standard vs reduced (H₀+H₁, `--expose-gc`, median of 12 trials, 2026-09-23):**
 
-`engine: "reduced"` achieves up to 43.5× wall-clock speedup on dense complexes (Jazz 198×3D, maxDist=0.2). Barcode verified identical. Full results in `bench/data/`.
+| Dataset (dims) | maxDist | Triangles baseline → reduced | Speedup |
+| -------------- | ------- | ---------------------------- | ------- |
+| Wine 178×13D   | 0.25    | 0 → 0                        | 1.69×   |
+| Wine 178×13D   | 0.45    | 687 → 347 (50%)              | 1.21×   |
+| Seeds 210×7D   | 0.15    | 99 → 83 (84%)                | 1.18×   |
+| Seeds 210×7D   | 0.35    | 19 039 → 2 661 (14%)         | 5.61×   |
+| Iris 150×4D    | 0.20    | 6 596 → 1 169 (18%)          | 3.15×   |
+| Iris 150×4D    | 0.35    | 39 360 → 3 089 (8%)          | 12.61×  |
+| Sonar 208×60D  | 1.4     | 9 807 → 1 374 (14%)          | 2.51×   |
+| Sonar 208×60D  | 2.0     | 191 468 → 7 824 (4%)         | 23.13×  |
+| Jazz 198×3D    | 0.15    | 339 935 → 10 508 (3%)        | 64.04×  |
+| Jazz 198×3D    | 0.20    | 738 386 → 15 102 (2%)        | 133.21× |
+
+Use `engine: "reduced"` for dense H₀+H₁ workloads; auto mode stays `"cohomology"`/`"implicit-full"` (H₂ crossover ~8K triangles, H₁-only ~60K).
+
+**Cohomology vs implicit (4096-point grid, `maxDist=4`, 799K triangles):** `cohomology-CSR` 1.12s → `implicit` 1.58s (full, includes complex build), reduction-only `cohomology-CSR` 1.39s → `implicit` 0.78s. Auto-dispatch picks the faster per complex.
+
+### Streaming: IncrementalH1 vs full recompute
+
+Re-run 2026-09-23, same harness/method as `bench/benchmark.ts` (paired t-test on log-speedup, 95% CI):
+
+| Dataset | Window | Speedup (geo. mean, 95% CI) | re-reduced |
+| --- | --- | --- | --- |
+| Sunspots 2D (2 820 mo.) | 40 | 1.20× (1.05–1.37) | 99.0% |
+| Melbourne temps 2D (3 650 d) | 45 | 1.20× (1.08–1.32) | 99.6% |
+| Iris 4D (150) | 20 | 1.22× (1.02–1.45) | 98.9% |
+| Wine 13D (178) | 20 | 1.90× (1.50–2.41) | 60.3% |
+| Seeds 7D (210) | 25 | 1.38× (1.02–1.87) | 97.9% |
+| Sonar 60D (208) | 15 | 3.94× (3.17–4.89) | 50.2% |
+| Jazz 3D (198) | 25 | 1.31× (1.07–1.61) | 97.9% |
+
+Family-wise (Bonferroni 7 axes, α=0.05): only Melbourne, Sonar, Wine survive at 95% simultaneously (others cross 1× after correction). Speedup peaks at w=20–40, declines past w≳120 (see `bench/data/scaling_results.txt`). Class-sorted orderings inflate headline numbers — under random push order Wine drops to 0.85× (significant, p<0.05, n=12 shuffles); see `bench/data/order_sensitivity_results.txt`.
 
 ## Test coverage
 
