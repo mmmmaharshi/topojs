@@ -1,0 +1,13 @@
+dataset,maxDist,n_edges,baseline_tris,reduced_tris,pct_remaining,speedup,heap_pct,engine
+Wine_178x13D,0.25,4,0,0,NA,1.60,0.0,standard_vs_reduced
+Wine_178x13D,0.45,493,687,347,50.5,1.72,52.6,standard_vs_reduced
+Seeds_210x7D,0.15,228,99,83,83.8,0.95,0.5,standard_vs_reduced
+Seeds_210x7D,0.35,2852,19039,2661,14.0,4.94,109.8,standard_vs_reduced
+Iris_150x4D,0.20,1314,6596,1169,17.7,3.41,52.8,standard_vs_reduced
+Iris_150x4D,0.35,3234,39360,3089,7.8,11.83,183.4,standard_vs_reduced
+Sonar_208x60D,1.4,1537,9807,1374,14.0,2.16,57.4,standard_vs_reduced
+Sonar_208x60D,2.0,8009,191468,7824,4.1,23.45,180.0,standard_vs_reduced
+Jazz_198x3D,0.15,10704,339935,10508,3.1,52.64,noise,standard_vs_reduced
+Jazz_198x3D,0.20,15298,738386,15102,2.0,91.95,noise,standard_vs_reduced
+# Generated: node --experimental-strip-types --expose-gc bench/reduced-vr-comparison.ts 2026-09-23
+# All barcode MATCH. See paper/TopoJS_SoftwareX_Manuscript.md Table 5.3

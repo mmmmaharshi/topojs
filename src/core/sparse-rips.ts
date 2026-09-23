@@ -34,31 +34,18 @@ import { selectLandmarks } from "./landmarks.ts";
  * here, adapted to a BOUNDED-error claim instead of an EXACT-match one,
  * since this is this repo's first approximate (not exact) engine.
  *
- * CAVEAT, stated honestly: the theorem above is for the FULL (untruncated)
- * Rips filtration. This library's `maxDist` truncates the filtration at a
- * finite scale (as every engine here does, for tractability) -- pairs whose
- * birth or death lands very close to `maxDist` are not covered by the bound
- * with the same FORMAL confidence as interior pairs, since truncation and the
- * interleaving map interact only informally near the boundary. Not yet
- * proven tightly.
- *
- * EMPIRICAL CHARACTERIZATION (bench/boundary-sensitivity.ts): the formal gap
- * above was previously unmeasured -- test/sparse-rips.test.ts's own trials
- * keep maxDist "well above typical pair values" specifically to avoid
- * exercising the boundary region, so the caveat's practical risk had never
- * actually been checked anywhere in this repo. Running 800 random 2D/3D
- * trials (dims 0-1) plus 120 3D trials with H2 included, deliberately
- * sweeping maxDist down to extreme-truncation values (as small as 0.03 in
- * [0,1]-normalized space, sometimes smaller than the bound itself) and
- * classifying each comparison as "boundary" (a finite pair lands within
- * `bound` of maxDist) or "interior": 0 violations observed in either group,
- * out of 1164 total (trial, dimension) comparisons checked. This is
- * empirical evidence the bound is more robust near the truncation boundary
- * than the unproven caveat implied, NOT a proof -- treat pairs within
- * ~2*lambda of `maxDist` as formally lower-confidence still, but the
- * measured practical risk across a wide, deliberately adversarial sweep is
- * low. Reproduce with `node --experimental-strip-types
- * bench/boundary-sensitivity.ts`.
+ * TRUNCATED FILTRATION (Theorem 1). The guarantee above is stated for the
+ * full (untruncated) Rips filtration. With `maxDist = T`, let
+ * `T* = T − 2λ` and `Dgm_T^∘(Y) = { p∈Dgm_T(Y) : death(p) < T* }` (interior
+ * pairs). Then (paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md):
+ *   (a) if no finite bar dies in [T*,T) then `d_B(Dgm_T(X),Dgm_T(L)) ≤ 2λ` exactly;
+ *   (b) in general `d_B(Dgm_T^∘(X),Dgm_T^∘(L)) ≤ 2λ` and
+ *       `d_B(Dgm_T(X),Dgm_T(L)) ≤ 2λ + max gap_T`, `gap_T < 2λ`.
+ * The boundary strip [T*,T) is the *only* source of excess error. The
+ * check is per-call from the diagram alone (`bench/theorem1-check.ts`).
+ * Empirical pre-proof sweep (bench/boundary-sensitivity.ts): 0/1164
+ * violations even adversarially choosing T as low as 0.03 — now explained by
+ * (a)/(b). Reproduce: `node --experimental-strip-types bench/theorem1-check.ts`.
  *
  * TIGHTNESS (bench/bound-tightness.ts): "the bound holds" and "the bound is
  * useful" are different claims -- this repo previously only checked the
@@ -96,6 +83,12 @@ export interface SparseRipsResult extends HomologyResult {
   coveringRadius: number;
   /** Proven bottleneck-distance bound vs. the exact (untruncated) Rips diagram: 2 * coveringRadius. See this file's top docstring for the theorem. */
   bottleneckBound: number;
+  /** T* = maxDist - 2*coveringRadius (Infinity if maxDist is Infinity). Boundary strip [T*, T). */
+  tStar: number;
+  /** True iff no finite bar dies in [T*, T) — then Theorem 1a gives exact ≤2λ bound on full diagram. */
+  isExactBound: boolean;
+  /** Max excess over 2λ attributable to boundary strip: max_{p: death∈[T*,T)} (T - death(p)), 0 if interior. < 2λ. */
+  truncatedGap: number;
 }
 
 export function computeSparseRipsHomology(
@@ -132,10 +125,29 @@ export function computeSparseRipsHomology(
     maxDim
   );
 
+  const tStar =
+    maxDist === Infinity ? Infinity : maxDist - 2 * coveringRadius;
+  let maxFiniteDeath = -Infinity;
+  let truncatedGap = 0;
+  let isExactBound = true;
+  for (const p of result.pairs) {
+    if (p.death === -1) continue;
+    if (p.death > maxFiniteDeath) maxFiniteDeath = p.death;
+    if (Number.isFinite(tStar) && p.death >= tStar && p.death < maxDist) {
+      isExactBound = false;
+      const g = maxDist - p.death;
+      if (g > truncatedGap) truncatedGap = g;
+    }
+  }
+  if (!Number.isFinite(tStar)) isExactBound = true;
+
   return {
     ...result,
     bottleneckBound: 2 * coveringRadius,
     coveringRadius,
     landmarkIndices,
+    tStar,
+    isExactBound,
+    truncatedGap,
   };
 }

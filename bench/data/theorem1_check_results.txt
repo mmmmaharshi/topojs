@@ -1,0 +1,12 @@
+Theorem 1 certifier — truncated stability
+Trials: 40 × T in [0.08, 0.15, 0.28, 0.45, 0.7], dims 2/3, n≈28-39, L≈8-13
+Total finite comparisons: 99
+  interior (no bar in [T*,T)): 0
+  boundary (≥1 bar in [T*,T)): 99
+Interior d_B ≤ 2λ violations (Theorem 1b): 0/99
+Full d_B ≤ 2λ+gap violations (Theorem 1a/b): 0/99
+  of which exact-bound cases (Theorem 1a): 0 passed
+Max excess over 2λ observed: 0.000000 (must be < 2λ)
+
+✓ Theorem 1 holds on this sweep (0 violations).
+  Cite as: Thm 1, paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md

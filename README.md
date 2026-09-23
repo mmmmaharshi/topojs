@@ -89,7 +89,7 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `computeSparseRipsHomology(points, dims, n, numLandmarks, maxDist, maxDim, startIndex?)` | Homology on a farthest-point landmark subset. `result.bottleneckBound` = 2× covering radius (proven bound). Actual error ~0.19× the guarantee at the median. |
+| `computeSparseRipsHomology(points, dims, n, numLandmarks, maxDist, maxDim, startIndex?)` | Homology on a farthest-point landmark subset. `result.bottleneckBound` = 2× covering radius (proven bound). Actual error ~0.19× the guarantee at the median. `result.tStar = maxDist−2λ`, `result.isExactBound` (Theorem 1a: `true` iff no finite bar dies in `[tStar, maxDist)`), `result.truncatedGap <2λ` for boundary strip. See `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`. |
 | `selectLandmarks(points, dims, n, numLandmarks, startIndex?)` | Farthest-point landmark sampling, O(numLandmarks·n) time. |
 
 ### Distances & comparison
@@ -129,7 +129,7 @@ console.log("Summary:", summarize(result.pairs));
 | --- | --- |
 | `SlidingWindow` | Fixed-capacity ring buffer feeding both engines. |
 | `StreamingHomology` | Full recompute on every `push()`. Baseline for differential testing. |
-| `IncrementalH1` | Prefix-stable incremental engine — H₀+H₁+H₂ without full recompute. `maxDim` controls dimension (0/1/2). |
+| `IncrementalH1` | Prefix-stable incremental engine — H₀+H₁+H₂ without full recompute. `maxDim` controls dimension (0/1/2). Theorem 2: diagram-identical to full recompute, `O(k+deg²+|suffix|)` per push (see `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`). |
 | `summarizeForStreaming(update)` | Betti-number/count summary of one `push()` result. |
 
 ### Example datasets
@@ -138,9 +138,14 @@ console.log("Summary:", summarize(result.pairs));
 | --- | --- |
 | `generateTerrain(size?, octaves?)` | Procedural fractal Brownian motion heightmap (`Float64Array`, `size×size`). |
 
+## Theorems (new)
+
+* **Theorem 1 — Truncated Stability** (`src/core/sparse-rips.ts`, `bench/theorem1-check.ts`): With `T=maxDist, λ=coveringRadius, T*=T−2λ`, `d_B(Dgm_T^∘)≤2λ` always and full `d_B≤2λ` iff `isExactBound` (no finite bar in `[T*,T)`), otherwise `≤2λ+truncatedGap` (`<2λ`). Closes the prior truncated caveat; `0/1164` empirical sweep now proved. Per-call certifier: `result.isExactBound`.
+* **Theorem 2 — Prefix-Stable Incremental Exactness** (`src/streaming/incremental-h1.ts`): `IncrementalH1.push()` is diagram-identical to `StreamingHomology.push()`; per-push extra work `O(k+deg²+|suffix|)`. See `paper/New_Theorem_Truncated_Stability_and_Incremental_Exactness.md`.
+
 ## Benchmarks
 
-Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --expose-gc` (batch reduced VR), `npm run bench:h2-scaling` (H₂ limit). All on real, externally-sourced data — no synthetic point clouds.
+Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --expose-gc` (batch reduced VR), `npm run bench:h2-scaling` (H₂ limit), `node --experimental-strip-types bench/theorem1-check.ts` (Theorem 1 certifier). All on real, externally-sourced data — no synthetic point clouds.
 
 ### Batch engines
 
