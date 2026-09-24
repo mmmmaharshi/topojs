@@ -1,4 +1,5 @@
 import type { Points } from "./distance.ts";
+import { squaredEuclideanDistance } from "./distance.ts";
 
 /**
  * Farthest-point (max-min / "Gonzalez") landmark sampling, deterministic
@@ -80,14 +81,7 @@ export function selectLandmarks(
   nearestLandmarkDist[startIndex] = 0;
 
   function dist(i: number, j: number): number {
-    let sq = 0;
-    const bi = i * dims;
-    const bj = j * dims;
-    for (let d = 0; d < dims; d++) {
-      const diff = points[bi + d]! - points[bj + d]!;
-      sq += diff * diff;
-    }
-    return Math.sqrt(sq);
+    return Math.sqrt(squaredEuclideanDistance(points, dims, i, j));
   }
 
   // Seed nearestLandmarkDist with distances to the first landmark.

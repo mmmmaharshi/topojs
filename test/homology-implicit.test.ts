@@ -36,10 +36,14 @@ describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomolo
       const cohomPairs = cohomResult.pairs.filter((p) => p.dim !== 2);
       const implicitPairs = implicitResult.pairs.filter((p) => p.dim !== 2);
       const expected =
-        n <= 8 ? referenceRipsBarcode(pts, dims, maxDist, 1) : cohomPairs;
-
-      expect(samePersistencePairs(cohomPairs, expected)).toBeTruthy();
-      expect(samePersistencePairs(implicitPairs, expected)).toBeTruthy();
+        n <= 8 ? referenceRipsBarcode(pts, dims, maxDist, 1) : undefined;
+      const cohomMatches =
+        expected === undefined || samePersistencePairs(cohomPairs, expected);
+      const implicitMatches = samePersistencePairs(
+        implicitPairs,
+        expected ?? cohomPairs
+      );
+      expect(cohomMatches && implicitMatches).toBeTruthy();
     }
   );
 
@@ -75,10 +79,14 @@ describe("computePersistentHomologyImplicit vs computePersistentHomologyCohomolo
           ? referenceRipsBarcode(pts, dims, maxDist, 2).filter(
               (pair) => pair.dim === 2
             )
-          : cohomPairs;
-
-      expect(samePersistencePairs(cohomPairs, expected)).toBeTruthy();
-      expect(samePersistencePairs(implicitPairs, expected)).toBeTruthy();
+          : undefined;
+      const cohomMatches =
+        expected === undefined || samePersistencePairs(cohomPairs, expected);
+      const implicitMatches = samePersistencePairs(
+        implicitPairs,
+        expected ?? cohomPairs
+      );
+      expect(cohomMatches && implicitMatches).toBeTruthy();
     }
   );
 });

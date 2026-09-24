@@ -1,24 +1,8 @@
 import type { Points } from "./distance.ts";
-import { enclosingRadius } from "./distance.ts";
+import { enclosingRadius, squaredEuclideanDistance } from "./distance.ts";
 import { collapseDominatedEdges } from "./edge-collapse.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { stableSortByVal } from "./radix-sort.ts";
-
-function squaredEuclidean(
-  points: Points,
-  dims: number,
-  i: number,
-  j: number
-): number {
-  const bi = i * dims;
-  const bj = j * dims;
-  let sq = 0;
-  for (let d = 0; d < dims; d++) {
-    const diff = points[bi + d]! - points[bj + d]!;
-    sq += diff * diff;
-  }
-  return sq;
-}
 
 /**
  * A k-simplex (k >= 2) in the general (arbitrary-dimension) Rips complex.
@@ -139,7 +123,7 @@ export function buildGeneralRipsComplex(
   const adj: number[][] = Array.from({ length: n }, () => []);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      const sq = squaredEuclidean(points, dims, i, j);
+      const sq = squaredEuclideanDistance(points, dims, i, j);
       if (sq <= maxDistSq) {
         const d = Math.sqrt(sq);
         tempEdges.push({ u: i, v: j, val: d });
@@ -248,7 +232,7 @@ export function buildGeneralRipsComplex(
           let { val } = parent;
           let bestSq = val * val;
           for (const pvi of pv) {
-            const sq = squaredEuclidean(points, dims, pvi, x);
+            const sq = squaredEuclideanDistance(points, dims, pvi, x);
             if (sq > bestSq) {
               bestSq = sq;
               val = Math.sqrt(sq);

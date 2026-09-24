@@ -75,13 +75,9 @@ function computeH0PhaseImpl(
  * vertices instead of point indices, otherwise identical), and
  * incremental-h1.ts (local window indices, otherwise identical) -- five live
  * copies with no compiler or test enforcing they stayed in sync beyond each
- * file's own differential tests against computePersistentHomology. A 6th,
- * UNUSED copy (this file's own computeH0, below) had already drifted:
- * unlike all 5 live copies, it never emitted the essential-component pairs,
- * which would have silently under-reported H0 features had anyone ever
- * wired it up. Fixed here by having computeH0 delegate to this function
- * (see below) so it can't drift again, and by having all 5 live call sites
- * use this same function instead of their own inline copy.
+ * file's own differential tests against computePersistentHomology. A prior
+ * unused copy had drifted and was removed; all live call sites now use this
+ * same function instead of an inline copy.
  *
  * Processes edges in filtration order (sorted by value, the caller's
  * responsibility). Each edge connecting two previously separate components
@@ -144,25 +140,4 @@ export function computeH0PhaseFromArrays(
     (i) => vArr[i]!,
     (i) => valArr[i]!
   );
-}
-
-/**
- * Compute H₀ persistence (finite + essential pairs) -- a thin convenience
- * wrapper over computeH0Phase() for callers that don't need cycleEdges.
- *
- * BUG FIX: this function's own docstring always described essential
- * (surviving-component) pairs as part of its contract ("the single
- * remaining component at the end is essential"), but the implementation
- * never actually emitted them -- a real, found-by-audit drift between this
- * unused copy and every LIVE H0 implementation in this codebase (all five
- * of which do emit essential pairs). Currently unreferenced anywhere in
- * src/, test/, or bench/, so this was latent rather than an active bug, but
- * fixed here by delegating to computeH0Phase() -- the same function every
- * live engine now uses -- so this can't drift again.
- */
-export function computeH0(
-  nVertices: number,
-  edges: EdgeEntry[]
-): PersistencePair[] {
-  return computeH0Phase(nVertices, edges).h0Pairs;
 }

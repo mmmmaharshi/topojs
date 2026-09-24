@@ -1,5 +1,5 @@
 import type { Points } from "./distance.ts";
-import { enclosingRadius } from "./distance.ts";
+import { enclosingRadius, squaredEuclideanDistance } from "./distance.ts";
 import { collapseDominatedEdges } from "./edge-collapse.ts";
 import type { EdgeEntry } from "./h0.ts";
 import { selectLandmarks } from "./landmarks.ts";
@@ -20,22 +20,6 @@ export interface RipsSkeleton {
 export interface RipsSkeletonOptions {
   collapseMaxDim?: number;
   epsilon?: number;
-}
-
-function squaredEuclidean(
-  points: Points,
-  dims: number,
-  i: number,
-  j: number
-): number {
-  const bi = i * dims;
-  const bj = j * dims;
-  let sq = 0;
-  for (let d = 0; d < dims; d++) {
-    const diff = points[bi + d]! - points[bj + d]!;
-    sq += diff * diff;
-  }
-  return sq;
 }
 
 export function buildRipsSkeleton(
@@ -107,7 +91,7 @@ export function buildRipsSkeleton(
         if (permutationRank !== null && permutationRank[j]! >= activeCount) {
           continue;
         }
-        const sq = squaredEuclidean(points, dims, i, j);
+        const sq = squaredEuclideanDistance(points, dims, i, j);
         if (sq <= maxDistSq) {
           const d = Math.sqrt(sq);
           tempEdges.push({ u: i, v: j, val: d });
@@ -120,7 +104,7 @@ export function buildRipsSkeleton(
         if (permutationRank !== null && permutationRank[j]! >= activeCount) {
           continue;
         }
-        const sq = squaredEuclidean(points, dims, i, j);
+        const sq = squaredEuclideanDistance(points, dims, i, j);
         if (sq <= maxDistSq) {
           const d = Math.sqrt(sq);
           tempEdges.push({ u: i, v: j, val: d });

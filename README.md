@@ -150,7 +150,7 @@ Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --expose-gc
 
 ### Batch engines
 
-Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open-addressing `Set`, dirty-word tracking in `DenseWorkingCol`, zero-alloc `SpatialGrid` (MurmurHash3), stable LSD radix sort for filtration order, bitset lune + grid edges for the reduced engine, squared-distance filtering and enclosing-radius cutoff. Verified by `bun test` (2015 tests, barcodes identical to baseline).
+Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open-addressing `Set`, dirty-word tracking in `DenseWorkingCol`, zero-alloc `SpatialGrid` (MurmurHash3), stable LSD radix sort for filtration order, bitset lune + grid edges for the reduced engine, squared-distance filtering and enclosing-radius cutoff. Verified by `bun test` (2013 tests, barcodes identical to baseline).
 
 **Standard vs reduced (H₀+H₁, `--expose-gc`, median of 12 trials, 2026-09-23):**
 
