@@ -10,7 +10,7 @@ keeps maxDist "well above typical pair values" to avoid the boundary region,
 so this caveat had never been empirically checked. This sweep checks it
 directly with synthetic random point clouds swept across a wide, deliberately
 adversarial maxDist range (correctness/bound characterization -- not a
-performance claim -- so CLAUDE.md's real-data-only benchmark policy does not
+performance claim -- so AGENTS.md's real-data-only benchmark policy does not
 apply here; see file header for the distinction).
 
 RESULTS (dims 0-1, 800 trials, maxDist swept 0.03-0.78 including extreme

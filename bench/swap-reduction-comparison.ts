@@ -13,7 +13,7 @@
  * itself changed during an earlier, unrelated session) would confound the
  * comparison with unrelated harness drift between the two checkouts.
  *
- * Real data only (per CLAUDE.md's real-data-only benchmark policy): UCI
+ * Real data only (per AGENTS.md's real-data-only benchmark policy): UCI
  * Wine (178 x 13D) and UCI Iris (150 x 4D), both already vendored in
  * bench/data/ for the rest of this repo's benchmarks. maxDist values are
  * chosen on the denser end of each dataset's already-established sweep

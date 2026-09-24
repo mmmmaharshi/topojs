@@ -21,7 +21,7 @@
  * numbers, without depending on bench/benchmark.ts (which serves a
  * different, streaming-focused purpose and may drift independently).
  *
- * Real data only (per CLAUDE.md's real-data-only benchmark policy): UCI
+ * Real data only (per AGENTS.md's real-data-only benchmark policy): UCI
  * Wine (178x13D), UCI Sonar (208x60D), UCI Seeds (210x7D), UCI Iris
  * (150x4D), and the Jazz musicians collaboration network (198 nodes, graph
  * Laplacian 3D embedding) -- all already vendored in bench/data/ or

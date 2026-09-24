@@ -24,7 +24,7 @@
  * separately per group.
  *
  * This uses synthetic random point clouds, not real-world datasets --
- * correctly so: CLAUDE.md's real-data-only policy applies to PERFORMANCE
+ * correctly so: AGENTS.md's real-data-only policy applies to PERFORMANCE
  * benchmark claims (bench/benchmark.ts), not to correctness/bound
  * characterization, which the existing test suite (test/sparse-rips.test.ts,
  * test/homology-*.test.ts) already does with synthetic point clouds
