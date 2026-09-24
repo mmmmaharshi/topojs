@@ -2,6 +2,10 @@
 
 Guidance for AI agents (and human contributors) working in this repository.
 
+Always follow @CODING_STANDARDS.md.
+
+Always respond in /i-have-adhd style.
+
 ## What this is
 
 TopoJS is a zero-dependency, pure-TypeScript library for computing persistent homology of Vietoris–Rips complexes (H0/H1/H2) and cubical complexes (2D grayscale images). No WASM, WebGL, WebGPU, or server. See `README.md` for the full feature/API overview.
