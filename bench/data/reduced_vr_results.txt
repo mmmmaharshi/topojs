@@ -140,7 +140,8 @@ implementation removes the O(n^2) distance-matrix allocation; the expected
 memory benefit grows with n. The dense edge index remains. Heap-delta
 measurements remain noisy and are not a release-quality memory claim.
 
-The reduced engine is exposed through `computePersistentHomology` with
-`engine: "reduced"`. Its `collapse: true` option is opt-in. The default
+The reduced engine is exposed through
+`advanced.computePersistentHomology` with `engine: "reduced"`. Its
+`collapse: true` option is opt-in. The default
 reduced path remains unchanged. The reduced engine computes H0+H1 only;
 H2 requires another engine.
