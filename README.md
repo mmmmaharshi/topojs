@@ -73,11 +73,11 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with auto engine selection. `maxDim` is the highest homology dimension: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂ (default). Options object for `engine` (`"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`), or `epsilon` (Sheehy sparsification). Auto mode picks `"implicit-full"` above 8K triangles (H₂) or 60K triangles (H₁ only); falls back to `"cohomology"`; `"implicit"` selected for Sheehy complexes. |
+| `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with auto engine selection. `maxDim` is the highest homology dimension: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂ (default). Options object for `engine` (`"auto"`, `"standard"`, `"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`), or `epsilon` (Sheehy sparsification). Auto mode picks `"implicit-full"` above 8K triangles (H₂) or 60K triangles (H₁ only); falls back to `"cohomology"`; `"implicit"` selected for Sheehy complexes. |
 | `computePersistentHomologyImplicit(points, dims, maxDist, maxDim?)` | Fully implicit reduction (`"implicit-full"` engine); avoids all simplex materialisation. `maxDim` follows the public scope: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂. H₂ crossover ~8K triangles, H₁ crossover ~60K triangles. |
 | `computeCubicalHomology(image, height, width, maxDim)` | H₀+H₁ on 2D grayscale images. |
 
-Complex construction and prebuilt cohomology reduction are internal implementation details. Use the point-cloud functions above for the published persistence API.
+Prebuilt cohomology reduction is an internal implementation detail; use the functions above rather than reaching into it.
 
 ### Arbitrary-dimension homology
 

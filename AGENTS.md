@@ -20,7 +20,7 @@ TopoJS is a zero-dependency, pure-TypeScript library for computing persistent ho
 - Benchmarks (real data only, not part of the published package): `npm run bench` or `npm run bench -- <dataset>` (see `bench/benchmark.ts` for the dataset registry and flags: `--scaling`, `--regime`, `--memory`). `npm run bench:all` runs every axis (default, `--scaling`, `--memory`, `--regime`) across every registered dataset in one command — takes a few minutes; requires a POSIX shell (macOS/Linux/WSL/git-bash), not plain Windows `cmd.exe`, since it uses a `for` loop.
 - Ripser cross-check (separate Python script, own dependencies — see `bench/requirements.txt`): `python3 bench/compare_ripser.py`
 
-CI (`.github/workflows/ci.yml`) runs `npm test`, `npx tsc --noEmit`, and `npm run lint` on Node 22/24. Note: `bench`/`demo:real-data` require Node ≥22.7 (`--experimental-strip-types` -- plain type stripping, not the now-removed `--experimental-transform-types`; this codebase uses no enums/namespaces, so plain stripping has always been sufficient) and are NOT run in CI.
+There is no CI workflow for the test gate -- `.github/workflows/` holds only `publish-jsr.yml`, so the pre-push checklist at the end of this file is the gate. Note: `bench`/`demo:real-data` require Node ≥22.7 (`--experimental-strip-types` -- plain type stripping, not the now-removed `--experimental-transform-types`; this codebase uses no enums/namespaces, so plain stripping has always been sufficient).
 
 ## Public API boundary
 
@@ -84,6 +84,8 @@ This is a single-context repository. See `docs/agents/domain.md`.
 
 Only push when all of these pass:
 
-- `bun run lint` — 0 errors (ultracite check)
-- `bun run build` — 0 errors (tsc)
-- `bun test` — all tests pass
+- `npm run lint` — 0 errors (ultracite check)
+- `npm run build` — 0 errors (tsc)
+- `npm test` — all tests pass
+
+`bun test` runs the same test files under Bun's own runner and is much faster locally, but `npm test` (vitest) is the gate. `bun run lint` / `bun run build` are equivalent to their npm forms -- they invoke the same `package.json` scripts.
