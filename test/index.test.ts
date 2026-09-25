@@ -3,6 +3,8 @@ import { describe, it, expect } from "vitest";
 import * as topojs from "../src/index.ts";
 import { samePersistencePairs } from "./helpers.ts";
 
+const advancedCompute = topojs.advanced.computePersistentHomology;
+
 /**
  * Barrel smoke test — found and closed a real verification gap during a
  * codebase audit: every OTHER test file in this suite imports directly from
@@ -70,8 +72,35 @@ describe("public API barrel (src/index.ts)", () => {
     expect(topojs.summarizeForStreaming).toBeTypeOf("function");
   });
 
+  it("exposes advanced controls only under the advanced namespace", () => {
+    expect(topojs).not.toHaveProperty("collapseDominatedEdges");
+    expect(topojs.advanced).toBeTypeOf("object");
+    expect(topojs.advanced.computePersistentHomology).toBeTypeOf("function");
+    expect(topojs.advanced.collapseDominatedEdges).toBeTypeOf("function");
+  });
+
+  it("rejects advanced options on the default entry point", () => {
+    const points = new Float64Array([0, 0, 1, 0]);
+    const engineOptions = { engine: "reduced", maxDim: 1 };
+    const collapseOptions = { collapse: true, maxDim: 1 };
+    expect(() =>
+      topojs.computePersistentHomology(points, 2, engineOptions)
+    ).toThrow(/advanced\.computePersistentHomology/u);
+    expect(() =>
+      topojs.computePersistentHomology(points, 2, collapseOptions)
+    ).toThrow(/advanced\.computePersistentHomology/u);
+  });
+
   it("exports generateTerrain", () => {
     expect(topojs.generateTerrain).toBeTypeOf("function");
+  });
+
+  it("advanced.computePersistentHomology accepts the legacy positional form", () => {
+    const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
+    const positional = advancedCompute(points, 2, 1, 2);
+    const options = advancedCompute(points, 2, { maxDim: 2, maxDist: 1 });
+    expect(positional.pairs).toHaveLength(options.pairs.length);
+    expect(positional.complex.numEdges).toBe(options.complex.numEdges);
   });
 
   it("end-to-end: computePersistentHomology works when called through the barrel import", () => {
@@ -81,12 +110,12 @@ describe("public API barrel (src/index.ts)", () => {
     expect(result.complex.numVertices).toBe(3);
   });
 
-  it("end-to-end: computePersistentHomology's engine:'reduced' option works when called through the barrel import (H0+H1 only, matching the standard engine)", () => {
+  it("end-to-end: advanced reduced engine works when called through the barrel import (H0+H1 only, matching the standard engine)", () => {
     const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866, 0.5, 0.3]);
     const standard = topojs.computePersistentHomology(points, 2, {
       maxDim: 1,
     });
-    const reduced = topojs.computePersistentHomology(points, 2, {
+    const reduced = advancedCompute(points, 2, {
       engine: "reduced",
       maxDim: 1,
     });
@@ -94,14 +123,14 @@ describe("public API barrel (src/index.ts)", () => {
     expect(reduced.pairs).toHaveLength(standard.pairs.length);
   });
 
-  it("supports opt-in collapsed reduced H1 through the unified options object", () => {
+  it("supports advanced collapsed reduced H1 through the unified options object", () => {
     const points = new Float64Array([1, 1, 1, 1, -1, -1, -1, 1, -1, -1, -1, 1]);
-    const regular = topojs.computePersistentHomology(points, 3, {
+    const regular = advancedCompute(points, 3, {
       engine: "reduced",
       maxDim: 1,
       maxDist: 3,
     });
-    const collapsed = topojs.computePersistentHomology(points, 3, {
+    const collapsed = advancedCompute(points, 3, {
       collapse: true,
       engine: "reduced",
       maxDim: 1,
@@ -110,7 +139,7 @@ describe("public API barrel (src/index.ts)", () => {
     expect(samePersistencePairs(collapsed.pairs, regular.pairs)).toBeTruthy();
     expect(collapsed.complex.numEdges).toBeLessThan(regular.complex.numEdges);
 
-    const standard = topojs.computePersistentHomology(points, 3, {
+    const standard = advancedCompute(points, 3, {
       collapse: true,
       engine: "standard",
       maxDim: 1,
@@ -118,7 +147,7 @@ describe("public API barrel (src/index.ts)", () => {
     });
     expect(samePersistencePairs(standard.pairs, regular.pairs)).toBeTruthy();
 
-    const explicitlyRegular = topojs.computePersistentHomology(points, 3, {
+    const explicitlyRegular = advancedCompute(points, 3, {
       collapse: false,
       engine: "reduced",
       maxDim: 1,
@@ -136,13 +165,13 @@ describe("public API barrel (src/index.ts)", () => {
       "implicit-full",
       "fast",
     ] as const) {
-      const withCollapse = topojs.computePersistentHomology(points, 3, {
+      const withCollapse = advancedCompute(points, 3, {
         collapse: true,
         engine,
         maxDim: 1,
         maxDist: 3,
       });
-      const withoutCollapse = topojs.computePersistentHomology(points, 3, {
+      const withoutCollapse = advancedCompute(points, 3, {
         engine,
         maxDim: 1,
         maxDist: 3,
@@ -168,14 +197,14 @@ describe("public API barrel (src/index.ts)", () => {
     ] as const;
 
     for (const engine of engines) {
-      const h0 = topojs.computePersistentHomology(loop, 2, {
+      const h0 = advancedCompute(loop, 2, {
         engine,
         maxDim: 0,
         maxDist: 1.1,
       });
       expect(h0.pairs.every((pair) => pair.dim === 0)).toBeTruthy();
 
-      const h1 = topojs.computePersistentHomology(loop, 2, {
+      const h1 = advancedCompute(loop, 2, {
         engine,
         maxDim: 1,
         maxDist: 1.1,
@@ -183,7 +212,7 @@ describe("public API barrel (src/index.ts)", () => {
       expect(h1.pairs.some((pair) => pair.dim === 1)).toBeTruthy();
       expect(h1.pairs.every((pair) => pair.dim <= 1)).toBeTruthy();
 
-      const h2 = topojs.computePersistentHomology(octahedron, 3, {
+      const h2 = advancedCompute(octahedron, 3, {
         engine,
         maxDim: 2,
         maxDist: Math.SQRT2 + 0.01,
@@ -269,14 +298,14 @@ describe("public API barrel (src/index.ts)", () => {
 
   it("computePersistentHomology's engine:'reduced' option supports scope 0 and 1, and rejects scope 2", () => {
     const loop = new Float64Array([0, 0, 1, 0, 1, 1, 0, 1]);
-    const h0 = topojs.computePersistentHomology(loop, 2, {
+    const h0 = advancedCompute(loop, 2, {
       engine: "reduced",
       maxDim: 0,
       maxDist: 1.1,
     });
     expect(h0.pairs.every((pair) => pair.dim === 0)).toBeTruthy();
 
-    const h1 = topojs.computePersistentHomology(loop, 2, {
+    const h1 = advancedCompute(loop, 2, {
       engine: "reduced",
       maxDim: 1,
       maxDist: 1.1,
@@ -285,7 +314,7 @@ describe("public API barrel (src/index.ts)", () => {
     expect(h1.pairs.every((pair) => pair.dim <= 1)).toBeTruthy();
 
     expect(() =>
-      topojs.computePersistentHomology(loop, 2, {
+      advancedCompute(loop, 2, {
         engine: "reduced",
         maxDim: 2,
         maxDist: 1.1,
@@ -295,9 +324,9 @@ describe("public API barrel (src/index.ts)", () => {
 
   it("computePersistentHomology's engine:'reduced' option throws a clear error if maxDim>1 is requested (it has no H2 algorithm)", () => {
     const points = new Float64Array([0, 0, 1, 0, 0.5, 0.866]);
-    expect(() =>
-      topojs.computePersistentHomology(points, 2, { engine: "reduced" })
-    ).toThrow(/only computes H0\+H1/u);
+    expect(() => advancedCompute(points, 2, { engine: "reduced" })).toThrow(
+      /only computes H0\+H1/u
+    );
   });
 
   it("end-to-end: StreamingHomology + IncrementalH1 both work when instantiated through the barrel import", () => {

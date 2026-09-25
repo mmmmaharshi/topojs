@@ -1,99 +1,99 @@
 PUBLIC AUTO-ENGINE MATRIX
 scope=maxDim:1; reference=cohomology; candidates=auto,cohomology,implicit-full,reduced,reduced-collapse; auto_resolved=unreported; counts=engine-reported; preflight_basis=implicit-collapse; preflight_saturation_possible=true
-generated=2026-09-25T15:54:52.960Z
+generated=2026-09-25T17:47:34.350Z
 
 UCI Wine (178x13D) maxDist=0.25 (sparser)
   signals: n=178 dims=13 maxDim=1 maxDist=0.25 finite=true epsilon=none trials=12 warmup=3 E_preflight=4 avg_degree_preflight=0.04 T_g_preflight=0 reference=cohomology
-  auto: 1.328ms edges_reported=4 triangles_reported=0 status=ok
-  cohomology: 0.518ms edges_reported=4 triangles_reported=0 status=ok
-  implicit-full: 0.519ms edges_reported=4 triangles_reported=0 status=ok
-  reduced: 0.810ms edges_reported=4 triangles_reported=0 status=ok
-  reduced-collapse: 0.615ms edges_reported=4 triangles_reported=0 status=ok
+  auto: 2.420ms edges_reported=4 triangles_reported=0 status=ok
+  cohomology: 0.944ms edges_reported=4 triangles_reported=0 status=ok
+  implicit-full: 0.876ms edges_reported=4 triangles_reported=0 status=ok
+  reduced: 1.031ms edges_reported=4 triangles_reported=0 status=ok
+  reduced-collapse: 0.848ms edges_reported=4 triangles_reported=0 status=ok
 
 UCI Wine (178x13D) maxDist=0.45 (denser)
   signals: n=178 dims=13 maxDim=1 maxDist=0.45 finite=true epsilon=none trials=12 warmup=3 E_preflight=302 avg_degree_preflight=3.39 T_g_preflight=219 reference=cohomology
-  auto: 2.918ms edges_reported=302 triangles_reported=219 status=ok
-  cohomology: 1.056ms edges_reported=302 triangles_reported=219 status=ok
-  implicit-full: 1.912ms edges_reported=302 triangles_reported=219 status=ok
-  reduced: 1.552ms edges_reported=493 triangles_reported=347 status=ok
-  reduced-collapse: 1.165ms edges_reported=302 triangles_reported=157 status=ok
+  auto: 3.278ms edges_reported=302 triangles_reported=219 status=ok
+  cohomology: 1.849ms edges_reported=302 triangles_reported=219 status=ok
+  implicit-full: 2.069ms edges_reported=302 triangles_reported=219 status=ok
+  reduced: 2.149ms edges_reported=493 triangles_reported=347 status=ok
+  reduced-collapse: 1.822ms edges_reported=302 triangles_reported=157 status=ok
 
 UCI Sonar (208x60D) maxDist=1.4 (sparser)
   signals: n=208 dims=60 maxDim=1 maxDist=1.4 finite=true epsilon=none trials=12 warmup=3 E_preflight=363 avg_degree_preflight=3.49 T_g_preflight=356 reference=cohomology
-  auto: 7.159ms edges_reported=363 triangles_reported=356 status=ok
-  cohomology: 4.425ms edges_reported=363 triangles_reported=356 status=ok
-  implicit-full: 4.230ms edges_reported=363 triangles_reported=356 status=ok
-  reduced: 5.993ms edges_reported=1537 triangles_reported=1374 status=ok
-  reduced-collapse: 4.463ms edges_reported=363 triangles_reported=203 status=ok
+  auto: 10.978ms edges_reported=363 triangles_reported=356 status=ok
+  cohomology: 4.657ms edges_reported=363 triangles_reported=356 status=ok
+  implicit-full: 6.297ms edges_reported=363 triangles_reported=356 status=ok
+  reduced: 6.839ms edges_reported=1537 triangles_reported=1374 status=ok
+  reduced-collapse: 6.646ms edges_reported=363 triangles_reported=203 status=ok
 
 UCI Sonar (208x60D) maxDist=2.0 (denser)
   signals: n=208 dims=60 maxDim=1 maxDist=2 finite=true epsilon=none trials=12 warmup=3 E_preflight=1835 avg_degree_preflight=17.64 T_g_preflight=9752 reference=cohomology
-  auto: 42.341ms edges_reported=1835 triangles_reported=9752 status=ok
-  cohomology: 22.526ms edges_reported=1835 triangles_reported=9752 status=ok
-  implicit-full: 27.822ms edges_reported=1835 triangles_reported=9752 status=ok
-  reduced: 25.041ms edges_reported=8009 triangles_reported=7824 status=ok
-  reduced-collapse: 20.065ms edges_reported=1835 triangles_reported=1669 status=ok
+  auto: 58.852ms edges_reported=1835 triangles_reported=9752 status=ok
+  cohomology: 32.107ms edges_reported=1835 triangles_reported=9752 status=ok
+  implicit-full: 49.148ms edges_reported=1835 triangles_reported=9752 status=ok
+  reduced: 42.832ms edges_reported=8009 triangles_reported=7824 status=ok
+  reduced-collapse: 36.987ms edges_reported=1835 triangles_reported=1669 status=ok
 
 UCI Seeds (210x7D) maxDist=0.15 (sparser)
   signals: n=210 dims=7 maxDim=1 maxDist=0.15 finite=true epsilon=none trials=12 warmup=3 E_preflight=167 avg_degree_preflight=1.59 T_g_preflight=22 reference=cohomology
-  auto: 1.123ms edges_reported=167 triangles_reported=22 status=ok
-  cohomology: 1.056ms edges_reported=167 triangles_reported=22 status=ok
-  implicit-full: 0.679ms edges_reported=167 triangles_reported=22 status=ok
-  reduced: 0.622ms edges_reported=228 triangles_reported=83 status=ok
-  reduced-collapse: 0.611ms edges_reported=167 triangles_reported=22 status=ok
+  auto: 2.723ms edges_reported=167 triangles_reported=22 status=ok
+  cohomology: 1.804ms edges_reported=167 triangles_reported=22 status=ok
+  implicit-full: 0.879ms edges_reported=167 triangles_reported=22 status=ok
+  reduced: 1.123ms edges_reported=228 triangles_reported=83 status=ok
+  reduced-collapse: 1.072ms edges_reported=167 triangles_reported=22 status=ok
 
 UCI Seeds (210x7D) maxDist=0.35 (denser)
   signals: n=210 dims=7 maxDim=1 maxDist=0.35 finite=true epsilon=none trials=12 warmup=3 E_preflight=794 avg_degree_preflight=7.56 T_g_preflight=1100 reference=cohomology
-  auto: 5.002ms edges_reported=794 triangles_reported=1100 status=ok
-  cohomology: 2.812ms edges_reported=794 triangles_reported=1100 status=ok
-  implicit-full: 3.998ms edges_reported=794 triangles_reported=1100 status=ok
-  reduced: 3.472ms edges_reported=2852 triangles_reported=2661 status=ok
-  reduced-collapse: 3.908ms edges_reported=794 triangles_reported=610 status=ok
+  auto: 8.521ms edges_reported=794 triangles_reported=1100 status=ok
+  cohomology: 5.200ms edges_reported=794 triangles_reported=1100 status=ok
+  implicit-full: 7.865ms edges_reported=794 triangles_reported=1100 status=ok
+  reduced: 8.173ms edges_reported=2852 triangles_reported=2661 status=ok
+  reduced-collapse: 5.385ms edges_reported=794 triangles_reported=610 status=ok
 
 UCI Iris (150x4D, normalized) maxDist=0.2 (sparser)
   signals: n=150 dims=4 maxDim=1 maxDist=0.2 finite=true epsilon=none trials=12 warmup=3 E_preflight=332 avg_degree_preflight=4.43 T_g_preflight=265 reference=cohomology
-  auto: 2.424ms edges_reported=332 triangles_reported=265 status=ok
-  cohomology: 0.962ms edges_reported=332 triangles_reported=265 status=ok
-  implicit-full: 1.854ms edges_reported=332 triangles_reported=265 status=ok
-  reduced: 2.554ms edges_reported=1314 triangles_reported=1169 status=ok
-  reduced-collapse: 1.409ms edges_reported=332 triangles_reported=188 status=ok
+  auto: 3.285ms edges_reported=332 triangles_reported=265 status=ok
+  cohomology: 1.325ms edges_reported=332 triangles_reported=265 status=ok
+  implicit-full: 2.285ms edges_reported=332 triangles_reported=265 status=ok
+  reduced: 4.108ms edges_reported=1314 triangles_reported=1169 status=ok
+  reduced-collapse: 1.455ms edges_reported=332 triangles_reported=188 status=ok
 
 UCI Iris (150x4D, normalized) maxDist=0.35 (denser)
   signals: n=150 dims=4 maxDim=1 maxDist=0.35 finite=true epsilon=none trials=12 warmup=3 E_preflight=455 avg_degree_preflight=6.07 T_g_preflight=511 reference=cohomology
-  auto: 4.545ms edges_reported=455 triangles_reported=511 status=ok
-  cohomology: 2.327ms edges_reported=455 triangles_reported=511 status=ok
-  implicit-full: 3.304ms edges_reported=455 triangles_reported=511 status=ok
-  reduced: 5.597ms edges_reported=3234 triangles_reported=3089 status=ok
-  reduced-collapse: 2.516ms edges_reported=455 triangles_reported=314 status=ok
+  auto: 8.537ms edges_reported=455 triangles_reported=511 status=ok
+  cohomology: 4.960ms edges_reported=455 triangles_reported=511 status=ok
+  implicit-full: 5.718ms edges_reported=455 triangles_reported=511 status=ok
+  reduced: 8.662ms edges_reported=3234 triangles_reported=3089 status=ok
+  reduced-collapse: 3.945ms edges_reported=455 triangles_reported=314 status=ok
 
 Monthly sunspots (2795x2D delay-embedded) maxDist=0.005 (sparser)
   signals: n=2795 dims=2 maxDim=1 maxDist=0.005 finite=true epsilon=none trials=3 warmup=1 preflight=unavailable (CombinatorialIndex n=2795 exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage)) reference=cohomology
   auto: unavailable (CombinatorialIndex n=2795 exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage))
-  cohomology: 11.010ms edges_reported=2438 triangles_reported=2458 status=ok
+  cohomology: 20.728ms edges_reported=2438 triangles_reported=2458 status=ok
   implicit-full: unavailable (CombinatorialIndex n=2795 exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage))
-  reduced: 13.645ms edges_reported=2438 triangles_reported=1138 status=ok
-  reduced-collapse: 11.843ms edges_reported=2438 triangles_reported=1138 status=ok
+  reduced: 26.495ms edges_reported=2438 triangles_reported=1138 status=ok
+  reduced-collapse: 22.718ms edges_reported=2438 triangles_reported=1138 status=ok
 
 Monthly sunspots (2795x2D delay-embedded) maxDist=0.02 (denser)
   signals: n=2795 dims=2 maxDim=1 maxDist=0.02 finite=true epsilon=none trials=3 warmup=1 preflight=unavailable (CombinatorialIndex n=2795 exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage)) reference=cohomology
   auto: unavailable (CombinatorialIndex n=2795 exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage))
-  cohomology: 344.226ms edges_reported=31695 triangles_reported=273266 status=ok
+  cohomology: 769.680ms edges_reported=31695 triangles_reported=273266 status=ok
   implicit-full: unavailable (CombinatorialIndex n=2795 exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage))
-  reduced: 135.210ms edges_reported=31695 triangles_reported=29019 status=ok
-  reduced-collapse: 130.299ms edges_reported=31695 triangles_reported=29019 status=ok
+  reduced: 329.562ms edges_reported=31695 triangles_reported=29019 status=ok
+  reduced-collapse: 190.693ms edges_reported=31695 triangles_reported=29019 status=ok
 
 Jazz musicians (198x3D Laplacian embedding) maxDist=0.15 (sparser)
   signals: n=198 dims=3 maxDim=1 maxDist=0.15 finite=true epsilon=none trials=3 warmup=0 E_preflight=398 avg_degree_preflight=4.02 T_g_preflight=207 reference=cohomology
-  auto: 19.479ms edges_reported=398 triangles_reported=207 status=ok
-  cohomology: 12.429ms edges_reported=398 triangles_reported=207 status=ok
-  implicit-full: 8.789ms edges_reported=398 triangles_reported=207 status=ok
-  reduced: 41.486ms edges_reported=10704 triangles_reported=10508 status=ok
-  reduced-collapse: 11.883ms edges_reported=398 triangles_reported=202 status=ok
+  auto: 33.199ms edges_reported=398 triangles_reported=207 status=ok
+  cohomology: 14.357ms edges_reported=398 triangles_reported=207 status=ok
+  implicit-full: 16.457ms edges_reported=398 triangles_reported=207 status=ok
+  reduced: 93.049ms edges_reported=10704 triangles_reported=10508 status=ok
+  reduced-collapse: 19.851ms edges_reported=398 triangles_reported=202 status=ok
 
 Jazz musicians (198x3D Laplacian embedding) maxDist=0.2 (denser)
   signals: n=198 dims=3 maxDim=1 maxDist=0.2 finite=true epsilon=none trials=1 warmup=0 E_preflight=398 avg_degree_preflight=4.02 T_g_preflight=207 reference=cohomology
-  auto: 28.455ms edges_reported=398 triangles_reported=207 status=ok
-  cohomology: 19.676ms edges_reported=398 triangles_reported=207 status=ok
-  implicit-full: 14.580ms edges_reported=398 triangles_reported=207 status=ok
-  reduced: 64.005ms edges_reported=15298 triangles_reported=15102 status=ok
-  reduced-collapse: 17.340ms edges_reported=398 triangles_reported=202 status=ok
+  auto: 59.044ms edges_reported=398 triangles_reported=207 status=ok
+  cohomology: 21.660ms edges_reported=398 triangles_reported=207 status=ok
+  implicit-full: 35.810ms edges_reported=398 triangles_reported=207 status=ok
+  reduced: 141.499ms edges_reported=15298 triangles_reported=15102 status=ok
+  reduced-collapse: 55.243ms edges_reported=398 triangles_reported=202 status=ok

@@ -48,8 +48,9 @@ import {
 import { computePersistentHomologyReduced } from "../src/core/homology-reduced.ts";
 import { computePersistentHomology } from "../src/core/homology.ts";
 import type { HomologyResult } from "../src/core/homology.ts";
-import { computePersistentHomology as computePublic } from "../src/index.ts";
+import * as topojs from "../src/index.ts";
 
+const computePublic = topojs.advanced.computePersistentHomology;
 const __dirname = import.meta.dirname;
 
 function loadMultiDimCsv(filename: string, dims: number): Float64Array {

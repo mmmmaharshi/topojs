@@ -111,7 +111,7 @@ const GRID_MIN_N = 700;
  * on density, with wall-clock speedups from roughly a wash at very sparse
  * maxDist up to ~43x on the densest real case tested -- see
  * bench/data/reduced_vr_results.txt and `npm run bench:reduced-vr`. Exposed
- * publicly via `computePersistentHomology(points, dims, { engine: "reduced",
+ * publicly via `advanced.computePersistentHomology(points, dims, { engine: "reduced",
  * maxDim: 0 })` or `maxDim: 1` (see homology-unified.ts) rather than as its
  * own top-level export, matching how the other alternate engines
  * (cohomology/fast/implicit/standard) are only reachable through that same
