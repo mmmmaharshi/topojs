@@ -75,6 +75,8 @@ export interface HomologyOptions {
   engine?: HomologyEngine;
   /** Sheehy sparse Rips parameter (only supported by `"implicit"`). */
   epsilon?: number;
+  /** Apply exact edge collapse before the reduced H0+H1 engine. */
+  collapse?: boolean;
 }
 
 /**
@@ -109,7 +111,13 @@ export function computePersistentHomology(
       ? { maxDim: arg4, maxDist: arg3 }
       : arg3;
 
-  const { maxDist = Infinity, maxDim = 2, engine = "auto", epsilon } = opts;
+  const {
+    maxDist = Infinity,
+    maxDim = 2,
+    engine = "auto",
+    epsilon,
+    collapse = false,
+  } = opts;
 
   if (engine !== "reduced") {
     validateMaxDim(maxDim);
@@ -206,7 +214,7 @@ export function computePersistentHomology(
       }
       validateMaxDim(maxDim);
       return limitToScope(
-        computePersistentHomologyReduced(points, dims, maxDist),
+        computePersistentHomologyReduced(points, dims, maxDist, collapse),
         maxDim
       );
     }

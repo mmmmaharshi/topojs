@@ -24,7 +24,7 @@ regime this technique targets) so it uses fewer replicates (documented per
 case below) to keep total measurement time practical -- correctness was
 still checked on every run.
 
-RESULTS (all 10 configurations: barcodes MATCH between the two engines):
+HISTORICAL DEFAULT RESULTS (all 10 configurations; the Iris cases use the older raw-scale protocol; barcodes MATCH between the two engines):
 
   UCI Wine (178x13D) maxDist=0.25 (sparser):
     n=178 edges=4, triangles: baseline=0 reduced=0 (no triangles exist yet)
@@ -97,15 +97,50 @@ during H1 reduction, which is a direct, mechanical consequence of the
 triangle-count numbers above, not a separate claim needing its own
 measurement.
 
-CONCLUSION: computePersistentHomologyReduced is a genuine, verified win --
-same H0+H1 barcode as the standard engine (differentially tested at scale in
-test/homology-reduced.test.ts, 11 tests across random 2D/3D/5D clouds,
-circles, tie-heavy grids, 1D lattices, sparse/disconnected configs, and
-degenerate small clouds, plus re-verified against real data here), with
-speedups from a wash at very sparse maxDist up to ~43x on the densest real
-dataset tested, tracking a triangle-count reduction to as little as 2% of
-the full complex. Scope is H0+H1 only (matches the source paper's own
-practical algorithm; see homology-reduced.ts's docstring for why H2 wasn't
-attempted). Not yet exposed via src/index.ts or the HomologyEngine
-selection mechanism in homology-unified.ts -- that's a follow-up decision,
-not a correctness or performance gap.
+CONCLUSION: computePersistentHomologyReduced is an exact H0+H1 engine --
+the same H0+H1 barcode as the standard engine across the real-data cases
+above and the differential suite. The opt-in collapsed path was also run on
+all 10 real-data cases with `--collapse`; every collapsed barcode matched
+the standard barcode. The per-case collapsed measurements below come from a new
+run of the same benchmark with the current normalized-Iris protocol. Do not
+compare their Iris timings with the historical raw-scale table above. The
+per-case collapsed measurements were:
+
+  Wine maxDist=0.25: edges 4 -> 4, triangles 0 -> 0, 1.01x
+  Wine maxDist=0.45: edges 493 -> 302, triangles 687 -> 157, 0.93x
+  Sonar maxDist=1.4: edges 1537 -> 363, triangles 9807 -> 203, 2.75x
+  Sonar maxDist=2.0: edges 8009 -> 1835, triangles 191468 -> 1669, 60.67x
+  Seeds maxDist=0.15: edges 228 -> 167, triangles 99 -> 22, 0.80x
+  Seeds maxDist=0.35: edges 2852 -> 794, triangles 19039 -> 610, 6.39x
+  Iris maxDist=0.2: edges 1314 -> 332, triangles 6596 -> 188, 3.27x
+  Iris maxDist=0.35: edges 3234 -> 455, triangles 39360 -> 314, 20.06x
+  Jazz maxDist=0.15: edges 10704 -> 398, triangles 339935 -> 202, 171.98x
+  Jazz maxDist=0.2: edges 15298 -> 398, triangles 738386 -> 202, 95.53x
+
+ON-DEMAND DISTANCE RUN: the reduced engine was rerun after replacing its
+full squared-distance matrix with on-demand squared-distance calculations.
+All 12 default and 12 collapsed configurations matched the standard H0+H1
+barcode. Edge and triangle counts were unchanged. The added real sunspots
+cases were:
+
+  Monthly sunspots maxDist=0.005: n=2795, reduced 27.755ms, 2438 edges,
+    1138 triangles, old reduced matrix bytes removed 29.80MiB
+  Monthly sunspots maxDist=0.02: n=2795, reduced 130.952ms, 31695 edges,
+    29019 triangles, old reduced matrix bytes removed 29.80MiB
+
+These bytes describe only the removed distance matrix. The reduced engine still
+allocates its dense edge index.
+
+Wall-clock timings moved in both directions across the real datasets, so this
+run does not claim a universal time speedup. A paired sunspots smoke check
+used the same lag-25 delay embedding, three trials, and identical counts. The
+old matrix implementation took 42.146ms at maxDist=0.005 and 207.889ms at
+0.02. The on-demand implementation took 22.535ms and 147.108ms. The
+implementation removes the O(n^2) distance-matrix allocation; the expected
+memory benefit grows with n. The dense edge index remains. Heap-delta
+measurements remain noisy and are not a release-quality memory claim.
+
+The reduced engine is exposed through `computePersistentHomology` with
+`engine: "reduced"`. Its `collapse: true` option is opt-in. The default
+reduced path remains unchanged. The reduced engine computes H0+H1 only;
+H2 requires another engine.

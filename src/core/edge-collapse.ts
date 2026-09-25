@@ -44,10 +44,13 @@ import { stableSortByVal } from "./radix-sort.ts";
  *
  * SCOPE (stated honestly): wired into the builders that enumerate FULL
  * flag complexes from edges (complex.ts, complex-general.ts,
- * complex-implicit.ts). NOT applied to homology-reduced.ts (its lune
- * triangles are a metric-dependent subset, not the full flag complex, so
- * the collapse theorem does not directly transfer) nor to
+ * complex-implicit.ts), and available to homology-reduced.ts through the
+ * opt-in `collapse` option. The reduced path uses the returned weighted
+ * edges for its lune and triangle filtration values. Collapse is not
+ * applied to the reduced path by default and is not applied to
  * streaming/incremental paths (collapse is a batch algorithm).
+ * The reduced composition is stated for completed real values and a fixed
+ * labeled final weighted graph. The existing cost gates still apply.
  *
  * COST MODEL: per edge-step one W-word bitset AND (W = ceil(n/32)) plus
  * matrix reads for the domination subset test — the same order as the

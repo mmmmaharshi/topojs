@@ -23,15 +23,17 @@
  *
  * Real data only (per AGENTS.md's real-data-only benchmark policy): UCI
  * Wine (178x13D), UCI Sonar (208x60D), UCI Seeds (210x7D), UCI Iris
- * (150x4D), and the Jazz musicians collaboration network (198 nodes, graph
- * Laplacian 3D embedding) -- all already vendored in bench/data/ or
+ * (150x4D), the Jazz musicians collaboration network (198 nodes, graph
+ * Laplacian 3D embedding), and monthly sunspots (2795x2D delay embedding) --
+ * all already vendored in bench/data/ or
  * src/data/realworld-datasets.ts for this repo's other benchmarks. For each
- * dataset, two maxDist values are swept: a sparser one (near the low end of
- * the dataset's established sweep range in bench/benchmark.ts's DATASETS
- * registry) and a denser one (near the high end), since the reduced
- * complex's win should scale with how crowded the neighborhoods are.
+ * dataset, two maxDist values are swept: a sparser one and a denser one, since
+ * the reduced complex's win should scale with neighborhood density. The
+ * sunspots pair uses 0.005 and 0.02 because the full H1 baseline at 0.05 is
+ * too slow for the 2780-point delay embedding.
  *
  * Usage: node --experimental-strip-types --expose-gc bench/reduced-vr-comparison.ts
+ * Add --collapse to measure the opt-in collapsed reduced path as well.
  */
 
 import { readFileSync } from "node:fs";
@@ -90,6 +92,54 @@ function loadJazzRaw(): Float64Array {
     }
   }
   return flat;
+}
+
+function autocorrelation(series: number[], lag: number): number {
+  const mean = series.reduce((sum, value) => sum + value, 0) / series.length;
+  let numerator = 0;
+  let denominator = 0;
+  for (const value of series) {
+    denominator += (value - mean) ** 2;
+  }
+  for (let i = 0; i + lag < series.length; i++) {
+    numerator += (series[i]! - mean) * (series[i + lag]! - mean);
+  }
+  return numerator / denominator;
+}
+
+function dataDrivenLag(
+  series: number[],
+  maxScan: number,
+  fallback: number
+): number {
+  const threshold = 1 / Math.E;
+  for (let candidate = 2; candidate <= maxScan; candidate++) {
+    if (autocorrelation(series, candidate) < threshold) {
+      return candidate;
+    }
+  }
+  return fallback;
+}
+
+function delayEmbed2D(series: number[], lag: number): number[][] {
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const normalize = (value: number): number => (value - min) / (max - min);
+  const points: number[][] = [];
+  for (let i = 0; i + lag < series.length; i++) {
+    points.push([normalize(series[i]!), normalize(series[i + lag]!)]);
+  }
+  return points;
+}
+
+function loadSunspotsDelayEmbedded(): Float64Array {
+  const csvPath = path.join(__dirname, "data", "monthly-sunspots.csv");
+  const raw = readFileSync(csvPath, "utf-8").trim().split("\n").slice(1);
+  const values = raw.map((line) => Number(line.split(",")[1]!));
+  const lag = dataDrivenLag(values, 40, 6);
+  const points = delayEmbed2D(values, lag);
+  console.log(`monthly sunspots: lag=${lag}, points=${points.length}`);
+  return new Float64Array(points.flat());
 }
 
 function median(values: number[]): number {
@@ -220,6 +270,24 @@ const cases: {
     points: loadMultiDimCsv("iris.csv", 4),
   },
   {
+    dims: 2,
+    heapRepeats: 3,
+    maxDist: 0.005,
+    name: "Monthly sunspots (2795x2D delay-embedded) maxDist=0.005 (sparser)",
+    points: loadSunspotsDelayEmbedded(),
+    trials: 3,
+    warmup: 1,
+  },
+  {
+    dims: 2,
+    heapRepeats: 3,
+    maxDist: 0.02,
+    name: "Monthly sunspots (2795x2D delay-embedded) maxDist=0.02 (denser)",
+    points: loadSunspotsDelayEmbedded(),
+    trials: 3,
+    warmup: 1,
+  },
+  {
     dims: 3,
     heapRepeats: 2,
     maxDist: 0.15,
@@ -244,7 +312,9 @@ const cases: {
 // contains "jazz" (case-insensitive). Exists so the Jazz "denser" case --
 // whose baseline alone takes ~9-22s per call, exactly the crowded regime
 // this technique targets -- can be run and timed on its own.
-const filter = process.argv[2]?.toLowerCase();
+const args = process.argv.slice(2);
+const compareCollapsed = args.includes("--collapse");
+const filter = args.find((arg) => !arg.startsWith("--"))?.toLowerCase();
 const activeCases = filter
   ? cases.filter((c) => c.name.toLowerCase().includes(filter))
   : cases;
@@ -256,14 +326,22 @@ for (const c of activeCases) {
     computePersistentHomology(c.points, c.dims, c.maxDist, 1);
   const runNew = () =>
     computePersistentHomologyReduced(c.points, c.dims, c.maxDist);
+  const runCollapsed = () =>
+    computePersistentHomologyReduced(c.points, c.dims, c.maxDist, true);
 
   const baseResult = runBaseline();
   const newResult = runNew();
+  const collapsedResult = compareCollapsed ? runCollapsed() : undefined;
 
   const baseCanon = canon(baseResult.pairs.filter((p) => p.dim <= 1));
   const newCanon = canon(newResult.pairs);
   const matches = baseCanon === newCanon;
-  if (!matches) {
+  const collapsedCanon = collapsedResult
+    ? canon(collapsedResult.pairs)
+    : undefined;
+  const collapsedMatches =
+    collapsedCanon === undefined || collapsedCanon === baseCanon;
+  if (!matches || !collapsedMatches) {
     anyMismatch = true;
   }
 
@@ -274,19 +352,35 @@ for (const c of activeCases) {
   const newTimeMs = timeMedianMs(runNew, trials, warmup);
   const baseHeapMB = heapDeltaMBMedian(runBaseline, heapRepeats);
   const newHeapMB = heapDeltaMBMedian(runNew, heapRepeats);
+  const collapsedTimeMs = compareCollapsed
+    ? timeMedianMs(runCollapsed, trials, warmup)
+    : Number.NaN;
+  const collapsedHeapMB = compareCollapsed
+    ? heapDeltaMBMedian(runCollapsed, heapRepeats)
+    : Number.NaN;
 
   const speedup = baseTimeMs / newTimeMs;
   const triRatioPct =
-    (100 * newResult.complex.numTriangles) / baseResult.complex.numTriangles;
+    baseResult.complex.numTriangles > 0
+      ? (100 * newResult.complex.numTriangles) / baseResult.complex.numTriangles
+      : Number.NaN;
   const heapRatioPct =
     baseHeapMB > 0 ? (100 * newHeapMB) / baseHeapMB : Number.NaN;
 
   console.log(`${c.name}:`);
+  const n = baseResult.complex.numVertices;
+  const oldMatrixBytes = 8 * ((n * (n - 1)) / 2) + 4 * n;
   console.log(
-    `  correctness: ${matches ? "MATCH" : "MISMATCH <-- BUG"} (n=${baseResult.complex.numVertices} edges=${baseResult.complex.numEdges})`
+    `  correctness: ${matches ? "MATCH" : "MISMATCH <-- BUG"} (n=${n} edges=${baseResult.complex.numEdges})`
   );
   console.log(
-    `  triangles:   baseline=${baseResult.complex.numTriangles}  reduced=${newResult.complex.numTriangles}  (${triRatioPct.toFixed(1)}% of baseline)`
+    `  old_reduced_matrix_bytes: ${(oldMatrixBytes / (1024 * 1024)).toFixed(2)}MiB`
+  );
+  const triRatioText = Number.isFinite(triRatioPct)
+    ? `${triRatioPct.toFixed(1)}%`
+    : "n/a";
+  console.log(
+    `  triangles:   baseline=${baseResult.complex.numTriangles}  reduced=${newResult.complex.numTriangles}  (${triRatioText} of baseline)`
   );
   console.log(
     `  time_ms:     baseline=${baseTimeMs.toFixed(3)}  reduced=${newTimeMs.toFixed(3)}  (${speedup.toFixed(2)}x speedup)`
@@ -294,6 +388,24 @@ for (const c of activeCases) {
   console.log(
     `  heap_MB:     baseline=${baseHeapMB.toFixed(4)}  reduced=${newHeapMB.toFixed(4)}  (${heapRatioPct.toFixed(1)}% of baseline)`
   );
+  if (collapsedResult) {
+    const collapsedTriRatioPct =
+      baseResult.complex.numTriangles > 0
+        ? (100 * collapsedResult.complex.numTriangles) /
+          baseResult.complex.numTriangles
+        : Number.NaN;
+    const collapsedHeapRatioPct =
+      baseHeapMB > 0 ? (100 * collapsedHeapMB) / baseHeapMB : Number.NaN;
+    const collapsedTriRatioText = Number.isFinite(collapsedTriRatioPct)
+      ? `${collapsedTriRatioPct.toFixed(1)}%`
+      : "n/a";
+    console.log(
+      `  collapsed:   edges=${collapsedResult.complex.numEdges}  triangles=${collapsedResult.complex.numTriangles} (${collapsedTriRatioText} of baseline)  correctness=${collapsedMatches ? "MATCH" : "MISMATCH <-- BUG"}`
+    );
+    console.log(
+      `  collapsed_time_ms: ${collapsedTimeMs.toFixed(3)}  speedup=${(baseTimeMs / collapsedTimeMs).toFixed(2)}x  heap_MB=${collapsedHeapMB.toFixed(4)} (${collapsedHeapRatioPct.toFixed(1)}% of baseline)`
+    );
+  }
   console.log();
 }
 
@@ -306,4 +418,9 @@ if (anyMismatch) {
   console.log(
     "All datasets: reduced-VR-complex engine's H0+H1 barcode MATCHES the standard engine's, across every maxDist tested above."
   );
+  if (compareCollapsed) {
+    console.log(
+      "All datasets: collapsed reduced-VR-complex H0+H1 barcode MATCHES the standard engine's."
+    );
+  }
 }

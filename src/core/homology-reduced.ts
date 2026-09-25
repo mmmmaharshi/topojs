@@ -1,9 +1,6 @@
-import {
-  computeSquaredPairwiseDistances,
-  enclosingRadius,
-  lookupSq,
-} from "./distance.ts";
+import { enclosingRadius, squaredEuclideanDistance } from "./distance.ts";
 import type { Points } from "./distance.ts";
+import { collapseDominatedEdges } from "./edge-collapse.ts";
 import type { EdgeEntry, PersistencePair } from "./h0.ts";
 import { computeH0Phase } from "./h0.ts";
 import type { HomologyResult } from "./homology.ts";
@@ -123,7 +120,8 @@ const GRID_MIN_N = 700;
 export function computePersistentHomologyReduced(
   points: Points,
   dims: number,
-  maxDist = Number.POSITIVE_INFINITY
+  maxDist = Number.POSITIVE_INFINITY,
+  collapse = false
 ): HomologyResult {
   const n = points.length / dims;
   // ── Enclosing-radius cutoff (see complex-implicit.ts): cap UNBOUNDED
@@ -135,10 +133,6 @@ export function computePersistentHomologyReduced(
       effectiveMaxDist = r;
     }
   }
-  const dist = computeSquaredPairwiseDistances(points, dims, n);
-  // Squared-domain threshold: identical predicate to the other engines'
-  // `sq <= maxDist²` filter (same raw sums, same bits); sqrt only for kept
-  // edges so emitted vals stay real distances.
   const maxDistSq = effectiveMaxDist * effectiveMaxDist;
 
   // ── Build the full 1-skeleton (every edge within maxDist) ──
@@ -160,14 +154,14 @@ export function computePersistentHomologyReduced(
     const candidates = grid ? grid.candidatesAfter(points, i) : null;
     if (candidates) {
       for (const j of candidates) {
-        const sq = lookupSq(dist, i, j);
+        const sq = squaredEuclideanDistance(points, dims, i, j);
         if (sq <= maxDistSq) {
           tempEdges.push({ u: i, v: j, val: Math.sqrt(sq) });
         }
       }
     } else {
       for (let j = i + 1; j < n; j++) {
-        const sq = lookupSq(dist, i, j);
+        const sq = squaredEuclideanDistance(points, dims, i, j);
         if (sq <= maxDistSq) {
           tempEdges.push({ u: i, v: j, val: Math.sqrt(sq) });
         }
@@ -180,11 +174,11 @@ export function computePersistentHomologyReduced(
   // array's index", so lune/component comparisons automatically agree with
   // it -- no separate tie-break logic to keep in sync).
   tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
-  const edges: EdgeEntry[] = tempEdges.map((e) => ({
-    u: e.u,
-    v: e.v,
-    val: e.val,
-  }));
+  const edges: EdgeEntry[] = collapse
+    ? collapseDominatedEdges(n, tempEdges, { maxDim: 2 }).toSorted(
+        (a, b) => a.val - b.val || a.u - b.u || a.v - b.v
+      )
+    : tempEdges;
 
   // edgeIdx[u*n+v] (always queried with u<v) -> index into `edges`, i.e.
   // that edge's position in filtration order. -1 means "no such edge"
@@ -297,9 +291,12 @@ export function computePersistentHomologyReduced(
     }
 
     for (const x of repForRoot.values()) {
-      const dxy = Math.sqrt(lookupSq(dist, x, y));
-      const dxz = Math.sqrt(lookupSq(dist, x, z));
-      const val = Math.max(dyz, dxy, dxz);
+      const xyOrder = edgeOrder(x, y);
+      const xzOrder = edgeOrder(x, z);
+      if (xyOrder < 0 || xzOrder < 0) {
+        continue;
+      }
+      const val = Math.max(dyz, edges[xyOrder]!.val, edges[xzOrder]!.val);
       if (val <= effectiveMaxDist) {
         triangles.push({ val, x, y, z });
       }

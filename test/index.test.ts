@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import * as topojs from "../src/index.ts";
+import { samePersistencePairs } from "./helpers.ts";
 
 /**
  * Barrel smoke test — found and closed a real verification gap during a
@@ -91,6 +92,65 @@ describe("public API barrel (src/index.ts)", () => {
     });
     expect(reduced.complex.numVertices).toBe(standard.complex.numVertices);
     expect(reduced.pairs).toHaveLength(standard.pairs.length);
+  });
+
+  it("supports opt-in collapsed reduced H1 through the unified options object", () => {
+    const points = new Float64Array([1, 1, 1, 1, -1, -1, -1, 1, -1, -1, -1, 1]);
+    const regular = topojs.computePersistentHomology(points, 3, {
+      engine: "reduced",
+      maxDim: 1,
+      maxDist: 3,
+    });
+    const collapsed = topojs.computePersistentHomology(points, 3, {
+      collapse: true,
+      engine: "reduced",
+      maxDim: 1,
+      maxDist: 3,
+    });
+    expect(samePersistencePairs(collapsed.pairs, regular.pairs)).toBeTruthy();
+    expect(collapsed.complex.numEdges).toBeLessThan(regular.complex.numEdges);
+
+    const standard = topojs.computePersistentHomology(points, 3, {
+      collapse: true,
+      engine: "standard",
+      maxDim: 1,
+      maxDist: 3,
+    });
+    expect(samePersistencePairs(standard.pairs, regular.pairs)).toBeTruthy();
+
+    const explicitlyRegular = topojs.computePersistentHomology(points, 3, {
+      collapse: false,
+      engine: "reduced",
+      maxDim: 1,
+      maxDist: 3,
+    });
+    expect(
+      samePersistencePairs(explicitlyRegular.pairs, regular.pairs)
+    ).toBeTruthy();
+
+    for (const engine of [
+      "auto",
+      "standard",
+      "cohomology",
+      "implicit",
+      "implicit-full",
+      "fast",
+    ] as const) {
+      const withCollapse = topojs.computePersistentHomology(points, 3, {
+        collapse: true,
+        engine,
+        maxDim: 1,
+        maxDist: 3,
+      });
+      const withoutCollapse = topojs.computePersistentHomology(points, 3, {
+        engine,
+        maxDim: 1,
+        maxDist: 3,
+      });
+      expect(
+        samePersistencePairs(withCollapse.pairs, withoutCollapse.pairs)
+      ).toBeTruthy();
+    }
   });
 
   it("uses homology-dimension maxDim semantics across the published engines", () => {
