@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 
-import { CombinatorialIndex } from "../src/core/combinatorial-index.ts";
+import {
+  CombinatorialIndex,
+  isCombinatorialIndexLimitError,
+} from "../src/core/combinatorial-index.ts";
 
 function C(n: number, k: number): number {
   if (k === 0) {
@@ -16,6 +19,15 @@ function C(n: number, k: number): number {
     return (n * (n - 1) * (n - 2)) / 6;
   }
   return 0;
+}
+
+function captureError(run: () => unknown): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
 }
 
 function* enumerateTriangles(n: number): Generator<[number, number, number]> {
@@ -108,6 +120,12 @@ describe(CombinatorialIndex, () => {
   describe("n ≥ 2300 throws", () => {
     it.each([2300, 2345, 5000, 10_000])(`n=%i throws`, (n) => {
       expect(() => new CombinatorialIndex(n)).toThrow("CombinatorialIndex");
+    });
+
+    it("identifies only the index-limit error", () => {
+      const error = captureError(() => new CombinatorialIndex(2300));
+      expect(isCombinatorialIndexLimitError(error)).toBeTruthy();
+      expect(isCombinatorialIndexLimitError(new Error("other"))).toBeFalsy();
     });
   });
 });

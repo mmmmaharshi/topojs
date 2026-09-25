@@ -146,7 +146,7 @@ Prebuilt cohomology reduction is an internal implementation detail; use the func
 
 ## Benchmarks
 
-Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --collapse` (batch reduced VR with the opt-in collapsed path), `npm run bench:reduced-vr` (default reduced VR), `npm run bench:h2-scaling` (H₂ limit), `node --experimental-strip-types bench/theorem1-check.ts` (Theorem 1 certifier). All on real, externally-sourced data — no synthetic point clouds.
+Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --collapse` (batch reduced VR with the opt-in collapsed path), `npm run bench:reduced-vr` (default reduced VR), `npm run bench:auto-matrix` (public auto-engine candidate matrix), `npm run bench:h2-scaling` (H₂ limit), `node --experimental-strip-types bench/theorem1-check.ts` (Theorem 1 certifier). All on real, externally-sourced data — no synthetic point clouds.
 
 ### Batch engines
 
@@ -167,7 +167,7 @@ Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open
 | Jazz 198×3D    | 0.15    | 339 935 → 10 508 (3%)        | 64.04×  |
 | Jazz 198×3D    | 0.20    | 738 386 → 15 102 (2%)        | 133.21× |
 
-Use `engine: "reduced"` for dense H₀+H₁ workloads; auto mode stays `"cohomology"`/`"implicit-full"` (H₂ crossover ~8K triangles, H₁-only ~60K). The reduced benchmark also includes the real monthly sunspots series at a larger `n`. Add `collapse: true` to the same options object to use the exact collapsed reduced path. The option defaults to false, affects only the reduced engine, and reports the collapsed edge and triangle counts. Pass `maxDim: 0` or `maxDim: 1` because the reduced engine does not compute H₂.
+Use `engine: "reduced"` for dense H₀+H₁ workloads; auto mode stays `"cohomology"`/`"implicit-full"` (H₂ crossover ~8K triangles, H₁-only ~60K). The reduced benchmark also includes the real monthly sunspots series at a larger `n`. Add `collapse: true` to the same options object to use the exact collapsed reduced path. The option defaults to false, affects only the reduced engine, and reports the collapsed edge and triangle counts. Pass `maxDim: 0` or `maxDim: 1` because the reduced engine does not compute H₂. The current auto preflight constructs a combinatorial index and is unavailable for `n >= 2300` on the measured no-epsilon path; explicit cohomology and reduced candidates can still run on larger inputs. See `bench/data/auto_engine_matrix_results.txt`.
 
 **Cohomology vs implicit (4096-point grid, `maxDist=4`, 799K triangles):** `cohomology-CSR` 1.12s → `implicit` 1.58s (full, includes complex build), reduction-only `cohomology-CSR` 1.39s → `implicit` 0.78s. Auto-dispatch picks the faster per complex.
 

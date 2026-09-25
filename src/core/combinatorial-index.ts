@@ -1,11 +1,23 @@
+const COMBINATORIAL_INDEX_LIMIT_CODE = "topojs/combinatorial-index-limit";
+
+export function isCombinatorialIndexLimitError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error as Error & { code?: string }).code === COMBINATORIAL_INDEX_LIMIT_CODE
+  );
+}
+
 export class CombinatorialIndex {
   readonly n: number;
   private readonly binom: Float64Array;
 
   constructor(n: number) {
     if (n >= 2300) {
-      throw new Error(
-        `CombinatorialIndex n=${n} exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage)`
+      throw Object.assign(
+        new Error(
+          `CombinatorialIndex n=${n} exceeds the n < 2300 limit (rank would overflow Int32Array pivot storage)`
+        ),
+        { code: COMBINATORIAL_INDEX_LIMIT_CODE }
       );
     }
     this.n = n;

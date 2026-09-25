@@ -50,7 +50,8 @@
     "bench:h2-scaling": "node --experimental-strip-types bench/h2-scaling.ts",
     "bench:complexity-fit": "node --experimental-strip-types bench/complexity-fit.ts",
     "bench:swap-reduction": "node --experimental-strip-types --expose-gc bench/swap-reduction-comparison.ts",
-    "bench:reduced-vr": "node --experimental-strip-types --expose-gc bench/reduced-vr-comparison.ts"
+    "bench:reduced-vr": "node --experimental-strip-types --expose-gc bench/reduced-vr-comparison.ts --",
+    "bench:auto-matrix": "node --experimental-strip-types --expose-gc bench/reduced-vr-comparison.ts -- --public-matrix"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
