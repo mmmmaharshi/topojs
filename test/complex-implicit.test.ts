@@ -26,6 +26,11 @@ describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
       const materialized = buildRipsComplex(pts, dims, maxDist, 2);
       const implicit = buildImplicitRipsComplex(pts, dims, maxDist);
 
+      expect(implicit.n).toBe(materialized.n);
+      expect(implicit.edges.map((e) => e.val)).toStrictEqual(
+        materialized.edges.map((e) => e.val)
+      );
+
       const implicitCount = countImplicitTriangles(implicit, maxDist);
       expect(implicitCount).toBe(materialized.triangles.length);
 
@@ -38,4 +43,23 @@ describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
       }
     });
   }
+
+  it("edge bits match between implicit and materialized", () => {
+    const rng = mulberry32(42);
+    const pts = randomPoints(rng, 15, 3, 10);
+    const maxDist = 3;
+
+    const materialized = buildRipsComplex(pts, 3, maxDist, 2);
+    const implicit = buildImplicitRipsComplex(pts, 3, maxDist);
+
+    expect(implicit.adjBits).toHaveLength(materialized.adjBits!.length);
+    for (let v = 0; v < implicit.n; v++) {
+      const ib = implicit.adjBits[v]!;
+      const mb = materialized.adjBits![v]!;
+      expect(ib).toHaveLength(mb.length);
+      for (let w = 0; w < ib.length; w++) {
+        expect(ib[w]).toBe(mb[w]);
+      }
+    }
+  });
 });

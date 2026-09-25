@@ -1,5 +1,17 @@
 import type { TetraEntry } from "./complex.ts";
 
+/**
+ * Builds the reduced coboundary of the tetrahedra over the triangles, in the
+ * column format `DenseWorkingCol` consumes directly: a CSR keyed by triangle
+ * index, holding FLIPPED tetrahedron indices.
+ *
+ * "Flipped" means `tetrahedra.length - 1 - row`, the reversal the cohomology
+ * reduction runs in. The direction is not cosmetic and was gotten wrong in an
+ * earlier revision -- processing edges ascending with `pivot = max original
+ * index` produced spurious nonzero H1 pairs. It is the same convention the
+ * triangle-level builder in `homology-cohom.ts` uses, one dimension up; the
+ * reversal there carries the same warning.
+ */
 export function buildFlippedTetrahedronCoboundary(
   triangleCount: number,
   tetrahedra: readonly TetraEntry[]
