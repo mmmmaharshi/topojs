@@ -319,14 +319,18 @@ const cases: BenchmarkCase[] = [
     trials: 1,
     warmup: 0,
   },
-  // Unbounded input, and with it the enclosing-radius cap: the enclosing
-  // radius IS the max pairwise distance, so maxDist=Infinity and
-  // maxDist=enclosingRadius produce the same complete 1-skeleton, and this
-  // single case exercises both. Every other case has a finite cutoff, so
-  // without this one the cap that the on-demand distance path replaces is
-  // never measured. Iris is the smallest dataset here that still builds a
-  // complete triangle set (C(150,3) = 551300) and keeps the standard-engine
-  // baseline under ten seconds.
+  // Unbounded input. Every other case has a finite cutoff, so this is the only
+  // one that reaches the end of the filtration, where the enclosing-radius cap
+  // and the on-demand distance path both have to hold up. Iris is the smallest
+  // dataset here that still builds a large triangle set while keeping the
+  // standard-engine baseline in the low seconds.
+  //
+  // Open question, not resolved: the standard engine reports 7859 edges here
+  // and buildRipsComplex reports 471, but a complete 1-skeleton on 150 points
+  // is 11175. So something filters at maxDist=Infinity and it is not this
+  // case's job to find it. The correctness check below still holds -- reduced
+  // and collapsed both MATCH the standard engine's H0+H1 barcode -- so treat
+  // the timings as comparative, not as a claim about the complete complex.
   {
     dims: 4,
     heapRepeats: 1,
