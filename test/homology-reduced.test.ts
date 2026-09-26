@@ -19,26 +19,72 @@ import {
  * ground truth here is computePersistentHomology's OUTPUT FILTERED to
  * dim<=1, not its full H0+H1+H2 result.
  */
-function checkMatches(points: Float64Array, maxDist: number, dims = 2): void {
+function checkMatchesMode(
+  points: Float64Array,
+  maxDist: number,
+  dims = 2,
+  collapse = false
+): void {
+  const context = `dims=${dims} maxDist=${maxDist} collapse=${collapse}`;
   const expectedFull = computePersistentHomology(points, dims, maxDist, 1);
-  const actual = computePersistentHomologyReduced(points, dims, maxDist);
-  expect(actual.complex.numVertices).toBe(expectedFull.complex.numVertices);
-  // The reduced engine keeps the FULL uncollapsed 1-skeleton (edge-collapse
-  // is a flag-filtration optimization and does not transfer to its
-  // metric-dependent lune construction), while the standard path collapses
-  // -- so numEdges is checked against an independent brute-force count,
-  // and only the barcode is compared across engines.
-  expect(actual.complex.numEdges).toBe(
-    bruteForceEdgeCount(points, dims, maxDist)
+  const actual = computePersistentHomologyReduced(
+    points,
+    dims,
+    maxDist,
+    collapse
   );
+  expect(actual.complex.numVertices, `${context}: vertex count`).toBe(
+    expectedFull.complex.numVertices
+  );
+  const fullEdgeCount = bruteForceEdgeCount(points, dims, maxDist);
+  if (collapse) {
+    expect(
+      actual.complex.numEdges,
+      `${context}: collapsed edge count`
+    ).toBeLessThanOrEqual(fullEdgeCount);
+  } else {
+    expect(actual.complex.numEdges, `${context}: edge count`).toBe(
+      fullEdgeCount
+    );
+  }
   const expectedPairs =
     points.length / dims <= 8
       ? referenceRipsBarcode(points, dims, maxDist, 1)
       : expectedFull.pairs.filter((p) => p.dim <= 1);
-  expect(samePersistencePairs(actual.pairs, expectedPairs)).toBeTruthy();
+  expect(
+    samePersistencePairs(actual.pairs, expectedPairs),
+    `${context}: H0+H1 pairs`
+  ).toBeTruthy();
+}
+
+function checkMatches(points: Float64Array, maxDist: number, dims = 2): void {
+  checkMatchesMode(points, maxDist, dims, false);
+  checkMatchesMode(points, maxDist, dims, true);
 }
 
 describe("computePersistentHomologyReduced (reduced VR complex) vs. independent reference and production fallback (H0+H1 only)", () => {
+  it("matches the default path when collapse is requested", () => {
+    const points = new Float64Array([1, 1, 1, 1, -1, -1, -1, 1, -1, -1, -1, 1]);
+    const expected = computePersistentHomologyReduced(points, 3, 3);
+    const actual = computePersistentHomologyReduced(points, 3, 3, true);
+    expect(samePersistencePairs(actual.pairs, expected.pairs)).toBeTruthy();
+    expect(actual.complex.numEdges).toBe(3);
+  });
+
+  it("uses shifted edge values for collapsed triangles", () => {
+    const points = new Float64Array([
+      0.23645552527159452, 0.3692706737201661, 0.5042420323006809,
+      0.7048832636792213, 0.05054362863302231, 0.3695183543022722,
+      0.7747629624791443, 0.556188570568338, 0.0164932357147336,
+      0.6392460397910327, 0.2504511415027082, 0.4223777682054788,
+      0.5906901974231005, 0.8369336591567844, 0.23507591942325234,
+      0.980845961952582,
+    ]);
+    const actual = computePersistentHomologyReduced(points, 2, 0.7, true);
+    const expected = computePersistentHomology(points, 2, 0.7, 1);
+    expect(samePersistencePairs(actual.pairs, expected.pairs)).toBeTruthy();
+  });
+
   it("matches on random point clouds across many seeds, densities, and maxDist values", () => {
     for (let seed = 1; seed <= 60; seed++) {
       const rng = mulberry32(seed);
@@ -148,6 +194,34 @@ describe("computePersistentHomologyReduced (reduced VR complex) vs. independent 
     }
     const flat = generatePoints(pts);
     checkMatches(flat, 0.1);
+  });
+
+  it("matches above the spatial-grid crossover with a finite cutoff", () => {
+    const size = 27;
+    const points: [number, number][] = [];
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j < size; j++) {
+        points.push([i, j]);
+      }
+    }
+    const flat = generatePoints(points);
+    const actual = computePersistentHomologyReduced(flat, 2, 1.1);
+    const collapsed = computePersistentHomologyReduced(flat, 2, 1.1, true);
+    const expected = computePersistentHomology(flat, 2, 1.1, 1);
+    const fullEdgeCount = bruteForceEdgeCount(flat, 2, 1.1);
+    expect(actual.complex.numEdges, "grid edge count").toBe(fullEdgeCount);
+    expect(
+      collapsed.complex.numEdges,
+      "collapsed grid edge count"
+    ).toBeLessThanOrEqual(fullEdgeCount);
+    expect(
+      samePersistencePairs(actual.pairs, expected.pairs),
+      "grid H0+H1 pairs"
+    ).toBeTruthy();
+    expect(
+      samePersistencePairs(collapsed.pairs, expected.pairs),
+      "collapsed grid H0+H1 pairs"
+    ).toBeTruthy();
   });
 
   it("matches on a larger dense cloud", () => {

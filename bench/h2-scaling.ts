@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { computePersistentHomology } from "../src/core/homology-unified.ts";
+import { computePersistentHomologyAdvanced } from "../src/core/homology-unified.ts";
 
 const __dirname = import.meta.dirname;
 
@@ -94,7 +94,7 @@ for (const n of sweepNs) {
   let numTriangles = -1;
   let numEdges = -1;
   try {
-    const result = computePersistentHomology(pts, 2, {
+    const result = computePersistentHomologyAdvanced(pts, 2, {
       engine: "standard",
       maxDim: 2,
       maxDist: MAX_DIST,
