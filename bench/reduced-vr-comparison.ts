@@ -325,20 +325,20 @@ const cases: BenchmarkCase[] = [
   // enclosingRadius(points, dims), and the one code path the on-demand distance
   // work sits next to.
   //
-  // "Unbounded" means "out to the enclosing ball", NOT "all pairs".
+  // Two things make the edge counts here look inconsistent when they are not.
+  // "Unbounded" means "out to the enclosing ball", NOT "all pairs":
   // enclosingRadius is a minimum enclosing BALL radius (a min over centres of
   // the max distance to that centre), not the max pairwise distance, so on
-  // normalized Iris it clamps Infinity to 0.478 and the 1-skeleton has 471
-  // edges rather than the 11175 a complete complex would have. That is
-  // intended behaviour, and it is why the edge count here is so much smaller
-  // than C(150,2).
+  // normalized Iris it clamps Infinity to 0.478. And every edge count printed
+  // below is POST-collapse, not the raw 1-skeleton: buildRipsComplex always
+  // calls collapseDominatedEdges, taking the collapse's maxDim from its 4th
+  // argument (complex.ts:48 -> rips-skeleton.ts:120-122). The standard baseline
+  // asks for homology maxDim 1 and so collapses weakly, the reduced engine
+  // collapses at maxDim 2. A complete complex would be C(150,2) = 11175, and
+  // nothing here is that.
   //
-  // Unresolved: the standard-engine baseline in the summary above reports 7859
-  // edges for this case, which is neither 471 nor 11175, so the two engines do
-  // not agree on what the clamp produces. Worth chasing before trusting the
-  // timings here. The correctness check does hold -- reduced and collapsed both
-  // MATCH the standard engine's H0+H1 barcode -- so treat the numbers as
-  // comparative only.
+  // So the baseline-vs-reduced edge gap is the collapse, which is the whole
+  // point of having the case, and the timings are comparative.
   {
     dims: 4,
     heapRepeats: 1,
