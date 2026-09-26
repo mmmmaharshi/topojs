@@ -103,8 +103,18 @@ above and the differential suite. The opt-in collapsed path was also run on
 all 10 real-data cases with `--collapse`; every collapsed barcode matched
 the standard barcode. The per-case collapsed measurements below come from a new
 run of the same benchmark with the current normalized-Iris protocol. Do not
-compare their Iris timings with the historical raw-scale table above. The
-per-case collapsed measurements were:
+compare their Iris timings with the historical raw-scale table above.
+
+Each "Nx" below is the standard engine divided by the COLLAPSED reduced
+engine -- the same baseline as the historical table above (the standard
+engine called with maxDim=1, which still builds the full triangle set
+internally). It is NOT a comparison against `cohomology`, which is the
+baseline auto_engine_matrix_results.txt times: measured against cohomology
+the same collapsed runs are 0.72x-1.0x, i.e. often slower, because the
+standard engine is the slowest candidate there and the collapse saving is
+measured against it. Both sets of numbers are correct and answer different
+questions. The claim the collapsed path supports is the triangle reduction
+(Jazz maxDist=0.15: 339935 -> 202, 4.7x fewer), not a wall-clock multiple.
 
   Wine maxDist=0.25: edges 4 -> 4, triangles 0 -> 0, 1.01x
   Wine maxDist=0.45: edges 493 -> 302, triangles 687 -> 157, 0.93x
@@ -127,6 +137,11 @@ cases were:
     1138 triangles, old reduced matrix bytes removed 29.80MiB
   Monthly sunspots maxDist=0.02: n=2795, reduced 130.952ms, 31695 edges,
     29019 triangles, old reduced matrix bytes removed 29.80MiB
+
+Those two timings are single runs from the benchmark above, not the paired
+smoke check further down, which is a separate three-trial measurement and
+reports different (and for maxDist=0.02, slower) numbers. Both are kept
+because they measure different things; neither is the other one's baseline.
 
 These bytes describe only the removed distance matrix. The reduced engine still
 allocates its dense edge index.

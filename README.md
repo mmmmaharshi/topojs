@@ -95,9 +95,12 @@ const result = advanced.computePersistentHomology(points, dims, {
 
 `advanced.computePersistentHomology` supports the `engine` and `collapse` controls. The default `computePersistentHomology` keeps the common API small.
 
-| Function | Description |
+| Export | Description |
 | --- | --- |
 | `advanced.computePersistentHomology(points, dims, options?)` | Explicit H0+H1/H0+H1+H2 engine selection. Supports `engine`, `collapse`, `maxDist`, `maxDim`, and `epsilon`. |
+| `advanced.HomologyEngine` | Engine name union: `"auto"`, `"standard"`, `"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`. |
+| `advanced.HomologyAdvancedOptions` | Options type for `advanced.computePersistentHomology` — the root `HomologyOptions` plus `engine` and `collapse`. |
+| `advanced.CollapseOptions` | Options type for `collapseDominatedEdges`. |
 
 ### Arbitrary-dimension homology
 
