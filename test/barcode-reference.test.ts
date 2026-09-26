@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computePersistentHomologyAdvanced } from "../src/core/homology-unified.ts";
+import { computePersistentHomology } from "../src/core/homology-unified.ts";
 import { referenceRipsBarcode } from "./barcode-reference.ts";
 import { mulberry32, randomPoints, samePersistencePairs } from "./helpers.ts";
 
@@ -59,7 +59,7 @@ describe("independent Rips barcode reference", () => {
       const points = randomPoints(rng, n, dims, 10);
       const maxDist = [0.5, 1, 2, 5, Infinity][Math.floor(rng() * 5)]!;
       for (let maxHomologyDim = 0; maxHomologyDim <= 2; maxHomologyDim++) {
-        const actual = computePersistentHomologyAdvanced(points, dims, {
+        const actual = computePersistentHomology(points, dims, {
           engine: "standard",
           maxDim: maxHomologyDim,
           maxDist,

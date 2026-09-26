@@ -1,4 +1,4 @@
-import { computePersistentHomologyAdvanced } from "../core/homology-unified.ts";
+import { computePersistentHomology } from "../core/homology-unified.ts";
 import type { HomologyResult } from "../core/homology-unified.ts";
 import { SlidingWindow } from "./sliding-window.ts";
 
@@ -81,7 +81,7 @@ export class StreamingHomology {
       return null;
     }
     const flat = this.window.toFlatArray();
-    const result = computePersistentHomologyAdvanced(flat, this.dims, {
+    const result = computePersistentHomology(flat, this.dims, {
       engine: "standard",
       maxDim: this.maxDim,
       maxDist: this.maxDist,

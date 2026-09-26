@@ -13,8 +13,12 @@ export { computePersistentHomologyImplicit } from "./core/homology-implicit.ts";
 export type {
   HomologyResult,
   HomologyOptions,
+  HomologyEngine,
 } from "./core/homology-unified.ts";
-export * as advanced from "./advanced.ts";
+
+// ── Exact edge collapse (1-skeleton shrink, diagram-preserving) ──
+export { collapseDominatedEdges } from "./core/edge-collapse.ts";
+export type { CollapseOptions } from "./core/edge-collapse.ts";
 
 // ── Rips persistence, ARBITRARY dimension (H0..Hk, k unbounded) ──
 export { computePersistentHomologyGeneral } from "./core/homology-general.ts";
