@@ -320,17 +320,25 @@ const cases: BenchmarkCase[] = [
     warmup: 0,
   },
   // Unbounded input. Every other case has a finite cutoff, so this is the only
-  // one that reaches the end of the filtration, where the enclosing-radius cap
-  // and the on-demand distance path both have to hold up. Iris is the smallest
-  // dataset here that still builds a large triangle set while keeping the
-  // standard-engine baseline in the low seconds.
+  // one that reaches the enclosing-radius cap -- the clamp in
+  // buildRipsSkeleton that replaces a non-finite maxDist with
+  // enclosingRadius(points, dims), and the one code path the on-demand distance
+  // work sits next to.
   //
-  // Open question, not resolved: the standard engine reports 7859 edges here
-  // and buildRipsComplex reports 471, but a complete 1-skeleton on 150 points
-  // is 11175. So something filters at maxDist=Infinity and it is not this
-  // case's job to find it. The correctness check below still holds -- reduced
-  // and collapsed both MATCH the standard engine's H0+H1 barcode -- so treat
-  // the timings as comparative, not as a claim about the complete complex.
+  // "Unbounded" means "out to the enclosing ball", NOT "all pairs".
+  // enclosingRadius is a minimum enclosing BALL radius (a min over centres of
+  // the max distance to that centre), not the max pairwise distance, so on
+  // normalized Iris it clamps Infinity to 0.478 and the 1-skeleton has 471
+  // edges rather than the 11175 a complete complex would have. That is
+  // intended behaviour, and it is why the edge count here is so much smaller
+  // than C(150,2).
+  //
+  // Unresolved: the standard-engine baseline in the summary above reports 7859
+  // edges for this case, which is neither 471 nor 11175, so the two engines do
+  // not agree on what the clamp produces. Worth chasing before trusting the
+  // timings here. The correctness check does hold -- reduced and collapsed both
+  // MATCH the standard engine's H0+H1 barcode -- so treat the numbers as
+  // comparative only.
   {
     dims: 4,
     heapRepeats: 1,
