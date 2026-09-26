@@ -1,10 +1,9 @@
 /**
  * Unified entry point for exact Rips persistent homology (H₀+H₁+H₂).
  *
- * Auto-selects the best available engine based on input characteristics
- * and an optional user preference. General users call
- * `computePersistentHomology(points, dims, maxDist, maxDim)` and get the
- * fastest correct result without picking an engine.
+ * General users call `computePersistentHomology` and get the fastest correct
+ * result without picking an engine. Engine selection and reduced H1 controls
+ * live behind the advanced public namespace.
  */
 
 import {
@@ -32,7 +31,17 @@ function limitToScope(result: HomologyResult, maxDim: number): HomologyResult {
   };
 }
 
-/** Engine selection for `computePersistentHomology`. */
+/**
+ * Engines available through `advanced.computePersistentHomology`:
+ *
+ * - `"auto"` — pick a measured default; the default entry point always uses it.
+ * - `"standard"` — full simplices; the baseline correctness oracle.
+ * - `"cohomology"` — full complex with cohomology reduction; faster on dense inputs.
+ * - `"implicit"` / `"implicit-full"` — fully implicit reduction, no simplex
+ *   materialisation. Crossovers are ~60K H1 triangles and ~8K H2 triangles.
+ * - `"fast"` — Sheehy ε-sparsified approximation.
+ * - `"reduced"` — reduced H0+H1 only; `maxDim` must be 0 or 1.
+ */
 export type HomologyEngine =
   | "auto"
   | "standard"
@@ -47,69 +56,29 @@ export interface HomologyOptions {
   maxDist?: number;
   /** Maximum homology dimension to compute (default 2). */
   maxDim?: number;
-  /**
-   * Preferred engine:
-   * - `"cohomology"` — CSR coboundary (materialised simplices); fastest on
-   *   small-to-medium complexes.
-   * - `"implicit"` — cohomology matrix with an implicit complex builder
-   *   (no triangle/tetrahedron arrays). Required for Sheehy-sparse complexes
-   *   (`epsilon` parameter). Backward-compatible since v1.0.0.
-   * - `"implicit-full"` — fully implicit reduction (no simplex materialisation
-   *   at all). Matches or beats cohomology on complexes with >8K triangles
-   *   (H₂) or >60K triangles (H₁ only). Added in v1.x.
-   *
-   * `"auto"` (default) picks:
-   * - `"implicit"` if `epsilon` is provided (Sheehy-sparse)
-   * - `"implicit-full"` if the triangle count exceeds the crossover thresholds
-   *   (8K for H₂, 60K for H₁ only)
-   * - `"cohomology"` otherwise
-   *
-   * `"reduced"` uses the reduced Vietoris-Rips complex (Koyama, Memoli,
-   * Robins, Turner, arXiv:2307.16333) -- builds a much smaller 2-simplex
-   * set via per-edge lune connected-components, often a large speedup on
-   * dense complexes (see bench/data/reduced_vr_results.txt). It supports
-   * public scopes 0 and 1 and throws for scope 2 or higher. Never
-   * auto-selected, since `computePersistentHomology`'s default scope is
-   * H0+H1+H2.
-   */
-  engine?: HomologyEngine;
   /** Sheehy sparse Rips parameter (only supported by `"implicit"`). */
   epsilon?: number;
 }
 
-/**
- * Vietoris–Rips persistent homology (H₀+H₁+H₂) with automatic engine selection.
- *
- * Signature overloads:
- * - `computePersistentHomology(points, dims, maxDist?, maxDim?)` — positional
- *   form with the public homology-dimension `maxDim` scope.
- * - `computePersistentHomology(points, dims, options?)` — options object for
- *   engine selection, maxDist/maxDim, and Sheehy-sparse epsilon.
- */
-export function computePersistentHomology(
-  points: Points,
-  dims: number,
-  maxDist?: number,
-  maxDim?: number
-): HomologyResult;
-export function computePersistentHomology(
-  points: Points,
-  dims: number,
-  options?: HomologyOptions
-): HomologyResult;
-export function computePersistentHomology(
-  points: Points,
-  dims: number,
-  arg3?: number | HomologyOptions,
-  arg4?: number
-): HomologyResult {
-  // Normalise to options object
-  const opts: HomologyOptions =
-    arg3 === undefined || typeof arg3 === "number"
-      ? { maxDim: arg4, maxDist: arg3 }
-      : arg3;
+export interface HomologyAdvancedOptions extends HomologyOptions {
+  /** Preferred engine. `"auto"` unless set explicitly. */
+  engine?: HomologyEngine;
+  /** Apply exact edge collapse before the reduced H0+H1 engine. */
+  collapse?: boolean;
+}
 
-  const { maxDist = Infinity, maxDim = 2, engine = "auto", epsilon } = opts;
+function computePersistentHomologyInternal(
+  points: Points,
+  dims: number,
+  opts: HomologyAdvancedOptions
+): HomologyResult {
+  const {
+    maxDist = Infinity,
+    maxDim = 2,
+    engine = "auto",
+    epsilon,
+    collapse = false,
+  } = opts;
 
   if (engine !== "reduced") {
     validateMaxDim(maxDim);
@@ -206,7 +175,7 @@ export function computePersistentHomology(
       }
       validateMaxDim(maxDim);
       return limitToScope(
-        computePersistentHomologyReduced(points, dims, maxDist),
+        computePersistentHomologyReduced(points, dims, maxDist, collapse),
         maxDim
       );
     }
@@ -215,4 +184,91 @@ export function computePersistentHomology(
       throw new Error(`Unknown homology engine: ${_exhaustive}`);
     }
   }
+}
+
+/**
+ * Both public entry points accept the legacy positional form
+ * `(points, dims, maxDist, maxDim)` and the options form
+ * `(points, dims, options)`. Normalising once here keeps the two from drifting
+ * apart, which they did before the advanced namespace existed.
+ */
+function normaliseArgs<T extends HomologyOptions>(
+  arg3?: number | T,
+  arg4?: number
+): T {
+  return (
+    arg3 === undefined || typeof arg3 === "number"
+      ? { maxDim: arg4, maxDist: arg3 }
+      : arg3
+  ) as T;
+}
+
+/**
+ * Vietoris–Rips persistent homology with automatic engine selection.
+ *
+ * The options object exposes the common controls: `maxDist`, `maxDim`, and
+ * `epsilon`. Engine selection and reduced H1 controls are available through
+ * `advanced.computePersistentHomology`.
+ */
+export function computePersistentHomology(
+  points: Points,
+  dims: number,
+  maxDist?: number,
+  maxDim?: number
+): HomologyResult;
+export function computePersistentHomology(
+  points: Points,
+  dims: number,
+  options?: HomologyOptions
+): HomologyResult;
+export function computePersistentHomology(
+  points: Points,
+  dims: number,
+  arg3?: number | HomologyOptions,
+  arg4?: number
+): HomologyResult {
+  // Trust boundary, not a type check: TypeScript already rejects `engine` and
+  // `collapse` here, so this only fires for a JavaScript caller. Without it
+  // they would silently get `auto` back and a barcode from the wrong engine.
+  // Undefined-valued keys are ignored, since those are what an
+  // `engine: opts.engine ?? undefined` spread produces.
+  const advanced = arg3 as Partial<HomologyAdvancedOptions> | undefined;
+  if (
+    advanced !== undefined &&
+    typeof advanced === "object" &&
+    (advanced.engine !== undefined || advanced.collapse !== undefined)
+  ) {
+    throw new Error(
+      "engine and collapse are advanced options; use advanced.computePersistentHomology"
+    );
+  }
+  return computePersistentHomologyInternal(points, dims, {
+    ...normaliseArgs(arg3, arg4),
+    collapse: false,
+    engine: "auto",
+  });
+}
+
+export function computePersistentHomologyAdvanced(
+  points: Points,
+  dims: number,
+  maxDist?: number,
+  maxDim?: number
+): HomologyResult;
+export function computePersistentHomologyAdvanced(
+  points: Points,
+  dims: number,
+  options?: HomologyAdvancedOptions
+): HomologyResult;
+export function computePersistentHomologyAdvanced(
+  points: Points,
+  dims: number,
+  arg3?: number | HomologyAdvancedOptions,
+  arg4?: number
+): HomologyResult {
+  return computePersistentHomologyInternal(
+    points,
+    dims,
+    normaliseArgs(arg3, arg4)
+  );
 }

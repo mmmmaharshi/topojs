@@ -1,5 +1,5 @@
 import type { Points } from "./distance.ts";
-import { computePersistentHomology } from "./homology-unified.ts";
+import { computePersistentHomologyAdvanced } from "./homology-unified.ts";
 import type { HomologyResult } from "./homology-unified.ts";
 import { selectLandmarks } from "./landmarks.ts";
 
@@ -118,7 +118,7 @@ export function computeSparseRipsHomology(
     }
   }
 
-  const result = computePersistentHomology(landmarkPoints, dims, {
+  const result = computePersistentHomologyAdvanced(landmarkPoints, dims, {
     engine: "standard",
     maxDim,
     maxDist,

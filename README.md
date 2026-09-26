@@ -73,11 +73,34 @@ console.log("Summary:", summarize(result.pairs));
 
 | Function | Description |
 | --- | --- |
-| `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with auto engine selection. `maxDim` is the highest homology dimension: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂ (default). Options object for `engine` (`"auto"`, `"standard"`, `"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`), or `epsilon` (Sheehy sparsification). Auto mode picks `"implicit-full"` above 8K triangles (H₂) or 60K triangles (H₁ only); falls back to `"cohomology"`; `"implicit"` selected for Sheehy complexes. |
+| `computePersistentHomology(points, dims, maxDist, maxDim?)` | H₀+H₁+H₂ with automatic engine selection. `maxDim` is the highest homology dimension: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂ (default). The options object accepts `maxDist`, `maxDim`, and `epsilon` (Sheehy sparsification). |
 | `computePersistentHomologyImplicit(points, dims, maxDist, maxDim?)` | Fully implicit reduction (`"implicit-full"` engine); avoids all simplex materialisation. `maxDim` follows the public scope: 0 = H₀, 1 = H₀+H₁, 2 = H₀+H₁+H₂. H₂ crossover ~8K triangles, H₁ crossover ~60K triangles. |
 | `computeCubicalHomology(image, height, width, maxDim)` | H₀+H₁ on 2D grayscale images. |
 
 Prebuilt cohomology reduction is an internal implementation detail; use the functions above rather than reaching into it.
+
+### Advanced controls
+
+Use `advanced` only when you need explicit engine selection or the collapsed reduced H1 path:
+
+```js
+import { advanced } from "@manohar_maharshi/topojs";
+
+const result = advanced.computePersistentHomology(points, dims, {
+  engine: "reduced",
+  maxDim: 1,
+  collapse: true,
+});
+```
+
+`advanced.computePersistentHomology` supports the `engine` and `collapse` controls. The default `computePersistentHomology` keeps the common API small.
+
+| Export | Description |
+| --- | --- |
+| `advanced.computePersistentHomology(points, dims, options?)` | Explicit H0+H1/H0+H1+H2 engine selection. Supports `engine`, `collapse`, `maxDist`, `maxDim`, and `epsilon`. |
+| `advanced.HomologyEngine` | Engine name union: `"auto"`, `"standard"`, `"cohomology"`, `"implicit"`, `"implicit-full"`, `"reduced"`, `"fast"`. |
+| `advanced.HomologyAdvancedOptions` | Options type for `advanced.computePersistentHomology` — the root `HomologyOptions` plus `engine` and `collapse`. |
+| `advanced.CollapseOptions` | Options type for `collapseDominatedEdges`. |
 
 ### Arbitrary-dimension homology
 
@@ -104,7 +127,7 @@ Prebuilt cohomology reduction is an internal implementation detail; use the func
 | Function | Description |
 | --- | --- |
 | `enclosingRadius(points, dims)` | min_i max_j d(i,j) — Ripser-style default threshold cap for unbounded `maxDist`. |
-| `collapseDominatedEdges(n, edges)` | Diagram-preserving edge-collapse shrink of the 1-skeleton (also applied automatically inside the Rips builders). |
+| `advanced.collapseDominatedEdges(n, edges, opts?)` | Diagram-preserving edge-collapse shrink of the 1-skeleton (also applied automatically inside the Rips builders). `opts.maxDim` controls whether cofaces will be built. |
 
 ### Export / serialization
 
@@ -146,7 +169,7 @@ Prebuilt cohomology reduction is an internal implementation detail; use the func
 
 ## Benchmarks
 
-Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --expose-gc` (batch reduced VR), `npm run bench:h2-scaling` (H₂ limit), `node --experimental-strip-types bench/theorem1-check.ts` (Theorem 1 certifier). All on real, externally-sourced data — no synthetic point clouds.
+Reproduce: `npm run bench` (streaming), `npm run bench:reduced-vr -- --collapse` (batch reduced VR with the opt-in collapsed path), `npm run bench:reduced-vr` (default reduced VR), `npm run bench:auto-matrix` (public auto-engine candidate matrix), `npm run bench:h2-scaling` (H₂ limit), `node --experimental-strip-types bench/theorem1-check.ts` (Theorem 1 certifier). All on real, externally-sourced data — no synthetic point clouds.
 
 ### Batch engines
 
@@ -167,7 +190,7 @@ Since v1.2: edge-collapse preprocessing, flat typed-array `HeapColumn` with open
 | Jazz 198×3D    | 0.15    | 339 935 → 10 508 (3%)        | 64.04×  |
 | Jazz 198×3D    | 0.20    | 738 386 → 15 102 (2%)        | 133.21× |
 
-Use `engine: "reduced"` for dense H₀+H₁ workloads; auto mode stays `"cohomology"`/`"implicit-full"` (H₂ crossover ~8K triangles, H₁-only ~60K).
+Use `advanced.computePersistentHomology` with `engine: "reduced"` for dense H₀+H₁ workloads; the default `computePersistentHomology` stays automatic. The reduced benchmark also includes the real monthly sunspots series at a larger `n`. Add `collapse: true` to the advanced options to use the exact collapsed reduced path. The option defaults to false, affects only the reduced engine, and reports the collapsed edge and triangle counts. Pass `maxDim: 0` or `maxDim: 1` because the reduced engine does not compute H₂. The current auto preflight constructs a combinatorial index and is unavailable for `n >= 2300` on the measured no-epsilon path; explicit cohomology and reduced candidates can still run on larger inputs. See `bench/data/auto_engine_matrix_results.txt`.
 
 **Cohomology vs implicit (4096-point grid, `maxDist=4`, 799K triangles):** `cohomology-CSR` 1.12s → `implicit` 1.58s (full, includes complex build), reduction-only `cohomology-CSR` 1.39s → `implicit` 0.78s. Auto-dispatch picks the faster per complex.
 

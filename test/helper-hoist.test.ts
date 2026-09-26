@@ -24,8 +24,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { HomologyResult } from "../src/core/homology.ts";
-import { computePersistentHomology } from "../src/index.ts";
+import type { HomologyResult } from "../src/core/homology-unified.ts";
+import { advanced } from "../src/index.ts";
 
 const ENGINES = [
   "auto",
@@ -143,7 +143,7 @@ describe("hoisted primitives produce unchanged real-data barcodes", () => {
     ({ dims, expected, file, maxDim, maxDist }) => {
       const pts = loadMinMax(file, dims);
       for (const engine of ENGINES) {
-        const res = computePersistentHomology(pts, dims, {
+        const res = advanced.computePersistentHomology(pts, dims, {
           engine,
           maxDim,
           maxDist,

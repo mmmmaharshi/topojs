@@ -86,7 +86,7 @@ This yields ≤c triangles per edge vs up to n, hence O(n²) worst-case in ℝ�
 
 ### 4.2 Engine Portfolio and Auto-Dispatch
 
-| Engine | Builds | Use when | `computePersistentHomology({engine})` |
+| Engine | Builds | Use when | `advanced.computePersistentHomology({engine})` |
 | --- | --- | --- | --- |
 | `standard` | Full simplices | Baseline / correctness oracle | Always correct |
 | `cohomology` | Full, cohomology | General H₀–H₂ | Faster on dense |
@@ -94,7 +94,7 @@ This yields ≤c triangles per edge vs up to n, hence O(n²) worst-case in ℝ�
 | `reduced` | Reduced triangles | Dense H₀+H₁ | 2–98% fewer triangles |
 | `fast` | Approximation hooks | Exploratory | Sheehy ε-sparsification |
 
-Auto mode selects `implicit-full` above crossover thresholds, otherwise `cohomology`/`standard`; `reduced` is opt-in for H₀+H₁ (`{engine:"reduced", maxDim:1}`).
+Auto mode selects `implicit-full` above crossover thresholds, otherwise `cohomology`/`standard`; `reduced` is opt-in for H₀+H₁ through `advanced.computePersistentHomology({engine:"reduced", maxDim:1})`.
 
 ### 4.3 Truncated Stability Theorem (New — closes `src/core/sparse-rips.ts:37` caveat)
 
