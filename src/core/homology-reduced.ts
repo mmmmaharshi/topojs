@@ -175,7 +175,13 @@ export function computePersistentHomologyReduced(
   // it -- no separate tie-break logic to keep in sync).
   tempEdges.sort((a, b) => a.val - b.val || a.u - b.u || a.v - b.v);
   const edges: EdgeEntry[] = collapse
-    ? collapseDominatedEdges(n, tempEdges, { maxDim: 2 }).toSorted(
+    ? // maxDim 2, not a configurable: the reduced complex is H0+H1 only and
+      // its top-dimensional cells are the reduced triangles built below, so
+      // the coface construction collapse needs is always 2. This matches the
+      // default in buildRipsSkeleton. Passing the caller's maxDim here would
+      // be wrong -- there is no maxDim, and 1 would drop the triangles that
+      // collapse is defined against.
+      collapseDominatedEdges(n, tempEdges, { maxDim: 2 }).toSorted(
         (a, b) => a.val - b.val || a.u - b.u || a.v - b.v
       )
     : tempEdges;
@@ -291,11 +297,13 @@ export function computePersistentHomologyReduced(
     }
 
     for (const x of repForRoot.values()) {
+      // Both lookups are non-negative by construction: lunePts admits x only
+      // when edgeOrder(x,y) >= 0 and edgeOrder(x,z) >= 0 (the oxy/oxz test
+      // above), the union-find only ever unions pairs drawn from lunePts, and
+      // every rep is a lunePts entry. `edges` is not mutated in between, so
+      // the indices are still valid here and the `!`s below cannot trip.
       const xyOrder = edgeOrder(x, y);
       const xzOrder = edgeOrder(x, z);
-      if (xyOrder < 0 || xzOrder < 0) {
-        continue;
-      }
       const val = Math.max(dyz, edges[xyOrder]!.val, edges[xzOrder]!.val);
       if (val <= effectiveMaxDist) {
         triangles.push({ val, x, y, z });

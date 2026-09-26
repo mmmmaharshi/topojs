@@ -187,6 +187,23 @@ function computePersistentHomologyInternal(
 }
 
 /**
+ * Both public entry points accept the legacy positional form
+ * `(points, dims, maxDist, maxDim)` and the options form
+ * `(points, dims, options)`. Normalising once here keeps the two from drifting
+ * apart, which they did before the advanced namespace existed.
+ */
+function normaliseArgs<T extends HomologyOptions>(
+  arg3?: number | T,
+  arg4?: number
+): T {
+  return (
+    arg3 === undefined || typeof arg3 === "number"
+      ? { maxDim: arg4, maxDist: arg3 }
+      : arg3
+  ) as T;
+}
+
+/**
  * Vietoris–Rips persistent homology with automatic engine selection.
  *
  * The options object exposes the common controls: `maxDist`, `maxDim`, and
@@ -210,21 +227,23 @@ export function computePersistentHomology(
   arg3?: number | HomologyOptions,
   arg4?: number
 ): HomologyResult {
+  // Trust boundary, not a type check: TypeScript already rejects `engine` and
+  // `collapse` here, so this only fires for a JavaScript caller. Without it
+  // they would silently get `auto` back and a barcode from the wrong engine.
+  // Undefined-valued keys are ignored, since those are what an
+  // `engine: opts.engine ?? undefined` spread produces.
+  const advanced = arg3 as Partial<HomologyAdvancedOptions> | undefined;
   if (
-    arg3 !== undefined &&
-    typeof arg3 === "object" &&
-    ("engine" in arg3 || "collapse" in arg3)
+    advanced !== undefined &&
+    typeof advanced === "object" &&
+    (advanced.engine !== undefined || advanced.collapse !== undefined)
   ) {
     throw new Error(
       "engine and collapse are advanced options; use advanced.computePersistentHomology"
     );
   }
-  const opts: HomologyOptions =
-    arg3 === undefined || typeof arg3 === "number"
-      ? { maxDim: arg4, maxDist: arg3 }
-      : arg3;
   return computePersistentHomologyInternal(points, dims, {
-    ...opts,
+    ...normaliseArgs(arg3, arg4),
     collapse: false,
     engine: "auto",
   });
@@ -247,9 +266,9 @@ export function computePersistentHomologyAdvanced(
   arg3?: number | HomologyAdvancedOptions,
   arg4?: number
 ): HomologyResult {
-  const options: HomologyAdvancedOptions =
-    arg3 === undefined || typeof arg3 === "number"
-      ? { maxDim: arg4, maxDist: arg3 }
-      : arg3;
-  return computePersistentHomologyInternal(points, dims, options);
+  return computePersistentHomologyInternal(
+    points,
+    dims,
+    normaliseArgs(arg3, arg4)
+  );
 }

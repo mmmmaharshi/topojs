@@ -319,6 +319,23 @@ const cases: BenchmarkCase[] = [
     trials: 1,
     warmup: 0,
   },
+  // Unbounded input, and with it the enclosing-radius cap: the enclosing
+  // radius IS the max pairwise distance, so maxDist=Infinity and
+  // maxDist=enclosingRadius produce the same complete 1-skeleton, and this
+  // single case exercises both. Every other case has a finite cutoff, so
+  // without this one the cap that the on-demand distance path replaces is
+  // never measured. Iris is the smallest dataset here that still builds a
+  // complete triangle set (C(150,3) = 551300) and keeps the standard-engine
+  // baseline under ten seconds.
+  {
+    dims: 4,
+    heapRepeats: 1,
+    maxDist: Number.POSITIVE_INFINITY,
+    name: "UCI Iris (150x4D, normalized) maxDist=Infinity (unbounded, equals enclosing radius)",
+    points: loadMultiDimCsv("iris.csv", 4),
+    trials: 1,
+    warmup: 0,
+  },
 ];
 
 // Optional CLI filter (matches bench/benchmark.ts's "run just one" convention):
@@ -480,7 +497,7 @@ function runPublicMatrix(
 ): void {
   const lines: string[] = [
     "PUBLIC AUTO-ENGINE MATRIX",
-    "scope=maxDim:1; reference=cohomology; candidates=auto,cohomology,implicit-full,reduced,reduced-collapse; auto_resolved=unreported; counts=engine-reported; preflight_basis=implicit-collapse; preflight_saturation_possible=true",
+    "scope=maxDim:1; reference=cohomology; candidates=auto,cohomology,implicit-full,reduced,reduced-collapse; counts=engine-reported; preflight_basis=implicit-collapse; preflight_counts_are_collapsed=true; preflight_saturates=always",
     `generated=${new Date().toISOString()}`,
     "",
   ];

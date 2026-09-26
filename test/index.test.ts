@@ -165,6 +165,11 @@ describe("public API barrel (src/index.ts)", () => {
       "implicit-full",
       "fast",
     ] as const) {
+      // Only the reduced engine reads `collapse`, so today every pair here is
+      // equal by construction. The loop guards the contract that it stays
+      // that way: collapseDominatedEdges is also applied automatically inside
+      // the Rips builders, so hoisting it to a shared preprocessing step would
+      // silently change every engine's barcode, and only this catches it.
       const withCollapse = advancedCompute(points, 3, {
         collapse: true,
         engine,
