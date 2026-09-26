@@ -7,7 +7,7 @@
  * that boundary actually located -- is it n=350? n=390? Is it a hard wall
  * (tetrahedra enumeration blowing up combinatorially) or a soft one (still
  * finishing, just slow)? This sweeps n upward on REAL data (this IS a
- * performance/scalability characterization, so CLAUDE.md's real-data-only
+ * performance/scalability characterization, so AGENTS.md's real-data-only
  * benchmark policy applies here, unlike bench/boundary-sensitivity.ts and
  * bench/bound-tightness.ts which are correctness/bound characterizations)
  * and records wall-clock time plus realized tetrahedra count at each n,

@@ -13,7 +13,7 @@ builds only the reduced complex's much smaller triangle set]. This is the
 correct, fair baseline: both engines return the exact same H0+H1 barcode,
 and the comparison isolates exactly the cost this technique targets.
 
-Real data only (per CLAUDE.md's real-data-only benchmark policy): UCI Wine
+Real data only (per AGENTS.md's real-data-only benchmark policy): UCI Wine
 (178x13D), UCI Sonar (208x60D), UCI Seeds (210x7D), UCI Iris (150x4D, raw cm
 scale), and the Jazz musicians collaboration network (198 nodes, graph
 Laplacian 3D embedding, already vendored in bench/data/jazz.csv for

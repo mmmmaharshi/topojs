@@ -127,8 +127,8 @@ function computeH1ImplicitAndPivots(
     const coboundary: number[] = [];
     // Apparent-pair tracking: the minimum cofacet value, how many cofacets
     // attain it, and the rank of the (unique, if count === 1) minimiser.
-    // Values come straight from the two lookup edges (u,k),(v,k) — no unrank
-    // needed, unlike triValByRank.
+    // Values come straight from the two lookup edges (u,k),(v,k); no un-ranking
+    // is needed.
     let minTriVal = Infinity;
     let minTriCount = 0;
     let minTriRank = -1;
@@ -187,8 +187,8 @@ function computeH1ImplicitAndPivots(
       // on the very first check regardless of the (val, rank) tie-break, and
       // a fresh claim stores the raw coboundary with zero XORs. Claim the
       // pivot and store the full boundary directly, skipping the working
-      // column entirely. minTriVal is bit-identical to triValByRank
-      // (Math.max of the same three edge values), so the emission guard
+      // column entirely. minTriVal is bit-identical to the rank-based triangle
+      // value (Math.max of the same three edge values), so the emission guard
       // matches the full path exactly.
       triPivotOwner.set(minTriRank, ei);
       // Stored unsorted: all consumers (HeapColumn/DenseWorkingCol xorSparse)
@@ -315,9 +315,9 @@ function computeH2Implicit(
         const bk = adjBits[k]!;
         const coboundary: number[] = [];
         // Apparent-pair tracking, dual to the H1 loop above: unique
-        // minimum-value tetrahedron cofacet. tetVal needs no unrank — it is
-        // max(triVal, the three x-edge values), and triVal is already known
-        // from dab/dac/dbc.
+        // minimum-value tetrahedron cofacet. The tetrahedron value needs no
+        // unrank; it is max(triVal, the three x-edge values), and triVal is
+        // already known from dab/dac/dbc.
         const triVal = Math.max(dab, dac, dbc);
         let minTetVal = Infinity;
         let minTetCount = 0;

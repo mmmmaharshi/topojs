@@ -1,5 +1,5 @@
 WORST-CASE REGIME: WHERE DOES INCREMENTALH1'S SPEEDUP ACTUALLY FAIL?
-All real data (per CLAUDE.md's real-data-only benchmark policy -- no
+All real data (per AGENTS.md's real-data-only benchmark policy -- no
 synthetic/pathological point clouds constructed for this). Two axes probed:
 window size (does raw growth eventually favor the naive engine?) and push
 order (does the reported speedup depend on a convenient default ordering?).

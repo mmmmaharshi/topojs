@@ -212,7 +212,7 @@ describe("computePersistentHomologyCohomology (cohomology direction) vs. indepen
     // cycle edges' reductions colliding on the same triangle pivot) to be
     // exercised at all. That variant is gone, but the sweep itself is
     // independently useful stress coverage this suite didn't have before:
-    // per CLAUDE.md's differential-testing convention ("hundreds to
+    // per AGENTS.md's differential-testing convention ("hundreds to
     // thousands of random trials, not just hand-picked examples"), it adds
     // a large sweep beyond the 40-seed default one above, biased toward
     // DENSE/near-complete complexes where cascades are longest -- kept

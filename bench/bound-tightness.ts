@@ -16,7 +16,7 @@ import path from "node:path";
  *
  * Uses synthetic random point clouds for the swept part (correctness/bound
  * characterization, not a performance claim -- see bench/boundary-
- * sensitivity.ts's header for why CLAUDE.md's real-data-only benchmark
+ * sensitivity.ts's header for why AGENTS.md's real-data-only benchmark
  * policy does not apply to this kind of measurement) plus real UCI Iris
  * data for the real-dataset part.
  *

@@ -77,40 +77,6 @@ export function triVal(
   );
 }
 
-export function triValByRank(
-  complex: ImplicitRipsComplex,
-  rank: number
-): number {
-  return complex.triangleValueByRank(rank);
-}
-
-export function tetVal(
-  complex: ImplicitRipsComplex,
-  a: number,
-  b: number,
-  c: number,
-  d: number
-): number {
-  const dab = complex.edgeValue(a, b);
-  const dac = complex.edgeValue(a, c);
-  const dad = complex.edgeValue(a, d);
-  const dbc = complex.edgeValue(b, c);
-  const dbd = complex.edgeValue(b, d);
-  const dcd = complex.edgeValue(c, d);
-  const m1 = dab >= dac ? dab : dac;
-  const m2 = dad >= dbc ? dad : dbc;
-  const m3 = dbd >= dcd ? dbd : dcd;
-  const m12 = m1 >= m2 ? m1 : m2;
-  return m12 >= m3 ? m12 : m3;
-}
-
-export function tetValByRank(
-  complex: ImplicitRipsComplex,
-  rank: number
-): number {
-  return complex.tetrahedronValueByRank(rank);
-}
-
 export function countImplicitTriangles(
   complex: ImplicitRipsComplex,
   filterMaxDist?: number

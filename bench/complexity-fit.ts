@@ -11,7 +11,7 @@
  * R^2 for single-term alternatives, so the 3-term formula's explanatory
  * power can be compared against simpler stories.
  *
- * Uses real data (this is a performance/complexity claim, so CLAUDE.md's
+ * Uses real data (this is a performance/complexity claim, so AGENTS.md's
  * real-data-only benchmark policy applies -- unlike bench/boundary-
  * sensitivity.ts and bench/bound-tightness.ts, which are correctness/bound
  * characterizations and correctly use synthetic sweeps instead).

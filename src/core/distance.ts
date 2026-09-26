@@ -1,6 +1,23 @@
 /** Flattened array of point coordinates [x0,y0, x1,y1, ...]. */
 export type Points = Float64Array;
 
+// Callers provide valid flattened point indices; each access stays within its point block.
+export function squaredEuclideanDistance(
+  points: Points,
+  dims: number,
+  i: number,
+  j: number
+): number {
+  const bi = i * dims;
+  const bj = j * dims;
+  let sq = 0;
+  for (let d = 0; d < dims; d++) {
+    const diff = points[bi + d]! - points[bj + d]!;
+    sq += diff * diff;
+  }
+  return sq;
+}
+
 /**
  * Packed squared-distance matrix: same layout as {@link DistanceMatrix} but
  * `data` holds d² (no sqrt at build). Internal use for engines that filter
@@ -27,15 +44,8 @@ export function computeSquaredPairwiseDistances(
   let idx = 0;
   for (let i = 0; i < n; i++) {
     rowStart[i] = idx;
-    const baseI = i * dims;
     for (let j = i + 1; j < n; j++) {
-      const baseJ = j * dims;
-      let sq = 0;
-      for (let d = 0; d < dims; d++) {
-        const diff = points[baseI + d]! - points[baseJ + d]!;
-        sq += diff * diff;
-      }
-      data[idx++] = sq;
+      data[idx++] = squaredEuclideanDistance(points, dims, i, j);
     }
   }
   return { data, n, rowStart };
@@ -73,18 +83,12 @@ export function enclosingRadius(points: Points, dims: number): number {
   }
   let bestSq = Infinity;
   for (let i = 0; i < n; i++) {
-    const bi = i * dims;
     let worstSq = 0;
     for (let j = 0; j < n; j++) {
       if (j === i) {
         continue;
       }
-      const bj = j * dims;
-      let sq = 0;
-      for (let d = 0; d < dims; d++) {
-        const diff = points[bi + d]! - points[bj + d]!;
-        sq += diff * diff;
-      }
+      const sq = squaredEuclideanDistance(points, dims, i, j);
       if (sq > worstSq) {
         worstSq = sq;
         // Early exit: this centre already worse than the best found.

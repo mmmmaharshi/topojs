@@ -64,7 +64,7 @@ src/index.ts  (public API boundary — only re-exports here are semver-stable)
 └── data/    realworld-datasets.ts (generators, no synthetic benchmarks)
 ```
 
-Design invariants (from `CLAUDE.md`): strict TypeScript (`strict: true`, `noUncheckedIndexedAccess`), shared primitives over copies, no allocation in hot paths (IncrementalH1 pools per-triangle state into flat arrays), real-data-only benchmarks.
+Design invariants (from `AGENTS.md`): strict TypeScript (`strict: true`, `noUncheckedIndexedAccess`), shared primitives over copies, no allocation in hot paths (IncrementalH1 pools per-triangle state into flat arrays), real-data-only benchmarks.
 
 ---
 

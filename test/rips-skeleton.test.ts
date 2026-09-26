@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildImplicitRipsComplex,
   countImplicitTriangles,
-  triValByRank,
 } from "../src/core/complex-implicit.ts";
 import { buildRipsComplex } from "../src/core/complex.ts";
 import { buildRipsSkeleton } from "../src/core/rips-skeleton.ts";
@@ -45,7 +44,7 @@ describe("private Rips skeleton seam", () => {
     expectAdjacencyBitsMatch(skeleton.adjBits, implicit.adjBits);
     expect([
       skeleton.edgeValue(1, 3),
-      triValByRank(implicit, 1),
+      implicit.triangleValueByRank(1),
       countImplicitTriangles(implicit),
     ]).toStrictEqual([1, Math.SQRT2, materialized.triangles.length]);
   });

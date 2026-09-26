@@ -3,7 +3,6 @@ import { describe, it, expect } from "vitest";
 import { CombinatorialIndex } from "../src/core/combinatorial-index.ts";
 import {
   buildImplicitRipsComplex,
-  triValByRank,
   countImplicitTriangles,
 } from "../src/core/complex-implicit.ts";
 import { buildRipsComplex } from "../src/core/complex.ts";
@@ -39,7 +38,7 @@ describe("buildImplicitRipsComplex vs buildRipsComplex", () => {
       for (const tri of materialized.triangles) {
         const [u, v, w] = tri.verts;
         const rank = ci.rank(u, v, w);
-        const implicitVal = triValByRank(implicit, rank);
+        const implicitVal = implicit.triangleValueByRank(rank);
         expect(implicitVal).toBe(tri.val);
       }
     });

@@ -1,3 +1,4 @@
+import { buildFlippedTetrahedronCoboundary } from "./cohomology-tet-coboundary.ts";
 import { buildRipsComplex } from "./complex.ts";
 import type { Points } from "./distance.ts";
 import type { PersistencePair } from "./h0.ts";
@@ -255,38 +256,8 @@ export function computePersistentHomologyCohomology(
     // index construction as edgeTriListFlipped above, one dimension up.
     const nt2 = tetrahedra.length;
     const flip2 = (ci: number): number => nt2 - 1 - ci;
-
-    const triTetCount = new Int32Array(triangles.length);
-    for (const tet of tetrahedra) {
-      const tt = tet.triangles;
-      triTetCount[tt[0]]!++;
-      triTetCount[tt[1]]!++;
-      triTetCount[tt[2]]!++;
-      triTetCount[tt[3]]!++;
-    }
-    const triTetStart = new Int32Array(triangles.length + 1);
-    {
-      let running = 0;
-      for (let t = 0; t < triangles.length; t++) {
-        triTetStart[t] = running;
-        running += triTetCount[t]!;
-      }
-      triTetStart[triangles.length] = running;
-    }
-    const triTetListFlipped = new Int32Array(triTetStart[triangles.length]!);
-    {
-      const fillPos = Int32Array.from(
-        triTetStart.subarray(0, triangles.length)
-      );
-      for (let ci = 0; ci < tetrahedra.length; ci++) {
-        const tt = tetrahedra[ci]!.triangles;
-        const fci = flip2(ci);
-        triTetListFlipped[fillPos[tt[0]]!++] = fci;
-        triTetListFlipped[fillPos[tt[1]]!++] = fci;
-        triTetListFlipped[fillPos[tt[2]]!++] = fci;
-        triTetListFlipped[fillPos[tt[3]]!++] = fci;
-      }
-    }
+    const { columns: triTetListFlipped, start: triTetStart } =
+      buildFlippedTetrahedronCoboundary(triangles.length, tetrahedra);
 
     const tetPivotOwner = new Int32Array(tetrahedra.length).fill(-1);
     const triReducedCol = new ColumnStore(triangles.length);
